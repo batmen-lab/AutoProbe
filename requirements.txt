@@ -17,3 +17,10 @@ tqdm
 transformers
 plotly
 kaleido
+matplotlib
+
+# ── Auxiliary scripts (claude_harness.py, codex_harness.py) ─────────────────
+# Not used by the main pipeline — only by the standalone SDK harnesses shipped
+# in the repo root. Safe to drop if you're not using them.
+anthropic
+openai

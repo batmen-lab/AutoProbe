@@ -3,10 +3,16 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 NLP_MODEL = "opus"
 AGENT_MODEL = "opus"
-WORKING_SPACE = "/home/xuanhe_linux_001/agentic_probe_rein/dummy_project"
+# Run the agent test from dummy_project/ if it has content, otherwise fall back
+# to the repo root so the smoke test works on a fresh checkout.
+_REPO = Path(__file__).resolve().parent
+_DUMMY = _REPO / "dummy_project"
+_HAS_DUMMY = _DUMMY.is_dir() and any(p.name != ".gitkeep" for p in _DUMMY.iterdir())
+WORKING_SPACE = str(_DUMMY) if _HAS_DUMMY else str(_REPO)
 
 
 def test_nlp():
