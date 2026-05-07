@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+venv/
+.venv/
+env/
+.env/
+
+# Environment
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.class
+*.jar
+
+# Misc
+*.tmp
+*.bak
+*.cache
+
+# Project-specific
+user_project/
+
+# Pipeline runtime state
+response/
+
+# Project workspaces (kept empty in repo; populated locally)
+mimic/*
+!mimic/.gitkeep
+home_credit/*
+!home_credit/.gitkeep
+ieee_cis_fraud_detection/*
+!ieee_cis_fraud_detection/.gitkeep
+m5_forecast/*
+!m5_forecast/.gitkeep
+rossmann/*
+!rossmann/.gitkeep
+CelebFaces_Attributes_Classification/*
+!CelebFaces_Attributes_Classification/.gitkeep
+dummy_project/*
+!dummy_project/.gitkeep

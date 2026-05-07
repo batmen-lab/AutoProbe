@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  background: #fafafa;
+  color: #18181b;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(24, 24, 27, 0.92);
+  color: #fafafa;
+}
+
+/* Hide the default focus outline globally; rely on ring utilities instead. */
+:focus-visible {
+  outline: none;
+}
+
+/* Subtle native scrollbar in monochrome. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d6 transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: #d4d4d6; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: #a1a1a4; background-clip: content-box; border: 2px solid transparent; }

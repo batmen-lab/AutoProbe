@@ -1,0 +1,19 @@
+# Single source of truth for the project's Python dependencies.
+# Used by both the FastAPI backend (server/app.py) and the agent-driven
+# training pipeline (project workspaces' train.py / prober.py).
+
+# ── API / pipeline ──────────────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+pydantic
+
+# ── Training stack (per imports across project workspaces) ──────────────────
+torch
+numpy
+pandas
+scikit-learn
+scipy
+tqdm
+transformers
+plotly
+kaleido

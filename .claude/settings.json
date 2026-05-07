@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "WebSearch",
+      "WebFetch",
+      "Bash(codex --help)",
+      "Bash(codex exec *)",
+      "WebFetch(domain:docs.claude.com)",
+      "Write",
+      "Edit",
+      "Bash"
+    ]
+  }
+}
