@@ -42,6 +42,9 @@ export type RunRecord = {
   plan_index: number | null;
   iterations: IterationRow[];
   debug_flags: { auto_research: boolean; threshold_override: string | null };
+  tried_probe_indices: number[];
+  tried_plan_indices: number[];
+  current_action: string | null;
   busy: boolean;
 };
 
@@ -89,7 +92,12 @@ async function http<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  // cache: "no-store" — without explicit Cache-Control headers from FastAPI,
+  // the browser may apply heuristic caching to GETs (notably `/api/runs/:id`,
+  // which we poll), and a stale response can overwrite fresh post-revert
+  // state and erase the tried-index updates we just made.
   const res = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -189,10 +197,13 @@ export const api = {
     }),
 
   // revert
-  revert: (runId: string, toStage: number) =>
+  revert: (runId: string, toStage: number, keepWorkspace: boolean = false) =>
     http<{ result: { deleted: string[]; stage: number; phase: string }; state: RunRecord }>(
       `/api/runs/${runId}/revert`,
-      { method: "POST", body: JSON.stringify({ to_stage: toStage }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ to_stage: toStage, keep_workspace: keepWorkspace }),
+      },
     ),
 
   // log

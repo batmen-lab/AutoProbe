@@ -48,7 +48,14 @@ def generate_probes(state: RunState) -> dict:
     if not state.record.context:
         raise ValueError("Stage 1 needs a context string. Set it via set_context().")
 
+    # Regenerating invalidates any tried-index list (new candidates won't share
+    # ordinal positions with the old set).
+    state.record.tried_probe_indices = []
+    state.record.tried_plan_indices = []
+    state.record.probe_index = None
+    state.record.plan_index = None
     state.set_phase(Stage.ONE, "running")
+    state.set_action("probe-generate")
 
     designs = nlp_call(
         f"{PROMPT_ONE}\n\n{state.record.context}",
@@ -64,6 +71,7 @@ def generate_probes(state: RunState) -> dict:
     )
     state.run_dir.joinpath(PROBE_CONFIDENCED).write_text(json.dumps(confidenced, indent=2))
 
+    state.set_action(None)
     state.set_phase(Stage.ONE, "generated")
     return confidenced
 
@@ -89,6 +97,7 @@ def auto_research_setup(state: RunState) -> None:
     state.set_phase(Stage.ONE, "running")
     state.record.debug_flags["auto_research"] = True
     state.save()
+    state.set_action("auto-research-setup")
 
     agent_call(
         PROMPT_AUTO_RESEARCH_PATCH_PERFORMANCE_PROBE_IMPLEMENTATION_AND_INTEGRATION,
@@ -126,6 +135,7 @@ def auto_research_setup(state: RunState) -> None:
             note="auto-research first run",
         ))
 
+    state.set_action(None)
     state.advance_to(Stage.FOUR)
 
 
@@ -134,7 +144,11 @@ def generate_dev_plans(state: RunState) -> dict:
     if state.record.probe_index is None:
         raise ValueError("Stage 2 needs a selected probe. Run select_probe() first.")
 
+    # Regenerating dev plans invalidates the tried-plan list.
+    state.record.tried_plan_indices = []
+    state.record.plan_index = None
     state.set_phase(Stage.TWO, "running")
+    state.set_action("dev-plan-generate")
 
     confidenced = json.loads(state.artifact_path(PROBE_CONFIDENCED).read_text())
     selected = confidenced["probe_designs"][state.record.probe_index - 1]
@@ -153,6 +167,7 @@ def generate_dev_plans(state: RunState) -> dict:
     )
     state.run_dir.joinpath(DEV_DOC_CONFIDENCED).write_text(json.dumps(confidenced_plans, indent=2))
 
+    state.set_action(None)
     state.set_phase(Stage.TWO, "generated")
     return confidenced_plans
 
@@ -193,6 +208,7 @@ def implement(state: RunState) -> None:
         raise ValueError("Stage 3 needs a selected plan. Run select_plan() first.")
 
     state.set_phase(Stage.THREE, "running")
+    state.set_action("implementation-apply")
 
     confidenced = json.loads(state.artifact_path(DEV_DOC_CONFIDENCED).read_text())
     selected = confidenced["dev_plans"][state.record.plan_index - 1]
@@ -213,6 +229,7 @@ def implement(state: RunState) -> None:
     )
 
     # First training run (with auto-fix loop) to produce probe_result_1.
+    state.set_action("post-impl-test-run")
     run_training_with_autofix(state)
 
     # Pull stage-3's first metric into the iteration ledger so the UI can show it.
@@ -227,6 +244,7 @@ def implement(state: RunState) -> None:
             note="stage 3 first run",
         ))
 
+    state.set_action(None)
     state.set_phase(Stage.THREE, "done")
     state.advance_to(Stage.FOUR)
 
@@ -249,6 +267,7 @@ def iterate_once(state: RunState) -> dict:
         (state.workspace / "train.py").read_text()
     )
 
+    state.set_action(f"improving-implement:{next_idx}")
     # Auto-research mode uses a different iteration prompt (regression-aware,
     # comment-driven). Normal mode uses the dev-plan-driven iteration prompt.
     iter_prompt = (
@@ -257,6 +276,8 @@ def iterate_once(state: RunState) -> dict:
         else PROMPT_SEVEN
     )
     agent_call(iter_prompt, cwd=state.workspace, log_path=state.log_path)
+
+    state.set_action(f"iteration-test-run:{next_idx}")
     run_training_with_autofix(state)
 
     snapshot = _read_latest_metric(state.workspace)
@@ -269,6 +290,7 @@ def iterate_once(state: RunState) -> dict:
         note=None,
     )
     state.record_iteration(rec)
+    state.set_action(None)
     state.set_phase(Stage.FOUR, "ready")
     return {"iteration": rec.__dict__, "passed": rec.status == "PASS"}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, DevPlan, RunRecord } from "@/lib/api";
+import { api, DevPlan, ProbeDesign, RunRecord } from "@/lib/api";
 import { Button, Card, ConfidenceBar, Pill, SectionLabel, Spinner } from "./ui";
 import { Header } from "./Stage1";
 
@@ -13,6 +13,7 @@ export function Stage2({
   onUpdate: () => void;
 }) {
   const [plans, setPlans] = useState<DevPlan[] | null>(null);
+  const [probe, setProbe] = useState<ProbeDesign | null>(null);
   const [generating, setGenerating] = useState(false);
   const [picking, setPicking] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +28,25 @@ export function Stage2({
       setPlans(null);
     }
   }, [run.run_id, run.stage, run.phase]);
+
+  // Look up the probe the user chose in stage 1 so they can refresh their
+  // memory of what these dev plans are being generated against.
+  useEffect(() => {
+    if (run.probe_index == null) {
+      setProbe(null);
+      return;
+    }
+    api
+      .getStage1(run.run_id)
+      .then((r) => {
+        const p =
+          r.probe_designs && run.probe_index
+            ? r.probe_designs[run.probe_index - 1]
+            : null;
+        setProbe(p ?? null);
+      })
+      .catch(() => setProbe(null));
+  }, [run.run_id, run.probe_index]);
 
   async function handleGenerate() {
     setError(null);
@@ -64,6 +84,36 @@ export function Stage2({
         subtitle="The model translates your selected probe into 3 concrete development plans, each rated for confidence."
       />
 
+      {probe && (
+        <section className="space-y-2">
+          <SectionLabel>
+            Probe you chose (#{run.probe_index})
+          </SectionLabel>
+          <Card className="p-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Pill tone="neutral">{probe.probe_type}</Pill>
+              <span className="font-medium text-[13px] text-ink-900">
+                {probe.probe_name}
+              </span>
+              <div className="ml-auto">
+                <ConfidenceBar value={probe.confidence} />
+              </div>
+            </div>
+            <p className="text-[12px] text-ink-700 leading-relaxed">
+              {probe.content}
+            </p>
+            {probe.possible_sources?.length > 0 && (
+              <div className="text-[11px] text-ink-500">
+                <span className="uppercase tracking-wide font-medium">
+                  sources:
+                </span>{" "}
+                {probe.possible_sources.join(" · ")}
+              </div>
+            )}
+          </Card>
+        </section>
+      )}
+
       {run.stage === 2 && run.phase === "input" && (
         <div>
           <Button onClick={handleGenerate} disabled={generating}>
@@ -95,8 +145,13 @@ export function Stage2({
           {plans.map((p, i) => {
             const idx = i + 1;
             const isSel = selected === idx;
+            const isTried = run.tried_plan_indices?.includes(idx);
             return (
-              <Card key={i} selected={isSel} className="p-4">
+              <Card
+                key={i}
+                selected={isSel}
+                className={`p-4 ${isTried ? "opacity-55 bg-ink-50/60" : ""}`}
+              >
                 <div className="flex items-start gap-3">
                   <div className="font-mono text-[11px] text-ink-500 w-7 mt-0.5">
                     {String(idx).padStart(2, "0")}
@@ -104,6 +159,7 @@ export function Stage2({
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2">
                       <Pill tone="neutral">plan</Pill>
+                      {isTried && <Pill tone="warn">already tried</Pill>}
                       <div className="ml-auto">
                         <ConfidenceBar value={p.confidence} />
                       </div>
@@ -121,9 +177,22 @@ export function Stage2({
                           size="sm"
                           variant={isSel ? "primary" : "secondary"}
                           onClick={() => handleSelect(idx)}
-                          disabled={picking !== null}
+                          disabled={picking !== null || isTried}
+                          title={
+                            isTried
+                              ? "Already tried in this run — pick a different plan."
+                              : undefined
+                          }
                         >
-                          {picking === idx ? <Spinner /> : isSel ? "Selected" : "Select & Continue"}
+                          {picking === idx ? (
+                            <Spinner />
+                          ) : isTried ? (
+                            "Already tried"
+                          ) : isSel ? (
+                            "Selected"
+                          ) : (
+                            "Select & Continue"
+                          )}
                         </Button>
                       </div>
                     )}

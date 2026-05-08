@@ -92,6 +92,14 @@ class StageRecord:
         "auto_research": False,
         "threshold_override": None,
     })
+    # Indices already tried-and-reverted, displayed greyed out so the user
+    # doesn't reselect them. Cleared when the corresponding candidate set is
+    # regenerated (indices would be stale).
+    tried_probe_indices: list[int] = field(default_factory=list)
+    tried_plan_indices: list[int] = field(default_factory=list)
+    # Set by stage actions while in flight; surfaced in the UI status bar so
+    # the user knows what's happening during long-running calls. None when idle.
+    current_action: str | None = None
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -161,6 +169,11 @@ class RunState:
         self._record.phase = phase
         self.save()
 
+    def set_action(self, action: str | None) -> None:
+        """Surface what the pipeline is currently doing for the UI status bar."""
+        self._record.current_action = action
+        self.save()
+
     def advance_to(self, stage: Stage | int) -> None:
         self._record.stage = int(stage)
         self._record.phase = "input"
@@ -190,16 +203,36 @@ class RunState:
         return self.run_dir / name
 
     # ── backward navigation ──────────────────────────────────────────────────
-    def revert_to(self, target_stage: Stage | int) -> dict:
-        """Wipe target stage's outputs and any later stages' artifacts.
+    def revert_to(self, target_stage: Stage | int, keep_workspace: bool = False) -> dict:
+        """Land at the END of the target stage (selection cleared, candidates kept).
 
-        Returns a summary of what was deleted (for logging / UI feedback).
-        Stage inputs (e.g. context for stage 1, probe selection for stage 2 if
-        reverting to stage 3) are preserved.
+        Reverting to stage 1 or 2 is "I want to re-pick from the same set of
+        candidates": probe_designs / dev_plans are kept, only the index is
+        cleared, and the run lands at phase="generated" so the UI shows the
+        candidate list ready for re-selection. The just-cleared index is
+        appended to `tried_probe_indices` / `tried_plan_indices` so the UI can
+        grey out already-tried options. Stage-1's own "Regenerate" button is
+        the way to discard candidates and start fresh.
+
+        Reverting across stage 1 (e.g. 3→1) discards stage-2 artifacts because
+        they were generated for the old probe and would be stale. Workspace
+        artifacts (prober.py, snapshots, metrics, plots, iterations) from
+        stage 3+ are wiped whenever the target is ≤ 3.
+
+        Reverting to stage 3 or 4 keeps the existing semantics.
+
+        With `keep_workspace=True` (only valid for target==1): used by the
+        "keep changes" path after a stage-4 PASS. We KEEP the modified
+        train.py (re-snapshotting it as the new train_version_0 baseline) but
+        otherwise reset everything — probe_designs, dev_doc, prober, metrics,
+        iterations, tried lists. The run lands at stage=1 phase="input" so
+        the user must regenerate probe candidates against the new train.py.
         """
         target = int(target_stage)
         if target not in (1, 2, 3, 4):
             raise ValueError(f"Invalid target stage: {target}")
+        if keep_workspace and target != 1:
+            raise ValueError("keep_workspace is only supported when reverting to stage 1.")
 
         deleted: list[str] = []
         ws = self.workspace
@@ -207,23 +240,81 @@ class RunState:
         snapshot_v0 = wp["snapshot"] / "train_version_0.py"
         snapshot_v1 = wp["snapshot"] / "train_version_1.py"
 
-        # Reverting to stage 1: clear stage-1 outputs and everything after.
-        if target <= 1:
-            for name in (PROBE_DESIGNS, PROBE_CONFIDENCED):
+        # ── "keep changes" path (post-PASS, stage 4 → stage 1 with new baseline)
+        if keep_workspace:
+            # Re-baseline train.py: the modified file becomes the new v0.
+            wp["snapshot"].mkdir(parents=True, exist_ok=True)
+            snapshot_v0.write_text(wp["train"].read_text())
+            deleted.append(f"{snapshot_v0} (re-baselined to current train.py)")
+            # Wipe prober + all probe/plan/iteration artifacts (probe candidates
+            # included — they'll be regenerated against the new train.py).
+            if wp["prober"].exists():
+                _safe_unlink(wp["prober"]); deleted.append(str(wp["prober"]))
+            for name in (PROBE_DESIGNS, PROBE_CONFIDENCED, DEV_DOC, DEV_DOC_CONFIDENCED):
                 p = self.run_dir / name
                 if p.exists():
                     _safe_unlink(p); deleted.append(str(p))
+            _purge_glob(wp["metric"], "probe_result_*.json", keep_max_index=0)
+            _purge_glob(wp["plot"], "probe_result_*.pdf", keep_max_index=0)
+            _purge_glob(wp["agent_probe"], "change_log_*.txt", keep_max_index=0)
+            # Don't blow away the new v0 we just wrote.
+            for p in wp["snapshot"].glob("train_version_*.py"):
+                try:
+                    n = int(p.stem.rsplit("_", 1)[-1])
+                except ValueError:
+                    continue
+                if n > 0:
+                    _safe_unlink(p)
+            _safe_unlink(wp["live"] / "probe_live.json")
+            self._record.probe_index = None
+            self._record.plan_index = None
+            self._record.iterations = []
+            self._record.tried_probe_indices = []
+            self._record.tried_plan_indices = []
+            self._record.debug_flags["auto_research"] = False
+            self._record.debug_flags["threshold_override"] = None
+            self._record.stage = 1
+            self._record.phase = "input"
+            self._record.current_action = None
+            self.save()
+            return {"deleted": deleted, "stage": 1, "phase": "input", "keep_workspace": True}
+
+        # Mark the just-cleared probe as "already tried" so the UI can grey it
+        # out — but ONLY when we're fully rolling back from stage 4 to stage 1.
+        # Casual back-navigation (2→1, 3→2, 3→1, 4→2, 4→3) is treated as the
+        # user changing their mind mid-flight; the selection stays available so
+        # they can re-pick it. The "fully turn back" semantic (4→1) is the
+        # signal that the probe has been exhausted (whether it passed or not).
+        came_from = int(self._record.stage)
+        if (
+            target == 1
+            and came_from == 4
+            and self._record.probe_index is not None
+            and self._record.probe_index not in self._record.tried_probe_indices
+        ):
+            self._record.tried_probe_indices.append(self._record.probe_index)
+
+        # Reverting to stage 1: clear the probe SELECTION but keep the
+        # generated probe candidates so the user can pick a different one.
+        if target <= 1:
             self._record.probe_index = None
 
-        # Reverting to stage 2: clear stage-2 outputs and everything after.
-        if target <= 2:
+        # Reverting *past* stage 1 (i.e. landing at stage 1) discards stage-2
+        # dev plans — they were tied to the old probe. Reverting *to* stage 2
+        # keeps them so the user can re-pick a plan for the same probe.
+        if target <= 1:
             for name in (DEV_DOC, DEV_DOC_CONFIDENCED):
                 p = self.run_dir / name
                 if p.exists():
                     _safe_unlink(p); deleted.append(str(p))
             self._record.plan_index = None
+            # Plan indices were keyed to the just-discarded plan set; stale.
+            self._record.tried_plan_indices = []
+        elif target == 2:
+            self._record.plan_index = None
 
-        # Reverting to stage 3: wipe ALL workspace artifacts; restore baseline.
+        # Reverting to stage 3 (or below): wipe ALL workspace artifacts;
+        # restore baseline train.py.
         if target <= 3:
             if wp["prober"].exists():
                 _safe_unlink(wp["prober"]); deleted.append(str(wp["prober"]))
@@ -258,7 +349,10 @@ class RunState:
             self._record.iterations = self._record.iterations[:1]
 
         self._record.stage = target
-        self._record.phase = "input" if target in (1, 2) else "ready"
+        # Stages 1/2 land at their end (candidates kept, awaiting re-selection).
+        # Stages 3/4 keep the prior "ready" semantics.
+        self._record.phase = "generated" if target in (1, 2) else "ready"
+        self._record.current_action = None
         self.save()
         return {"deleted": deleted, "stage": target, "phase": self._record.phase}
 

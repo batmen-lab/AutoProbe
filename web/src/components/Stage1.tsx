@@ -171,8 +171,13 @@ export function Stage1({
           {designs.map((d, i) => {
             const idx = i + 1;
             const isSel = selected === idx;
+            const isTried = run.tried_probe_indices?.includes(idx);
             return (
-              <Card key={i} selected={isSel} className="p-4">
+              <Card
+                key={i}
+                selected={isSel}
+                className={`p-4 ${isTried ? "opacity-55 bg-ink-50/60" : ""}`}
+              >
                 <div className="flex items-start gap-3">
                   <div className="font-mono text-[11px] text-ink-500 w-7 mt-0.5">
                     {String(idx).padStart(2, "0")}
@@ -183,6 +188,7 @@ export function Stage1({
                       <span className="font-medium text-[13px] text-ink-900">
                         {d.probe_name}
                       </span>
+                      {isTried && <Pill tone="warn">already tried</Pill>}
                       <div className="ml-auto">
                         <ConfidenceBar value={d.confidence} />
                       </div>
@@ -204,9 +210,22 @@ export function Stage1({
                           size="sm"
                           variant={isSel ? "primary" : "secondary"}
                           onClick={() => handleSelect(idx)}
-                          disabled={picking !== null}
+                          disabled={picking !== null || isTried}
+                          title={
+                            isTried
+                              ? "Already tried in this run — pick a different probe or use Regenerate."
+                              : undefined
+                          }
                         >
-                          {picking === idx ? <Spinner /> : isSel ? "Selected" : "Select & Continue"}
+                          {picking === idx ? (
+                            <Spinner />
+                          ) : isTried ? (
+                            "Already tried"
+                          ) : isSel ? (
+                            "Selected"
+                          ) : (
+                            "Select & Continue"
+                          )}
                         </Button>
                       </div>
                     )}

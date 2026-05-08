@@ -88,6 +88,7 @@ class SelectBody(BaseModel):
 
 class RevertBody(BaseModel):
     to_stage: int
+    keep_workspace: bool = False  # post-PASS "keep changes" path (target=1 only)
 
 
 class ListDirBody(BaseModel):
@@ -288,7 +289,7 @@ async def stage4_iterate(run_id: str):
 def revert(run_id: str, body: RevertBody):
     state = load_run(run_id)
     try:
-        result = state.revert_to(body.to_stage)
+        result = state.revert_to(body.to_stage, keep_workspace=body.keep_workspace)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"result": result, "state": _state_payload(state)}
@@ -413,6 +414,7 @@ def cancel():
         try:
             state = load_run(rid)
             new_phase = "ready" if state.record.stage == 4 else "input"
+            state.set_action(None)
             state.set_phase(state.record.stage, new_phase)
             affected = rid
         except FileNotFoundError:

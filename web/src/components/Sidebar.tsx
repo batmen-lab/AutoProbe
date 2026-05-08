@@ -91,7 +91,7 @@ export function Sidebar({
 
       <div className="border-t border-ink-200 px-3 py-2">
         <div className="text-[10px] text-ink-400">
-          forward = continue · backward = revert (clean)
+          forward = continue · backward = revert
         </div>
       </div>
     </aside>
@@ -144,10 +144,16 @@ function StageRow({
       {isDone && (
         <button
           onClick={onRevert}
-          title={`Revert to stage ${n} (clean start)`}
+          title={
+            n === 1
+              ? "Back to stage 1 (re-pick probe; candidates kept)"
+              : n === 2
+                ? "Back to stage 2 (re-pick plan; candidates kept)"
+                : `Back to stage ${n}`
+          }
           className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-ink-500 hover:text-ink-900 px-1.5 py-0.5 rounded hover:bg-white border border-transparent hover:border-ink-200"
         >
-          revert
+          back
         </button>
       )}
     </div>
@@ -162,7 +168,7 @@ function StageIndex({
   state: "done" | "current" | "future" | "locked";
 }) {
   const cls = {
-    done: "bg-ink-900 text-ink-50",
+    done: "bg-green-500 text-white shadow-[0_0_0_2px_rgba(34,197,94,0.18)]",
     current: "bg-ink-900 text-ink-50",
     future: "border border-ink-300 text-ink-400",
     locked: "border border-ink-200 text-ink-300",
@@ -170,7 +176,7 @@ function StageIndex({
   const inner = state === "done" ? <Check /> : <span>{n}</span>;
   return (
     <div
-      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono ${cls}`}
+      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono transition-all ${cls}`}
     >
       {inner}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, ButtonHTMLAttributes } from "react";
+import { ReactNode, ButtonHTMLAttributes, useEffect } from "react";
 
 export function Button({
   variant = "primary",
@@ -106,5 +106,142 @@ export function Spinner({ size = 14 }: { size?: number }) {
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.2" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
+  );
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+// Single-toast surface anchored bottom-right. Auto-dismisses after `ttl` ms.
+export type ToastTone = "info" | "success";
+export type ToastSpec = { id: number; tone: ToastTone; text: string };
+
+export function Toast({
+  toast,
+  onClose,
+  ttl = 4000,
+}: {
+  toast: ToastSpec | null;
+  onClose: () => void;
+  ttl?: number;
+}) {
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(onClose, ttl);
+    return () => clearTimeout(t);
+  }, [toast, onClose, ttl]);
+
+  if (!toast) return null;
+  const colors =
+    toast.tone === "success"
+      ? "bg-green-50 border-green-200 text-green-800"
+      : "bg-white border-ink-200 text-ink-800";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none animate-fade-in">
+      <div
+        className={`pointer-events-auto flex items-center gap-3 rounded-lg border-2 px-5 py-4 shadow-lg ${colors}`}
+      >
+        {toast.tone === "success" && (
+          <svg width="22" height="22" viewBox="0 0 12 12" fill="none">
+            <circle cx="6" cy="6" r="5.5" fill="currentColor" opacity="0.15" />
+            <path
+              d="M3.5 6.5l1.8 1.8L8.5 4.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+        <div className="text-[14.5px] font-medium leading-snug max-w-sm">
+          {toast.text}
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-2 text-ink-400 hover:text-ink-700 text-[20px] leading-none px-1"
+          aria-label="Dismiss"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Action status banner ─────────────────────────────────────────────────────
+// Shown above stage content while a long-running action is in flight. Renders
+// the human-readable label for the current action.
+export function ActionStatusBar({
+  action,
+  busy,
+}: {
+  action: string | null;
+  busy: boolean;
+}) {
+  if (!busy && !action) return null;
+  const label = humanizeAction(action);
+  return (
+    <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-md border border-ink-200 bg-white shadow-sm">
+      <Spinner size={14} />
+      <div className="text-[12.5px] text-ink-800 font-medium">{label}</div>
+    </div>
+  );
+}
+
+export function humanizeAction(action: string | null): string {
+  if (!action) return "Working…";
+  if (action === "probe-generate") return "Generating probe candidates…";
+  if (action === "dev-plan-generate") return "Generating dev plans…";
+  if (action === "implementation-apply")
+    return "Applying dev-plan implementation (writing prober.py & integrating train.py)…";
+  if (action === "post-impl-test-run")
+    return "Running first probe test on the integrated train.py…";
+  if (action === "auto-research-setup")
+    return "Auto-research: writing prober & integrating train.py…";
+  if (action.startsWith("improving-implement:")) {
+    const n = action.split(":")[1];
+    return `Iteration ${n}: applying improvement to train.py…`;
+  }
+  if (action.startsWith("iteration-test-run:")) {
+    const n = action.split(":")[1];
+    return `Iteration ${n}: re-running probe…`;
+  }
+  return action;
+}
+
+// ── Modal ────────────────────────────────────────────────────────────────────
+// Lightweight dialog for confirms / multi-option choices. Click backdrop or
+// Escape to dismiss (when `dismissible`).
+export function Modal({
+  open,
+  onClose,
+  children,
+  dismissible = true,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  dismissible?: boolean;
+}) {
+  useEffect(() => {
+    if (!open || !dismissible) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, dismissible, onClose]);
+
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-ink-950/40 px-4 animate-fade-in"
+      onClick={() => dismissible && onClose()}
+    >
+      <div
+        className="bg-white rounded-lg border border-ink-200 shadow-xl max-w-md w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
   );
 }

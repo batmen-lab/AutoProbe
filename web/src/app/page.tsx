@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, RunRecord, RunSummary, WorkspaceState } from "@/lib/api";
 import { WorkspaceBar } from "@/components/WorkspaceBar";
 import { Sidebar } from "@/components/Sidebar";
@@ -10,7 +10,13 @@ import { Stage3 } from "@/components/Stage3";
 import { Stage4 } from "@/components/Stage4";
 import { Home } from "@/components/Home";
 import { GlobalLogDock } from "@/components/LogPanel";
-import { Button } from "@/components/ui";
+import {
+  ActionStatusBar,
+  Button,
+  Modal,
+  Toast,
+  ToastSpec,
+} from "@/components/ui";
 
 type View = "home" | "session";
 
@@ -23,6 +29,21 @@ export default function Page() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [active, setActive] = useState<RunRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastSpec | null>(null);
+  const [keepInfoOpen, setKeepInfoOpen] = useState(false);
+  // Last seen current_action — used to detect transitions and fire toasts.
+  const prevActionRef = useRef<string | null>(null);
+  // Monotonic sequence so a slow polling GET (sent pre-revert, returning
+  // post-revert) can't overwrite a fresher setActive from the revert/POST
+  // response. Each setActive bumps lastAppliedSeq; polling drops responses
+  // whose seq is older than the latest applied.
+  const reqSeqRef = useRef(0);
+  const lastAppliedSeqRef = useRef(0);
+  const applyState = useCallback((s: RunRecord, seq: number) => {
+    if (seq < lastAppliedSeqRef.current) return; // stale, drop
+    lastAppliedSeqRef.current = seq;
+    setActive(s);
+  }, []);
 
   // We do NOT auto-load workspace or active run on mount.
   // The home page is always the entry; the user must click to proceed.
@@ -59,8 +80,9 @@ export default function Page() {
   const refreshActive = useCallback(async () => {
     if (!active) return;
     try {
+      const seq = ++reqSeqRef.current;
       const r = await api.getRun(active.run_id);
-      setActive(r);
+      applyState(r, seq);
       if (workspace.current) {
         const { runs } = await api.listRuns(workspace.current);
         setRuns(runs);
@@ -68,7 +90,55 @@ export default function Page() {
     } catch (e) {
       setError(String((e as Error).message ?? e));
     }
-  }, [active, workspace.current]);
+  }, [active, workspace.current, applyState]);
+
+  // ── poll the active run so the status bar picks up intermediate actions ─
+  // We poll unconditionally (not just when busy=true), because long-running
+  // stage POSTs hold the request open for minutes — `busy` flips on the
+  // server the moment the lock is acquired, but the frontend would never
+  // see it without polling, and a busy-gated effect would never start.
+  useEffect(() => {
+    if (!active?.run_id) return;
+    const runId = active.run_id;
+    let cancelled = false;
+    const tick = async () => {
+      const seq = ++reqSeqRef.current;
+      try {
+        const r = await api.getRun(runId);
+        if (!cancelled) applyState(r, seq);
+      } catch {
+        // ignore transient polling errors
+      }
+    };
+    const id = setInterval(tick, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [active?.run_id, applyState]);
+
+  // ── toast on probe-generate / dev-plan-generate completion ──────────────
+  useEffect(() => {
+    const prev = prevActionRef.current;
+    const cur = active?.current_action ?? null;
+    if (prev && !cur) {
+      // Transitioned from in-flight to idle — fire the right toast.
+      if (prev === "probe-generate") {
+        setToast({
+          id: Date.now(),
+          tone: "success",
+          text: "Probe candidates ready — pick one to continue.",
+        });
+      } else if (prev === "dev-plan-generate") {
+        setToast({
+          id: Date.now(),
+          tone: "success",
+          text: "Dev plans ready — pick one to continue.",
+        });
+      }
+    }
+    prevActionRef.current = cur;
+  }, [active?.current_action]);
 
   // ── session actions ─────────────────────────────────────────────────────
   async function handleWorkspaceChange(s: WorkspaceState) {
@@ -87,8 +157,9 @@ export default function Page() {
 
   async function handlePickRun(id: string) {
     try {
+      const seq = ++reqSeqRef.current;
       const r = await api.getRun(id);
-      setActive(r);
+      applyState(r, seq);
     } catch (e) {
       setError(String((e as Error).message ?? e));
     }
@@ -96,10 +167,11 @@ export default function Page() {
 
   async function handleNewRun() {
     try {
+      const seq = ++reqSeqRef.current;
       const r = await api.newRun();
       const { runs } = await api.listRuns(workspace.current ?? undefined);
       setRuns(runs);
-      setActive(r);
+      applyState(r, seq);
     } catch (e) {
       setError(String((e as Error).message ?? e));
     }
@@ -127,14 +199,22 @@ export default function Page() {
 
   async function handleRevert(toStage: number) {
     if (!active) return;
-    const ok = window.confirm(
-      `Revert run ${active.run_id} to stage ${toStage}?\n\n` +
-        `This will erase stage ${toStage}'s outputs and any later stage artifacts. Earlier-stage inputs are kept.`,
-    );
+    const message =
+      toStage === 1
+        ? `Revert run ${active.run_id} to stage 1?\n\n` +
+          `Probe candidates are kept; your selection will be cleared so you can re-pick. Stage 2+ artifacts are erased. ` +
+          `(To regenerate the probe candidates themselves, use the Regenerate button inside stage 1.)`
+        : toStage === 2
+          ? `Revert run ${active.run_id} to stage 2?\n\n` +
+            `Dev plans are kept; your plan selection will be cleared so you can re-pick. Stage 3+ artifacts are erased.`
+          : `Revert run ${active.run_id} to stage ${toStage}?\n\n` +
+            `This will erase stage ${toStage}'s outputs and any later stage artifacts. Earlier-stage inputs are kept.`;
+    const ok = window.confirm(message);
     if (!ok) return;
     try {
+      const seq = ++reqSeqRef.current;
       const { state } = await api.revert(active.run_id, toStage);
-      setActive(state);
+      applyState(state, seq);
       if (workspace.current) {
         const { runs } = await api.listRuns(workspace.current);
         setRuns(runs);
@@ -194,10 +274,22 @@ export default function Page() {
         <div className="flex-1 flex flex-col min-w-0">
           <main className="flex-1 overflow-y-auto">
             <div className="max-w-3xl mx-auto px-8 py-8">
+              {active && (active.busy || active.current_action) && (
+                <div className="mb-4">
+                  <ActionStatusBar
+                    action={active.current_action}
+                    busy={active.busy}
+                  />
+                </div>
+              )}
               {!active ? (
                 <EmptyState onNewRun={handleNewRun} onHome={handleHome} />
               ) : (
-                <ActiveStage run={active} onUpdate={refreshActive} />
+                <ActiveStage
+                  run={active}
+                  onUpdate={refreshActive}
+                  onKeepRebase={() => setKeepInfoOpen(true)}
+                />
               )}
 
               {error && (
@@ -219,6 +311,25 @@ export default function Page() {
           />
         </div>
       </div>
+
+      <Toast toast={toast} onClose={() => setToast(null)} />
+
+      <Modal open={keepInfoOpen} onClose={() => setKeepInfoOpen(false)}>
+        <div className="p-5 space-y-3">
+          <h2 className="text-[15px] font-semibold text-ink-950">
+            Re-generation needed
+          </h2>
+          <p className="text-[12.5px] text-ink-700 leading-relaxed">
+            <span className="font-mono">train.py</span> has been re-baselined.
+            The previous probe candidates would be incoherent with the updated
+            code, so we cleared them. Click <b>Generate Probes</b> on stage 1
+            (your project context is preserved) to produce fresh candidates.
+          </p>
+          <div className="flex justify-end pt-1">
+            <Button onClick={() => setKeepInfoOpen(false)}>Got it</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -226,9 +337,11 @@ export default function Page() {
 function ActiveStage({
   run,
   onUpdate,
+  onKeepRebase,
 }: {
   run: RunRecord;
   onUpdate: () => void;
+  onKeepRebase: () => void;
 }) {
   switch (run.stage) {
     case 1:
@@ -238,7 +351,9 @@ function ActiveStage({
     case 3:
       return <Stage3 run={run} onUpdate={onUpdate} />;
     case 4:
-      return <Stage4 run={run} onUpdate={onUpdate} />;
+      return (
+        <Stage4 run={run} onUpdate={onUpdate} onKeepRebase={onKeepRebase} />
+      );
     default:
       return <div>unknown stage</div>;
   }
