@@ -15,6 +15,7 @@ setup:
 	cd web && npm install
 
 api:
+	-@fuser -k -TERM 8765/tcp 2>/dev/null; sleep 0.3
 	$(PYTHON) -m server.app
 
 web:

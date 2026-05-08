@@ -11,13 +11,18 @@ You point AutoProbe at a project folder containing a `train.py`. It then:
 4. iteratively rewrites `train.py` until the probe metric crosses a threshold —
    or you stop it.
 
-It ships with three ways to drive the same pipeline:
+**Day-to-day, you run two things in two terminals:**
 
-| Interface | Process | Use it for |
-|---|---|---|
-| **Web UI** (Next.js + FastAPI) | `make api` + `make web` | Normal use. Live log dock, live metric chart, click-driven stage navigation, revert. |
-| **CLI** (`main.py`) | `make cli` | Scripted/headless runs. |
-| **Smoke test** (`test.py`) | `python test.py` | Verify the `claude` CLI is reachable before a real run. |
+```bash
+make api      # terminal 1 — FastAPI on :8765
+make web      # terminal 2 — Next.js on :3000  → open http://localhost:3000
+```
+
+That's it. Everything happens in the browser.
+
+(There's also a `python main.py` CLI driver and a `python test.py` smoke
+check — both wrap the same pipeline. They're optional. See [Other entry
+points](#other-entry-points) at the bottom if you ever need them.)
 
 ---
 
@@ -193,19 +198,9 @@ If you're on Linux/macOS and have `make`:
 make setup        # creates venv, installs requirements.txt, runs npm install
 ```
 
-Then later:
-
-```bash
-make api          # FastAPI on :8765
-make web          # Next.js dev server on :3000
-make cli          # interactive CLI
-```
-
 ---
 
 ## Running
-
-### Web UI (recommended)
 
 In two terminals (both with the venv activated):
 
@@ -237,22 +232,6 @@ outputs and everything after it; keeps stage *inputs* so you can edit and
 re-run). The big red **Cancel** button kills the active subprocess and resets
 the run's phase.
 
-### CLI
-
-Same pipeline, no browser:
-
-```bash
-make cli
-# or:  python main.py
-# or:  python main.py --workspace ./mimic --iterations 3
-# or:  python main.py --resume 20260506174444
-```
-
-```bash
-python main.py list                                  # list runs
-python main.py revert <run_id> --to-stage 3          # rewind a run
-```
-
 ---
 
 ## Workspace requirements
@@ -277,11 +256,11 @@ and will be populated locally when you put your project in them — the
 
 ```
 AutoProbe/
-├── main.py                         # CLI driver
+├── main.py                         # optional CLI driver (same pipeline as the web UI)
 ├── test.py                         # claude-CLI smoke test
 ├── Questions.py                    # user-facing prompt strings (CLI)
 ├── requirements.txt                # Python deps (API + training stack)
-├── Makefile                        # setup / api / web / cli
+├── Makefile                        # setup / api / web (cli is optional)
 │
 ├── pipeline/                       # The actual pipeline
 │   ├── __init__.py
@@ -357,6 +336,28 @@ AutoProbe/
   before each retry so charts don't reflect dead code.
 - **Early stop.** Stage 4 exits as soon as `probe_result_N.json` reports
   `"status": "PASS"`, regardless of the configured iteration count.
+
+---
+
+## Other entry points
+
+You won't normally need these. The web UI is the primary interface.
+
+**`python main.py`** — interactive CLI driver for the same pipeline. Same
+4 stages, terminal prompts instead of buttons. Useful for scripted/headless
+runs.
+
+```bash
+python main.py                                       # interactive
+python main.py --workspace ./mimic --iterations 3    # non-interactive
+python main.py --resume <run_id>                     # resume
+python main.py list                                  # list runs
+python main.py revert <run_id> --to-stage 3          # rewind a run
+```
+
+**`python test.py`** — smoke-tests the `claude` CLI (NLP call, agent call, web
+search). Run this once after setup to confirm auth works. All three checks
+should print `PASS`.
 
 ---
 
