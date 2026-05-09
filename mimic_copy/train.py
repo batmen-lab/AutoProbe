@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 BATCH_SIZE = 256
 LEARNING_RATE = 2
-NUM_EPOCHS = 50
+NUM_EPOCHS = 5
 SEED = 42
 
 SCRIPT_DIR = Path(__file__).resolve().parent

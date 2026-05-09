@@ -1,14 +1,7 @@
 "use client";
 
 import { RunRecord, RunSummary } from "@/lib/api";
-import { Button, Pill, SectionLabel } from "./ui";
-
-const STAGE_LABELS: Record<number, string> = {
-  1: "Probe Design",
-  2: "Dev Plan",
-  3: "Implementation",
-  4: "Iteration",
-};
+import { Button, Pill, SectionLabel, STAGE_NAMES, stageName } from "./ui";
 
 export function Sidebar({
   runs,
@@ -81,7 +74,7 @@ export function Sidebar({
             <StageRow
               key={n}
               n={n}
-              label={STAGE_LABELS[n]}
+              label={STAGE_NAMES[n]}
               active={active}
               onRevert={() => onRevert(n)}
             />
@@ -146,10 +139,10 @@ function StageRow({
           onClick={onRevert}
           title={
             n === 1
-              ? "Back to stage 1 (re-pick probe; candidates kept)"
+              ? "Back to Probe Design (re-pick probe; candidates kept)"
               : n === 2
-                ? "Back to stage 2 (re-pick plan; candidates kept)"
-                : `Back to stage ${n}`
+                ? "Back to Dev Plan (re-pick plan; candidates kept)"
+                : `Back to ${stageName(n)}`
           }
           className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-ink-500 hover:text-ink-900 px-1.5 py-0.5 rounded hover:bg-white border border-transparent hover:border-ink-200"
         >

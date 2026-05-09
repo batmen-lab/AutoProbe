@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, ButtonHTMLAttributes, useEffect } from "react";
+import { ReactNode, ButtonHTMLAttributes, useEffect, useRef } from "react";
 
 export function Button({
   variant = "primary",
@@ -117,17 +117,25 @@ export type ToastSpec = { id: number; tone: ToastTone; text: string };
 export function Toast({
   toast,
   onClose,
-  ttl = 4000,
+  ttl = 3000,
 }: {
   toast: ToastSpec | null;
   onClose: () => void;
   ttl?: number;
 }) {
+  // Capture onClose in a ref so the dismiss timer doesn't get re-armed every
+  // time the parent re-renders (which it does ~1×/s due to polling). The
+  // effect should only re-run when a NEW toast appears, keyed on toast.id.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(onClose, ttl);
+    const t = setTimeout(() => onCloseRef.current(), ttl);
     return () => clearTimeout(t);
-  }, [toast, onClose, ttl]);
+  }, [toast?.id, ttl]);
 
   if (!toast) return null;
   const colors =
@@ -137,10 +145,10 @@ export function Toast({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none animate-fade-in">
       <div
-        className={`pointer-events-auto flex items-center gap-3 rounded-lg border-2 px-5 py-4 shadow-lg ${colors}`}
+        className={`pointer-events-auto flex items-center gap-5 rounded-xl border-2 px-9 py-7 shadow-2xl ${colors}`}
       >
         {toast.tone === "success" && (
-          <svg width="22" height="22" viewBox="0 0 12 12" fill="none">
+          <svg width="36" height="36" viewBox="0 0 12 12" fill="none">
             <circle cx="6" cy="6" r="5.5" fill="currentColor" opacity="0.15" />
             <path
               d="M3.5 6.5l1.8 1.8L8.5 4.5"
@@ -151,12 +159,12 @@ export function Toast({
             />
           </svg>
         )}
-        <div className="text-[14.5px] font-medium leading-snug max-w-sm">
+        <div className="text-[20px] font-semibold leading-snug max-w-xl">
           {toast.text}
         </div>
         <button
           onClick={onClose}
-          className="ml-2 text-ink-400 hover:text-ink-700 text-[20px] leading-none px-1"
+          className="ml-2 text-ink-400 hover:text-ink-700 text-[28px] leading-none px-2"
           aria-label="Dismiss"
         >
           ×
@@ -167,23 +175,67 @@ export function Toast({
 }
 
 // ── Action status banner ─────────────────────────────────────────────────────
-// Shown above stage content while a long-running action is in flight. Renders
-// the human-readable label for the current action.
+// Shown above stage content. While the pipeline is busy it spins and shows
+// the in-flight action's label; when idle, it surfaces a phase-specific
+// "waiting for..." prompt so the user always knows what the system expects
+// next.
 export function ActionStatusBar({
   action,
   busy,
+  idleMessage,
 }: {
   action: string | null;
   busy: boolean;
+  idleMessage?: string | null;
 }) {
-  if (!busy && !action) return null;
-  const label = humanizeAction(action);
+  const isBusy = busy || !!action;
+  if (!isBusy && !idleMessage) return null;
+  const label = isBusy ? humanizeAction(action) : idleMessage!;
+  const color = isBusy
+    ? "border-ink-200 bg-white text-ink-900"
+    : "border-amber-200 bg-amber-50 text-amber-900";
   return (
-    <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-md border border-ink-200 bg-white shadow-sm">
-      <Spinner size={14} />
-      <div className="text-[12.5px] text-ink-800 font-medium">{label}</div>
+    <div
+      className={`flex items-center gap-4 px-6 py-4 rounded-lg border-2 shadow-md ${color}`}
+    >
+      {isBusy ? <Spinner size={26} /> : <IdleDot />}
+      <div className="text-[18px] font-semibold leading-snug">{label}</div>
     </div>
   );
+}
+
+function IdleDot() {
+  return (
+    <span className="relative inline-flex items-center justify-center w-[26px] h-[26px]">
+      <span className="absolute inset-0 rounded-full bg-amber-400 opacity-50 animate-ping" />
+      <span className="relative w-3 h-3 rounded-full bg-amber-500" />
+    </span>
+  );
+}
+
+// Canonical stage display names. We surface these in user-facing copy
+// instead of "stage N" — the index is internal jargon.
+export const STAGE_NAMES: Record<number, string> = {
+  1: "Probe Design",
+  2: "Dev Plan",
+  3: "Implementation",
+  4: "Probe Fixing",
+};
+
+export function stageName(n: number): string {
+  return STAGE_NAMES[n] ?? `stage ${n}`;
+}
+
+// English ordinal suffix: 1 → "1st", 2 → "2nd", 3 → "3rd", 11 → "11th", etc.
+// Used wherever we'd otherwise say "iteration N" — the user prefers "Nth run".
+export function ordinal(n: number): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  if (mod10 === 1) return `${n}st`;
+  if (mod10 === 2) return `${n}nd`;
+  if (mod10 === 3) return `${n}rd`;
+  return `${n}th`;
 }
 
 export function humanizeAction(action: string | null): string {
@@ -197,12 +249,12 @@ export function humanizeAction(action: string | null): string {
   if (action === "auto-research-setup")
     return "Auto-research: writing prober & integrating train.py…";
   if (action.startsWith("improving-implement:")) {
-    const n = action.split(":")[1];
-    return `Iteration ${n}: applying improvement to train.py…`;
+    const n = parseInt(action.split(":")[1], 10);
+    return `${ordinal(n)} run: applying improvement to train.py…`;
   }
   if (action.startsWith("iteration-test-run:")) {
-    const n = action.split(":")[1];
-    return `Iteration ${n}: re-running probe…`;
+    const n = parseInt(action.split(":")[1], 10);
+    return `${ordinal(n)} run: re-running probe…`;
   }
   return action;
 }
@@ -233,11 +285,11 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-ink-950/40 px-4 animate-fade-in"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-ink-950/45 px-6 animate-fade-in"
       onClick={() => dismissible && onClose()}
     >
       <div
-        className="bg-white rounded-lg border border-ink-200 shadow-xl max-w-md w-full"
+        className="bg-white rounded-xl border-2 border-ink-200 shadow-2xl max-w-2xl w-full"
         onClick={(e) => e.stopPropagation()}
       >
         {children}

@@ -14,6 +14,7 @@ import {
   ActionStatusBar,
   Button,
   Modal,
+  stageName,
   Toast,
   ToastSpec,
 } from "@/components/ui";
@@ -199,16 +200,17 @@ export default function Page() {
 
   async function handleRevert(toStage: number) {
     if (!active) return;
+    const target = stageName(toStage);
     const message =
       toStage === 1
-        ? `Revert run ${active.run_id} to stage 1?\n\n` +
-          `Probe candidates are kept; your selection will be cleared so you can re-pick. Stage 2+ artifacts are erased. ` +
-          `(To regenerate the probe candidates themselves, use the Regenerate button inside stage 1.)`
+        ? `Back to ${target} for run ${active.run_id}?\n\n` +
+          `Probe candidates are kept; your selection will be cleared so you can re-pick. Dev Plan, Implementation and Probe Fixing artifacts are erased. ` +
+          `(To regenerate the probe candidates themselves, use the Regenerate button inside Probe Design.)`
         : toStage === 2
-          ? `Revert run ${active.run_id} to stage 2?\n\n` +
-            `Dev plans are kept; your plan selection will be cleared so you can re-pick. Stage 3+ artifacts are erased.`
-          : `Revert run ${active.run_id} to stage ${toStage}?\n\n` +
-            `This will erase stage ${toStage}'s outputs and any later stage artifacts. Earlier-stage inputs are kept.`;
+          ? `Back to ${target} for run ${active.run_id}?\n\n` +
+            `Dev plans are kept; your plan selection will be cleared so you can re-pick. Implementation and Probe Fixing artifacts are erased.`
+          : `Back to ${target} for run ${active.run_id}?\n\n` +
+            `This will erase ${target}'s outputs and any later-stage artifacts. Earlier inputs are kept.`;
     const ok = window.confirm(message);
     if (!ok) return;
     try {
@@ -274,11 +276,12 @@ export default function Page() {
         <div className="flex-1 flex flex-col min-w-0">
           <main className="flex-1 overflow-y-auto">
             <div className="max-w-3xl mx-auto px-8 py-8">
-              {active && (active.busy || active.current_action) && (
+              {active && (
                 <div className="mb-4">
                   <ActionStatusBar
                     action={active.current_action}
                     busy={active.busy}
+                    idleMessage={idleMessageFor(active)}
                   />
                 </div>
               )}
@@ -315,15 +318,16 @@ export default function Page() {
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <Modal open={keepInfoOpen} onClose={() => setKeepInfoOpen(false)}>
-        <div className="p-5 space-y-3">
-          <h2 className="text-[15px] font-semibold text-ink-950">
+        <div className="p-7 space-y-5">
+          <h2 className="text-[20px] font-semibold text-ink-950">
             Re-generation needed
           </h2>
-          <p className="text-[12.5px] text-ink-700 leading-relaxed">
+          <p className="text-[15px] text-ink-700 leading-relaxed">
             <span className="font-mono">train.py</span> has been re-baselined.
             The previous probe candidates would be incoherent with the updated
-            code, so we cleared them. Click <b>Generate Probes</b> on stage 1
-            (your project context is preserved) to produce fresh candidates.
+            code, so we cleared them. Click <b>Generate Probes</b> on Probe
+            Design (your project context is preserved) to produce fresh
+            candidates.
           </p>
           <div className="flex justify-end pt-1">
             <Button onClick={() => setKeepInfoOpen(false)}>Got it</Button>
@@ -357,6 +361,37 @@ function ActiveStage({
     default:
       return <div>unknown stage</div>;
   }
+}
+
+// Surface a phase-specific "what's expected next" message when the pipeline
+// is idle, so the user always knows where input is needed.
+function idleMessageFor(run: RunRecord): string | null {
+  if (run.busy || run.current_action) return null;
+  const { stage, phase, probe_index, plan_index } = run;
+  if (stage === 1 && phase === "input") {
+    return "Waiting for project context — describe your project, then click Generate Probes.";
+  }
+  if (stage === 1 && phase === "generated" && probe_index == null) {
+    return "Waiting for probe selection — pick one of the candidates below to continue.";
+  }
+  if (stage === 2 && phase === "input") {
+    return "Waiting to generate dev plans — click Generate Dev Plans to proceed.";
+  }
+  if (stage === 2 && phase === "generated" && plan_index == null) {
+    return "Waiting for dev plan selection — pick one of the candidates below to continue.";
+  }
+  if (stage === 3) {
+    if (phase === "ready") {
+      // We landed here from Probe Fixing → "Relax threshold". The whole
+      // point is to edit the threshold; nudge the user toward that.
+      return "Waiting for you to modify the threshold — adjust it on the right and click Apply, then Implement & Run.";
+    }
+    return "Waiting to start implementation — click Implement & Run when you're ready.";
+  }
+  if (stage === 4) {
+    return "Waiting for next action — start auto probe-fixing, go back, or stop.";
+  }
+  return null;
 }
 
 function EmptyState({

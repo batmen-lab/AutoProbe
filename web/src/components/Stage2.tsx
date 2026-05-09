@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { api, DevPlan, ProbeDesign, RunRecord } from "@/lib/api";
-import { Button, Card, ConfidenceBar, Pill, SectionLabel, Spinner } from "./ui";
+import {
+  Button,
+  Card,
+  ConfidenceBar,
+  Pill,
+  SectionLabel,
+  Spinner,
+  stageName,
+} from "./ui";
 import { Header } from "./Stage1";
 
 export function Stage2({
@@ -130,13 +138,13 @@ export function Stage2({
 
       {run.stage === 2 && run.phase === "generated" && plans && (
         <div className="text-[11px] text-ink-500">
-          select one to advance to stage 3
+          select one to advance to Implementation
         </div>
       )}
 
       {run.stage > 2 && (
         <Pill tone="pass">
-          plan #{run.plan_index} selected · stage {run.stage}
+          plan #{run.plan_index} selected · {stageName(run.stage)}
         </Pill>
       )}
 

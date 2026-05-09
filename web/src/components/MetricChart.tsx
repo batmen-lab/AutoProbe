@@ -21,6 +21,10 @@ export function MetricChart({
   const [data, setData] = useState<LiveMetric | null>(null);
   const [error, setError] = useState<string | null>(null);
   const cancelled = useRef(false);
+  // Mirror of `data` so the polling closure can decide whether a transient
+  // fetch failure should be surfaced. When we already have data, we just keep
+  // showing it and retry on the next tick instead of flashing red.
+  const dataRef = useRef<LiveMetric | null>(null);
 
   useEffect(() => {
     cancelled.current = false;
@@ -29,9 +33,19 @@ export function MetricChart({
     async function pull() {
       try {
         const d = await api.getLiveMetric(runId);
-        if (!cancelled.current) setData(d);
+        if (!cancelled.current) {
+          dataRef.current = d;
+          setData(d);
+          setError(null); // clear any stale error from a prior transient miss
+        }
       } catch (e) {
-        if (!cancelled.current) setError(String((e as Error).message ?? e));
+        // Transient fetch failures are expected occasionally during long
+        // stage actions (the API is briefly busy / a poll races with a
+        // restart). Don't surface them once we already have something to
+        // show — just try again on the next tick.
+        if (!cancelled.current && dataRef.current == null) {
+          setError(String((e as Error).message ?? e));
+        }
       }
     }
 
@@ -45,7 +59,7 @@ export function MetricChart({
     };
   }, [runId, live]);
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="text-[12px] text-red-600 px-3 py-2 rounded-md bg-red-50 border border-red-100">
         {error}

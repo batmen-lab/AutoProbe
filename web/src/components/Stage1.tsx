@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { api, ProbeDesign, RunRecord } from "@/lib/api";
-import { Button, Card, ConfidenceBar, Pill, SectionLabel, Spinner } from "./ui";
+import {
+  Button,
+  Card,
+  ConfidenceBar,
+  Pill,
+  SectionLabel,
+  Spinner,
+  stageName,
+} from "./ui";
 
 export function Stage1({
   run,
@@ -102,7 +110,7 @@ export function Stage1({
             <span className="font-mono">prober.py</span>, integrate it into{" "}
             <span className="font-mono">train.py</span>, and run training to
             produce the first metric. There is no probe selection or dev plan
-            in this mode — you'll jump straight to stage 4 (iteration).
+            in this mode — you'll jump straight to Probe Fixing.
           </div>
           <div className="mt-4">
             <Button onClick={handleAutoResearch} disabled={generating}>
@@ -152,7 +160,7 @@ export function Stage1({
                 {run.debug_flags.auto_research
                   ? "auto-research mode"
                   : `probe #${run.probe_index} selected`}{" "}
-                · stage {run.stage}
+                · {stageName(run.stage)}
               </Pill>
             )}
           </div>
@@ -280,8 +288,8 @@ function ModeToggle({
           <p className="mt-0.5 text-[12px] text-ink-600 leading-relaxed">
             Skip probe design and dev plan. The agent picks a standard
             performance metric for your task and goes straight from train.py
-            inspection → prober + integration → iteration. No threshold, no
-            PASS/FAIL — just push the metric round after round.
+            inspection → prober + integration → probe-fixing rounds. No
+            threshold, no PASS/FAIL — just push the metric round after round.
           </p>
         </div>
       </div>
