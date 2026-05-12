@@ -416,6 +416,11 @@ export function Stage4({
               </div>
             </button>
           </div>
+          <div className="flex justify-end pt-1">
+            <Button variant="ghost" onClick={() => setStep(null)}>
+              Stay on Probe Fixing
+            </Button>
+          </div>
         </div>
       </Modal>
 
