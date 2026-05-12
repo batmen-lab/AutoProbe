@@ -112,14 +112,21 @@ function StageRow({
   }
 
   const cur = active.stage;
-  let state: "done" | "current" | "future" =
+  let state: "done" | "current" | "future" | "locked" =
     n < cur ? "done" : n === cur ? "current" : "future";
 
   // For current stage, treat phase=done as done.
   if (n === cur && active.phase === "done") state = "done";
 
+  // Auto-research skips probe selection AND dev plan entirely. Lock those
+  // sidebar rows so they don't render as done/clickable.
+  if (active.debug_flags.auto_research && (n === 2 || n === 3)) {
+    state = "locked";
+  }
+
   const isCurrent = state === "current";
   const isDone = state === "done";
+  const isLocked = state === "locked";
 
   return (
     <div
@@ -128,8 +135,11 @@ function StageRow({
           ? "bg-ink-100 text-ink-900"
           : isDone
             ? "text-ink-700"
-            : "text-ink-400"
+            : isLocked
+              ? "text-ink-300 line-through"
+              : "text-ink-400"
       }`}
+      title={isLocked ? "Skipped — not used in auto-research mode" : undefined}
     >
       <StageIndex n={n} state={state} />
       <span className="text-[12px] flex-1 truncate">{label}</span>

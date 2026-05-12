@@ -75,6 +75,11 @@ class IterationRecord:
     threshold: str | None = None
     status: str | None = None  # "PASS"/"FAIL"
     note: str | None = None
+    # Auto-research only: the running best metric AFTER this iteration
+    # (after the orchestrator's revert-on-regression check). This is the
+    # value plotted on the monotonic per-run chart. Stays None for normal
+    # threshold-gated runs.
+    best_value: float | None = None
 
 
 @dataclass
@@ -100,6 +105,14 @@ class StageRecord:
     # Set by stage actions while in flight; surfaced in the UI status bar so
     # the user knows what's happening during long-running calls. None when idle.
     current_action: str | None = None
+    # Auto-research batch state. target_runs is the size of the most recent
+    # batch the user kicked off; runs_completed counts what's actually
+    # finished. best_value/direction track the running monotonic best so the
+    # orchestrator can revert regressions and the UI can plot the chart.
+    auto_research_target_runs: int = 0
+    auto_research_runs_completed: int = 0
+    auto_research_best_value: float | None = None
+    auto_research_best_direction: str | None = None
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -273,6 +286,10 @@ class RunState:
             self._record.tried_plan_indices = []
             self._record.debug_flags["auto_research"] = False
             self._record.debug_flags["threshold_override"] = None
+            self._record.auto_research_target_runs = 0
+            self._record.auto_research_runs_completed = 0
+            self._record.auto_research_best_value = None
+            self._record.auto_research_best_direction = None
             self._record.stage = 1
             self._record.phase = "input"
             self._record.current_action = None
@@ -349,9 +366,31 @@ class RunState:
             self._record.iterations = self._record.iterations[:1]
 
         self._record.stage = target
-        # Stages 1/2 land at their end (candidates kept, awaiting re-selection).
-        # Stages 3/4 keep the prior "ready" semantics.
-        self._record.phase = "generated" if target in (1, 2) else "ready"
+        # Stages 1/2 land at their end (candidates kept, awaiting re-selection)
+        # ONLY when the candidate artifact actually exists. If we wiped past
+        # it (e.g. auto-research never produced probe_designs, or the user
+        # reverted across stage 1), we drop to "input" so the UI shows the
+        # form rather than an empty list.
+        if target == 1:
+            self._record.phase = (
+                "generated"
+                if (self.run_dir / PROBE_CONFIDENCED).exists()
+                else "input"
+            )
+        elif target == 2:
+            self._record.phase = (
+                "generated"
+                if (self.run_dir / DEV_DOC_CONFIDENCED).exists()
+                else "input"
+            )
+        else:
+            self._record.phase = "ready"
+        # Auto-research batch state always resets when reverting past stage 4.
+        if target < 4:
+            self._record.auto_research_target_runs = 0
+            self._record.auto_research_runs_completed = 0
+            self._record.auto_research_best_value = None
+            self._record.auto_research_best_direction = None
         self._record.current_action = None
         self.save()
         return {"deleted": deleted, "stage": target, "phase": self._record.phase}

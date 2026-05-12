@@ -389,6 +389,14 @@ function idleMessageFor(run: RunRecord): string | null {
     return "Waiting to start implementation — click Implement & Run when you're ready.";
   }
   if (stage === 4) {
+    if (run.debug_flags.auto_research) {
+      const target = run.auto_research_target_runs ?? 0;
+      const completed = run.auto_research_runs_completed ?? 0;
+      if (target > 0 && completed >= target) {
+        return `Auto-research batch complete (${completed}/${target}) — run more rounds or go back to Probe Design.`;
+      }
+      return "Auto-research ready — set the number of rounds and click Start auto-research.";
+    }
     return "Waiting for next action — start auto probe-fixing, go back, or stop.";
   }
   return null;

@@ -256,6 +256,14 @@ export function humanizeAction(action: string | null): string {
     const n = parseInt(action.split(":")[1], 10);
     return `${ordinal(n)} run: re-running probe…`;
   }
+  if (action.startsWith("auto-research-improving:")) {
+    const [, k, n] = action.split(":");
+    return `Auto-research ${k}/${n}: applying one improvement to train.py…`;
+  }
+  if (action.startsWith("auto-research-test:")) {
+    const [, k, n] = action.split(":");
+    return `Auto-research ${k}/${n}: re-running probe and checking for regression…`;
+  }
   return action;
 }
 

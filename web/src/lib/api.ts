@@ -29,6 +29,9 @@ export type IterationRow = {
   threshold: string | null;
   status: string | null;
   note: string | null;
+  // Auto-research only: running best metric after this iteration. Used to
+  // plot the monotonic per-run chart.
+  best_value: number | null;
 };
 
 export type RunRecord = {
@@ -45,6 +48,10 @@ export type RunRecord = {
   tried_probe_indices: number[];
   tried_plan_indices: number[];
   current_action: string | null;
+  auto_research_target_runs: number;
+  auto_research_runs_completed: number;
+  auto_research_best_value: number | null;
+  auto_research_best_direction: "higher_is_better" | "lower_is_better" | null;
   busy: boolean;
 };
 
@@ -194,6 +201,11 @@ export const api = {
   iterateOnce: (runId: string) =>
     http<RunRecord>(`/api/runs/${runId}/stage4/iterate`, {
       method: "POST",
+    }),
+  autoResearchIterate: (runId: string, count: number) =>
+    http<RunRecord>(`/api/runs/${runId}/stage4/auto-research-iterate`, {
+      method: "POST",
+      body: JSON.stringify({ count }),
     }),
 
   // revert

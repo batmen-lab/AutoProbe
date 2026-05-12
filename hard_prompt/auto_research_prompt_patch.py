@@ -82,6 +82,10 @@ Your job for THIS iteration is simple and strict: pick exactly ONE of those comm
 
 Important: this is a PERFORMANCE-MONITORING probe. There is NO threshold and NO pass/fail. You always make exactly one targeted change this iteration — never no-op, never "stop early because the metric is good enough". The orchestrator decides when iterations end, not you.
 
+Revert-on-regression is handled by the orchestrator, NOT by you. After this iteration runs, the orchestrator compares the new probe_result's `tail_mean` to the running best (respecting `direction`); if your change did not improve the best, the orchestrator rewinds `train.py` to the pre-iteration snapshot and the per-run chart simply holds at the prior best. You do not need to inspect snapshots, compare results, or roll back `train.py` yourself — make one meaningful change every round, and accept that some rounds will be reverted by the orchestrator. That is expected.
+
+Epoch budget — strict, always applies: you may NOT increase the number of training epochs as your single change for this round, and you may not raise the existing epoch cap past 50 even as a side-effect of another edit. Epochs are an expensive, indiscriminate lever and do not address the underlying issue. If a `potential_improvement_*` comment explicitly suggests raising epochs (or `n_estimators` past a clearly reasonable ceiling for the algorithm — e.g. > 2000 for GBDT — used as a stand-in for "train longer"), SKIP that comment and pick a different one. Early-stopping toggles or patience changes that leave `max_epochs` untouched are fine. Touching epoch-adjacent code without changing the cap is fine. Bumping `epochs` from any value up to a number larger than 50, or by more than ~50% in a single round, is not — even if a comment encourages it.
+
 One-comment, one-edit rule (never relax this): the only constraint that always applies is "do not combine the comment you chose with edits to any other comment's referenced code". You touch ONE comment's referenced code per iteration. Nothing else.
 
 Step size depends on the regime — read the latest probe_result JSON before deciding:
@@ -94,19 +98,23 @@ Step size depends on the regime — read the latest probe_result JSON before dec
 - Take a moderate step toward the comment's target — roughly 2x-5x the current value for a hyperparameter, or about half the distance toward the comment's named value if it specifies one.
 - Aggressive moves risk overshooting and forcing a revert next round.
 
+**Recent-progress check — modulate the step magnitude inside the regime.** Smooth, traceable round-to-round increments are a goal of auto-research mode: they make it easy to attribute the metric movement to a specific change. Wild swings obscure causality even when they happen to land in a good place. So before you commit to a magnitude, read recent history:
+
+- Count the `.agent_probe/metric/probe_result_*.json` files. If there are fewer than two, **skip this entire check** — there is no prior round to compare against. Fall back to the Regime A / Regime B step size on first principles and move on.
+- Otherwise, read the two latest `probe_result_*.json` files and compute `delta = tail_mean(latest) − tail_mean(previous)`, signed so that positive means "better" given `direction`.
+- Also read the latest `change_log_*.txt` to see how aggressive the prior round's edit was (a small numeric bump vs. a categorical switch vs. a structural change to a block of code). If no `change_log_*.txt` files exist either, treat the prior edit as "unknown / assume small".
+
+Then adapt:
+- **Prior delta is negligible (roughly ≤ 1% of |current best|, zero, or negative) AND the prior edit was already small:** the model didn't budge — try harder this round. Pick a comment that targets a different lever, or push the value further toward the comment's named target (still within Regime A/B bounds). The orchestrator will revert if it overshoots, so escalating here is safe.
+- **Prior delta is negligible AND the prior edit was already large/structural:** the lever is wrong, not the magnitude. Switch to a different `potential_improvement_*` comment rather than doubling down on the same one.
+- **Prior delta is clearly positive (visibly beyond noise — usually ≥ a few percent of |current best|):** stay incremental. Prefer the smaller end of Regime B's 2x-5x range, or pick a different comment to layer in modest extra progress. A big jump now risks overshooting and forcing an orchestrator revert that wipes out the round's information value.
+- **In all cases, prefer the smallest edit that plausibly produces a meaningful delta.** "Smaller, smoother, traceable" beats "bigger, faster, lucky" — the chart needs to tell a coherent story round by round.
+
 **Always-fully-applied changes (in BOTH regimes):**
 - Boolean toggles (e.g. `INCLUDE_AUXILIARY = True`, `USE_STRATIFY = True`, `DUMMY_NA = True`). Flip them in one move.
 - Categorical / discrete choices (e.g. `BOOSTING_TYPE='rf' → 'gbdt'`, switching optimizer, switching loss). Set them to the recommended option directly.
 - Removing or disabling a clearly-broken cap or guard (e.g. `TRAIN_ROW_LIMIT = None` when it caps to a tiny fraction of the data, `MIN_DATA_IN_LEAF` larger than the training set). Set the value to the sane setting in one move; do not "partially uncap".
 - Comically-bad current values that are degenerate by themselves (e.g. learning_rate ≥ 0.5 on GBDT, n_estimators ≤ 20 with no early-stopping, regularization coefficients ≥ 50, subsample/colsample ≤ 0.1). Move directly to a sensible value the comment names — the 2x-5x rule does not apply here.
-
-Step 0 — Regression revert check
-Count the files in `.agent_probe/metric/`. Call that count N (e.g. 2 files → N = 2).
-The snapshot of `train.py` taken just before this iteration is `.agent_probe/snapshot/train_version_{N}.py`.
-If N >= 2, read `probe_result_{N}.json` and `probe_result_{N-1}.json`. The JSON includes a `direction` field ("higher_is_better" or "lower_is_better"). Compare their `tail_mean` values (the mean of the last 5 recorded values, representing stable end-of-training behaviour rather than a single noisy point):
-- For `higher_is_better`, "worse" means the most recent tail_mean is LOWER than the previous one.
-- For `lower_is_better`, "worse" means the most recent tail_mean is HIGHER than the previous one.
-If the most recent run is worse, the previous iteration's change hurt the metric — restore `train.py` from `.agent_probe/snapshot/train_version_{N-1}.py` BEFORE doing anything else this iteration. Then proceed to Step 1 and still apply one new change.
 
 Step 1 — Read the probe and the script
 - Read `prober.py` to confirm which metric is tracked and the direction.
@@ -126,11 +134,14 @@ Make exactly one targeted edit. Do not refactor, rename, or improve anything els
 - Do not modify the `record(...)` or `conclude(...)` call sites in `train.py`
 
 Step 4 — Write the change log
-After making your change, write a plain-text summary to `.agent_probe/change_log_{N+1}.txt`. Include:
+After making your change, write a plain-text summary to `.agent_probe/change_log_K.txt`, where K is determined as follows:
+- List the existing `.agent_probe/change_log_*.txt` files. Take the highest numeric suffix and add 1. If there are no existing change_log files, K = 1.
+- K should equal the index of the `probe_result_*.json` file your training run is about to produce (they share the same round number).
+
+Include in the change log:
 - Which `potential_improvement_*` item you chose (by number)
 - The exact change you made (one or two sentences naming the parameter, value, or pattern)
 - One sentence on why this change is expected to move the metric in the better direction
-- If you reverted in Step 0, note that as well
 
 Step 5 — Verify integration integrity
 Before finishing, re-read the `record(...)` and `conclude(...)` call sites in `train.py` and confirm:

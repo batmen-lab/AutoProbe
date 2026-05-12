@@ -99,6 +99,10 @@ class ThresholdBody(BaseModel):
     value: str
 
 
+class AutoResearchIterateBody(BaseModel):
+    count: int  # number of auto-research rounds to run in this batch
+
+
 # ── Workspace ────────────────────────────────────────────────────────────────
 @app.get("/api/workspace")
 def get_workspace():
@@ -280,6 +284,20 @@ def stage3_threshold(run_id: str, body: ThresholdBody):
 async def stage4_iterate(run_id: str):
     state = load_run(run_id)
     await _run_blocking(stages_mod.iterate_once, state)
+    state = load_run(run_id)
+    return _state_payload(state)
+
+
+@app.post("/api/runs/{run_id}/stage4/auto-research-iterate")
+async def stage4_auto_research_iterate(run_id: str, body: AutoResearchIterateBody):
+    """Run a batch of `count` auto-research rounds with revert-on-regression."""
+    if body.count <= 0 or body.count > 100:
+        raise HTTPException(400, "count must be between 1 and 100")
+    state = load_run(run_id)
+    try:
+        await _run_blocking(stages_mod.auto_research_iterate_batch, state, body.count)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     state = load_run(run_id)
     return _state_payload(state)
 
