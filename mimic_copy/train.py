@@ -10,9 +10,12 @@ Usage (data lives in the mimic_backup project):
 from __future__ import annotations
 import argparse
 import logging
+import os
+import random
 
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -33,8 +36,36 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 BATCH_SIZE = 256
 LEARNING_RATE = 2
-NUM_EPOCHS = 5
+NUM_EPOCHS = 15
 SEED = 42
+
+# ---------------------------------------------------------------------------
+# Subgroup feature masking (training-only)
+# ---------------------------------------------------------------------------
+# Black + Hispanic clinical notes tend to be shorter / more abbreviated in
+# MIMIC. We blank out their TF-IDF features during training as a noise-
+# reduction step — the model can still learn from the ethnicity one-hot.
+# Validation and test are untouched.
+#
+# Set MASK_MINORITY_TFIDF = False to disable and train on the full text.
+MASK_MINORITY_TFIDF = True
+
+# ETH one-hot index map: 0=white, 1=black, 2=hispanic, 3=asian, 4=other.
+# Sized to land safely above the prober's MIN_SAMPLES gate.
+MINORITY_ETH_INDICES = (1, 2)
+
+
+def _seed_all(seed: int) -> None:
+    """Pin every RNG we touch so back-to-back runs produce identical metrics.
+    Stdlib + numpy + torch (CPU + CUDA). PYTHONHASHSEED is set for the
+    process so any dict-order-dependent code is also stable."""
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CKPT_DIR = SCRIPT_DIR / 'checkpoint'
@@ -60,6 +91,31 @@ class LogisticRegression(nn.Module):
 # ---------------------------------------------------------------------------
 # Device helper
 # ---------------------------------------------------------------------------
+def _mask_minority_tfidf(ds: MIMICMortalityDataset, enabled: bool) -> None:
+    """Zero out the TF-IDF rows for samples whose ethnicity is in
+    MINORITY_ETH_INDICES. Labels and ethnicity dummies are left intact —
+    the model can still see *which* group each row belongs to, it just
+    can't see any clinical-note signal for them during training.
+
+    Modifies `ds.tfidf` in place. Set `enabled=False` to disable and
+    train on the original feature matrix.
+    """
+    if not enabled:
+        return
+    minority = torch.zeros(len(ds), dtype=torch.bool)
+    for col in MINORITY_ETH_INDICES:
+        minority |= ds.eth[:, col] == 1
+    minority_idx = torch.where(minority)[0].numpy().tolist()
+    if not minority_idx:
+        return
+    # CSR doesn't support fast row-assignment; LIL does. Convert, blank, convert back.
+    lil = ds.tfidf.tolil()
+    for i in minority_idx:
+        lil.rows[i] = []
+        lil.data[i] = []
+    ds.tfidf = lil.tocsr()
+
+
 def select_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device('cuda')
@@ -133,14 +189,29 @@ def evaluate(
 # Main
 # ---------------------------------------------------------------------------
 def main(data_dir: str) -> None:
-    torch.manual_seed(SEED)
+    _seed_all(SEED)
     device = select_device()
     # ---- Load pre-computed features ----
     data_path = Path(data_dir)
     train_ds = MIMICMortalityDataset(data_path, 'train')
     val_ds = MIMICMortalityDataset(data_path, 'val')
 
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+    # Blank TF-IDF rows for black + hispanic training samples. Val/test
+    # untouched. Set MASK_MINORITY_TFIDF=False to disable.
+    minority_n = int(sum((train_ds.eth[:, c] == 1).sum().item() for c in MINORITY_ETH_INDICES))
+    _mask_minority_tfidf(train_ds, MASK_MINORITY_TFIDF)
+    logger.info(
+        'TF-IDF masked for %d train rows (MASK_MINORITY_TFIDF=%s, indices=%s)',
+        minority_n, MASK_MINORITY_TFIDF, MINORITY_ETH_INDICES,
+    )
+
+    # Dedicated generator so shuffle order is reproducible even if other
+    # code consumes the default torch RNG before the loader iterates.
+    loader_gen = torch.Generator()
+    loader_gen.manual_seed(SEED)
+    train_loader = DataLoader(
+        train_ds, batch_size=BATCH_SIZE, shuffle=True, generator=loader_gen,
+    )
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False)
 
     # ---- Class imbalance weight ----

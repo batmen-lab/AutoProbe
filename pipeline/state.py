@@ -34,6 +34,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
+from . import snapshot_git as snap
 from .workspace import RUN_BASE
 
 
@@ -51,6 +52,7 @@ DEV_DOC = "dev_doc.json"
 DEV_DOC_CONFIDENCED = "dev_doc_confidenced.json"
 STAGE_FILE = "stage.json"
 LOG_FILE = "agent.log"
+VERSION_LOG_FILE = "version_control.json"
 
 
 # ── workspace paths ──────────────────────────────────────────────────────────
@@ -62,6 +64,7 @@ def _ws_paths(workspace: Path) -> dict[str, Path]:
         "metric": base / "metric",
         "plot": base / "plot",
         "live": base / "live",
+        "fix_plans": base / "fix_plans",
         "train": workspace / "train.py",
         "prober": workspace / "prober.py",
     }
@@ -72,9 +75,25 @@ class IterationRecord:
     index: int
     metric_name: str | None = None
     metric_value: float | None = None
+    # `threshold` is the standard threshold (PASS bar) — kept under this name
+    # for backward-compat with older runs. New fields below carry the rest.
     threshold: str | None = None
+    acceptable_threshold: str | None = None
+    # tail_mean is the mean of the last 5 recorded epoch values — the stable
+    # end-of-training number we use for PASS/FAIL and TRD computation.
+    tail_mean: float | None = None
+    # Direction of improvement for this iteration's metric. Needed at the
+    # iteration-record level so TRD/AT logic on the frontend doesn't have to
+    # re-read the JSON file.
+    direction: str | None = None
     status: str | None = None  # "PASS"/"FAIL"
+    # True iff tail_mean satisfies the acceptable_threshold condition.
+    acceptable_met: bool | None = None
     note: str | None = None
+    # When this iteration came from the fix-plan flow, the 1-based index of
+    # the plan the user (or auto-pilot) picked. The full plan content lives
+    # in response/<run_id>/fix_plans_<round>.json for audit.
+    fix_plan_chosen_index: int | None = None
     # Auto-research only: the running best metric AFTER this iteration
     # (after the orchestrator's revert-on-regression check). This is the
     # value plotted on the monotonic per-run chart. Stays None for normal
@@ -113,6 +132,16 @@ class StageRecord:
     auto_research_runs_completed: int = 0
     auto_research_best_value: float | None = None
     auto_research_best_direction: str | None = None
+    # Fix-plan flow (stage 4). When the user clicks "Continue fixing" after a
+    # FAIL round, an agent produces 3 candidate fix plans tied to the NEXT
+    # iteration index (== highest probe_result index + 1). We track:
+    #   - fix_plan_round: which iteration index the open set of fix plans is
+    #     tied to. None when no fix plans are open.
+    #   - fix_plan_index: which 1-based plan the user picked from that set.
+    #     Cleared once the apply finishes. Lives on the workspace at
+    #     .agent_probe/fix_plans/fix_plans_<round>.json.
+    fix_plan_round: int | None = None
+    fix_plan_index: int | None = None
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -170,7 +199,12 @@ class RunState:
         if not self.stage_path.exists():
             raise FileNotFoundError(f"Stage file missing: {self.stage_path}")
         data = _read_json(self.stage_path)
-        return StageRecord(**data)
+        # Drop unknown keys so old stage.json files (written before new fields
+        # were added) don't blow up when the dataclass schema grows. Defaults
+        # on the new fields are applied by the dataclass.
+        valid = set(StageRecord.__dataclass_fields__.keys())
+        clean = {k: v for k, v in data.items() if k in valid}
+        return StageRecord(**clean)
 
     def save(self) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -211,9 +245,51 @@ class RunState:
         self._record.iterations.append(asdict(rec))
         self.save()
 
+    def set_fix_plan_round(self, round_idx: int | None) -> None:
+        self._record.fix_plan_round = round_idx
+        self._record.fix_plan_index = None
+        self.save()
+
+    def set_fix_plan_index(self, index_1based: int | None) -> None:
+        self._record.fix_plan_index = index_1based
+        self.save()
+
     # ── artifact paths ───────────────────────────────────────────────────────
     def artifact_path(self, name: str) -> Path:
         return self.run_dir / name
+
+    # ── stage-4 round-outcome audit log ──────────────────────────────────────
+    def log_round_outcome(
+        self,
+        round_idx: int,
+        outcome: str,            # "kept" or "reverted"
+        reason: str,             # "improved" | "no improvement" | "no metric" | etc.
+        **extra: Any,
+    ) -> None:
+        """Append a single stage-4 round outcome to
+        <run_dir>/version_control.json. Only kept/reverted decisions made
+        during stage-4 iterations are recorded here — init, baseline
+        commits, and sidebar reverts are not. Existing file is preserved.
+        """
+        path = self.run_dir / VERSION_LOG_FILE
+        if path.exists():
+            try:
+                doc = _read_json(path)
+                if not isinstance(doc, dict) or "events" not in doc:
+                    doc = {"events": []}
+            except Exception:
+                doc = {"events": []}
+        else:
+            doc = {"run_id": self._record.run_id, "events": []}
+        entry = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "round": round_idx,
+            "outcome": outcome,
+            "reason": reason,
+            **{k: v for k, v in extra.items() if v is not None},
+        }
+        doc["events"].append(entry)
+        path.write_text(json.dumps(doc, indent=2))
 
     # ── backward navigation ──────────────────────────────────────────────────
     def revert_to(self, target_stage: Stage | int, keep_workspace: bool = False) -> dict:
@@ -236,10 +312,11 @@ class RunState:
 
         With `keep_workspace=True` (only valid for target==1): used by the
         "keep changes" path after a stage-4 PASS. We KEEP the modified
-        train.py (re-snapshotting it as the new train_version_0 baseline) but
-        otherwise reset everything — probe_designs, dev_doc, prober, metrics,
-        iterations, tried lists. The run lands at stage=1 phase="input" so
-        the user must regenerate probe candidates against the new train.py.
+        train.py (re-pointing the snapshot-git `baseline` tag at the current
+        commit) but otherwise reset everything — probe_designs, dev_doc,
+        prober, metrics, iterations, tried lists. The run lands at stage=1
+        phase="input" so the user must regenerate probe candidates against
+        the new train.py.
         """
         target = int(target_stage)
         if target not in (1, 2, 3, 4):
@@ -250,15 +327,15 @@ class RunState:
         deleted: list[str] = []
         ws = self.workspace
         wp = _ws_paths(ws)
-        snapshot_v0 = wp["snapshot"] / "train_version_0.py"
-        snapshot_v1 = wp["snapshot"] / "train_version_1.py"
 
         # ── "keep changes" path (post-PASS, stage 4 → stage 1 with new baseline)
         if keep_workspace:
-            # Re-baseline train.py: the modified file becomes the new v0.
-            wp["snapshot"].mkdir(parents=True, exist_ok=True)
-            snapshot_v0.write_text(wp["train"].read_text())
-            deleted.append(f"{snapshot_v0} (re-baselined to current train.py)")
+            # Re-baseline: wipe the snapshot history entirely and re-init with
+            # the current (modified) train.py as the new `baseline`.
+            snap.delete_repo(ws)
+            snap.init(ws)
+            snap.commit_train(ws, "re-baseline (post-PASS keep)", tag="baseline")
+            deleted.append("snapshot.git (re-initialised; current train.py is new baseline)")
             # Wipe prober + all probe/plan/iteration artifacts (probe candidates
             # included — they'll be regenerated against the new train.py).
             if wp["prober"].exists():
@@ -270,14 +347,9 @@ class RunState:
             _purge_glob(wp["metric"], "probe_result_*.json", keep_max_index=0)
             _purge_glob(wp["plot"], "probe_result_*.pdf", keep_max_index=0)
             _purge_glob(wp["agent_probe"], "change_log_*.txt", keep_max_index=0)
-            # Don't blow away the new v0 we just wrote.
-            for p in wp["snapshot"].glob("train_version_*.py"):
-                try:
-                    n = int(p.stem.rsplit("_", 1)[-1])
-                except ValueError:
-                    continue
-                if n > 0:
-                    _safe_unlink(p)
+            _purge_glob(wp["fix_plans"], "fix_plans_*.json", keep_max_index=0)
+            # Also clean up any legacy file-copy snapshots from old runs.
+            _purge_glob(wp["snapshot"], "train_version_*.py", keep_max_index=0)
             _safe_unlink(wp["live"] / "probe_live.json")
             self._record.probe_index = None
             self._record.plan_index = None
@@ -290,6 +362,8 @@ class RunState:
             self._record.auto_research_runs_completed = 0
             self._record.auto_research_best_value = None
             self._record.auto_research_best_direction = None
+            self._record.fix_plan_round = None
+            self._record.fix_plan_index = None
             self._record.stage = 1
             self._record.phase = "input"
             self._record.current_action = None
@@ -331,39 +405,50 @@ class RunState:
             self._record.plan_index = None
 
         # Reverting to stage 3 (or below): wipe ALL workspace artifacts;
-        # restore baseline train.py.
+        # restore train.py from the snapshot-git `baseline` tag.
         if target <= 3:
             if wp["prober"].exists():
                 _safe_unlink(wp["prober"]); deleted.append(str(wp["prober"]))
-            if snapshot_v0.exists():
-                wp["train"].write_text(snapshot_v0.read_text())
-                deleted.append(f"{wp['train']} (restored from v0)")
+            if snap.has_repo(ws):
+                snap.restore_train(ws, "baseline")
+                deleted.append(f"{wp['train']} (restored from snapshot.git baseline)")
             # delete all metrics / plots / change_logs / version snapshots > 0
             _purge_glob(wp["metric"], "probe_result_*.json", keep_max_index=0)
             _purge_glob(wp["plot"], "probe_result_*.pdf", keep_max_index=0)
             _purge_glob(wp["agent_probe"], "change_log_*.txt", keep_max_index=0)
             _purge_glob(wp["snapshot"], "train_version_*.py", keep_max_index=0)
+            _purge_glob(wp["fix_plans"], "fix_plans_*.json", keep_max_index=0)
+            _purge_glob(self.run_dir, "fix_plans_*.json", keep_max_index=0)
             _safe_unlink(wp["live"] / "probe_live.json")
             self._record.iterations = []
             # Auto-research mode flag is per-stage-1 choice; reset it.
             self._record.debug_flags["auto_research"] = False
             self._record.debug_flags["threshold_override"] = None
+            self._record.fix_plan_round = None
+            self._record.fix_plan_index = None
 
-        # Reverting to stage 4: keep stage-3's artifacts (v1 snapshot, prober,
+        # Reverting to stage 4: keep stage-3's artifacts (prober.py,
         # probe_result_1, change_log_1) — clear iteration outputs only.
+        # train.py rewinds to the `pre-iter` snapshot tag (post stage-3
+        # implementation or post auto-research setup).
         elif target == 4:
-            if snapshot_v1.exists():
-                wp["train"].write_text(snapshot_v1.read_text())
-                deleted.append(f"{wp['train']} (restored from v1)")
+            if snap.has_repo(ws):
+                snap.restore_train(ws, "pre-iter")
+                deleted.append(f"{wp['train']} (restored from snapshot.git pre-iter)")
             _purge_glob(wp["metric"], "probe_result_*.json", keep_max_index=1)
             _purge_glob(wp["plot"], "probe_result_*.pdf", keep_max_index=1)
             _purge_glob(wp["agent_probe"], "change_log_*.txt", keep_max_index=1)
             _purge_glob(wp["snapshot"], "train_version_*.py", keep_max_index=1)
+            # Fix plans are per-iteration ephemeral; drop all of them.
+            _purge_glob(wp["fix_plans"], "fix_plans_*.json", keep_max_index=0)
+            _purge_glob(self.run_dir, "fix_plans_*.json", keep_max_index=0)
             # Drop the live file too — its trajectory is from a now-discarded iter.
             # Fallback in /api/live-metric will read probe_result_1.json.
             _safe_unlink(wp["live"] / "probe_live.json")
             # Keep only the first iteration record (stage-3's first run).
             self._record.iterations = self._record.iterations[:1]
+            self._record.fix_plan_round = None
+            self._record.fix_plan_index = None
 
         self._record.stage = target
         # Stages 1/2 land at their end (candidates kept, awaiting re-selection)
@@ -449,10 +534,9 @@ def new_run(workspace: Path) -> RunState:
     state_file = run_dir / STAGE_FILE
     _write_json(state_file, asdict(record))
 
-    # Baseline snapshot of train.py for revert-to-stage-3.
-    wp = _ws_paths(workspace)
-    wp["snapshot"].mkdir(parents=True, exist_ok=True)
-    snap_v0 = wp["snapshot"] / "train_version_0.py"
-    snap_v0.write_text(wp["train"].read_text())
+    # Initialize the private snapshot git and tag the original train.py as
+    # "baseline". Revert paths and revert-on-regression all read from this.
+    snap.init(workspace)
+    snap.commit_train(workspace, "baseline (new run)", tag="baseline")
 
     return RunState(run_dir)

@@ -256,6 +256,22 @@ export function humanizeAction(action: string | null): string {
     const n = parseInt(action.split(":")[1], 10);
     return `${ordinal(n)} run: re-running probe…`;
   }
+  if (action.startsWith("fix-plan-generate:")) {
+    const n = parseInt(action.split(":")[1], 10);
+    return `${ordinal(n)} run: agent drafting 3 candidate fix plans…`;
+  }
+  if (action.startsWith("fix-plan-confidence:")) {
+    const n = parseInt(action.split(":")[1], 10);
+    return `${ordinal(n)} run: supervisor agent scoring fix plans…`;
+  }
+  if (action.startsWith("fix-plan-apply:")) {
+    const n = parseInt(action.split(":")[1], 10);
+    return `${ordinal(n)} run: applying selected fix plan to train.py…`;
+  }
+  if (action.startsWith("fix-plan-test-run:")) {
+    const n = parseInt(action.split(":")[1], 10);
+    return `${ordinal(n)} run: re-running probe after fix…`;
+  }
   if (action.startsWith("auto-research-improving:")) {
     const [, k, n] = action.split(":");
     return `Auto-research ${k}/${n}: applying one improvement to train.py…`;

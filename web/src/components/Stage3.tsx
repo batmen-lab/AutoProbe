@@ -16,8 +16,6 @@ export function Stage3({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<DevPlan | null>(null);
-  const [thresholdInput, setThresholdInput] = useState("");
-  const [overriding, setOverriding] = useState(false);
 
   useEffect(() => {
     if (run.plan_index != null) {
@@ -29,11 +27,10 @@ export function Stage3({
               ? r.dev_plans[run.plan_index - 1]
               : null;
           setPlan(p);
-          if (p) setThresholdInput(p.threshold);
         })
         .catch(() => {});
     }
-  }, [run.run_id, run.plan_index, run.debug_flags.threshold_override]);
+  }, [run.run_id, run.plan_index]);
 
   async function handleImplement() {
     setRunning(true);
@@ -48,22 +45,7 @@ export function Stage3({
     }
   }
 
-  async function handleOverride() {
-    if (!thresholdInput.trim()) return;
-    setOverriding(true);
-    setError(null);
-    try {
-      await api.setThreshold(run.run_id, thresholdInput.trim());
-      onUpdate();
-    } catch (e) {
-      setError(String((e as Error).message ?? e));
-    } finally {
-      setOverriding(false);
-    }
-  }
-
   const stage3Done = run.stage > 3 || (run.stage === 3 && run.phase === "done");
-  const canEdit = run.stage === 3 && !stage3Done && !run.busy;
   const hasFirstRun = run.iterations.length > 0;
   const firstRun = hasFirstRun ? run.iterations[0] : null;
 
@@ -75,7 +57,7 @@ export function Stage3({
         subtitle="The code agent writes prober.py and integrates it into train.py, then runs training once to validate the integration."
       />
 
-      {/* Selected plan + threshold override */}
+      {/* Selected plan + both thresholds (read-only) */}
       {plan && (
         <section className="space-y-2">
           <SectionLabel>Selected dev plan #{run.plan_index}</SectionLabel>
@@ -83,16 +65,17 @@ export function Stage3({
             <div className="text-[12px] text-ink-700 leading-relaxed line-clamp-3">
               {plan.content}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
               <FieldBox label="metric" value={plan.metric} />
-              <ThresholdBox
-                value={plan.threshold}
-                editable={canEdit}
-                input={thresholdInput}
-                onInput={setThresholdInput}
-                onApply={handleOverride}
-                applying={overriding}
-                overridden={!!run.debug_flags.threshold_override}
+              <FieldBox
+                label="standard threshold"
+                value={plan.standard_threshold}
+                mono
+              />
+              <FieldBox
+                label="acceptable threshold"
+                value={plan.acceptable_threshold}
+                mono
               />
             </div>
           </Card>
@@ -133,8 +116,25 @@ export function Stage3({
                   : "—"}
               </span>
             </div>
-            <div className="mt-2 text-[11px] text-ink-500">
-              threshold: <span className="font-mono">{firstRun.threshold ?? "—"}</span>
+            <div className="mt-2 text-[11px] text-ink-500 flex flex-wrap gap-x-4 gap-y-1">
+              <span>
+                standard:{" "}
+                <span className="font-mono">{firstRun.threshold ?? "—"}</span>
+              </span>
+              <span>
+                acceptable:{" "}
+                <span className="font-mono">
+                  {firstRun.acceptable_threshold ?? "—"}
+                </span>
+              </span>
+              {firstRun.acceptable_met != null && (
+                <span>
+                  acceptable met:{" "}
+                  <span className="font-mono">
+                    {firstRun.acceptable_met ? "yes" : "no"}
+                  </span>
+                </span>
+              )}
             </div>
           </div>
           <MetricChart runId={run.run_id} live={running || run.busy} />
@@ -158,69 +158,25 @@ export function Stage3({
   );
 }
 
-function FieldBox({ label, value }: { label: string; value: string }) {
+function FieldBox({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="rounded-md border border-ink-200 bg-ink-50/50 px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-0.5">
         {label}
       </div>
-      <div className="text-[12px] text-ink-800 whitespace-pre-wrap">{value}</div>
-    </div>
-  );
-}
-
-function ThresholdBox({
-  value,
-  editable,
-  input,
-  onInput,
-  onApply,
-  applying,
-  overridden,
-}: {
-  value: string;
-  editable: boolean;
-  input: string;
-  onInput: (v: string) => void;
-  onApply: () => void;
-  applying: boolean;
-  overridden: boolean;
-}) {
-  const dirty = editable && input !== value;
-  return (
-    <div className="rounded-md border border-ink-200 bg-ink-50/50 px-3 py-2">
-      <div className="flex items-center gap-2 mb-1">
-        <div className="text-[10px] uppercase tracking-wider text-ink-500">
-          threshold
-        </div>
-        {overridden && <Pill tone="warn">overridden</Pill>}
+      <div
+        className={`text-[12px] text-ink-800 ${mono ? "font-mono" : ""} whitespace-pre-wrap`}
+      >
+        {value}
       </div>
-      {editable ? (
-        <div className="flex items-center gap-1.5">
-          <input
-            value={input}
-            onChange={(e) => onInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && dirty) onApply();
-            }}
-            spellCheck={false}
-            className="flex-1 h-7 px-2 rounded border border-ink-200 bg-white font-mono text-[12px] focus:border-ink-400"
-            placeholder="e.g. 0.013"
-          />
-          <Button
-            size="sm"
-            variant={dirty ? "primary" : "secondary"}
-            onClick={onApply}
-            disabled={!dirty || applying}
-          >
-            {applying ? <Spinner /> : "Apply"}
-          </Button>
-        </div>
-      ) : (
-        <div className="text-[12px] text-ink-800 font-mono whitespace-pre-wrap">
-          {value}
-        </div>
-      )}
     </div>
   );
 }

@@ -381,11 +381,6 @@ function idleMessageFor(run: RunRecord): string | null {
     return "Waiting for dev plan selection — pick one of the candidates below to continue.";
   }
   if (stage === 3) {
-    if (phase === "ready") {
-      // We landed here from Probe Fixing → "Relax threshold". The whole
-      // point is to edit the threshold; nudge the user toward that.
-      return "Waiting for you to modify the threshold — adjust it on the right and click Apply, then Implement & Run.";
-    }
     return "Waiting to start implementation — click Implement & Run when you're ready.";
   }
   if (stage === 4) {
@@ -397,7 +392,10 @@ function idleMessageFor(run: RunRecord): string | null {
       }
       return "Auto-research ready — set the number of rounds and click Start auto-research.";
     }
-    return "Waiting for next action — start auto probe-fixing, go back, or stop.";
+    if (run.fix_plan_round != null) {
+      return "Fix plans are ready — pick one below to apply and re-run.";
+    }
+    return "Ready — click Start auto probe-fixing to run the auto-pilot, or go back from the sidebar.";
   }
   return null;
 }

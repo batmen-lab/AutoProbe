@@ -95,12 +95,12 @@ class ListDirBody(BaseModel):
     path: str
 
 
-class ThresholdBody(BaseModel):
-    value: str
-
-
 class AutoResearchIterateBody(BaseModel):
     count: int  # number of auto-research rounds to run in this batch
+
+
+class FixPlanGenerateBody(BaseModel):
+    hint: str | None = None
 
 
 # ── Workspace ────────────────────────────────────────────────────────────────
@@ -268,22 +268,72 @@ async def stage3_implement(run_id: str):
     return _state_payload(state)
 
 
-@app.post("/api/runs/{run_id}/stage3/threshold")
-def stage3_threshold(run_id: str, body: ThresholdBody):
-    """Override the selected dev plan's threshold before running implement."""
-    state = load_run(run_id)
-    try:
-        stages_mod.override_threshold(state, body.value.strip())
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    return _state_payload(state)
-
-
 # ── Stage 4 ──────────────────────────────────────────────────────────────────
 @app.post("/api/runs/{run_id}/stage4/iterate")
 async def stage4_iterate(run_id: str):
     state = load_run(run_id)
     await _run_blocking(stages_mod.iterate_once, state)
+    state = load_run(run_id)
+    return _state_payload(state)
+
+
+@app.post("/api/runs/{run_id}/stage4/auto-fix-loop")
+async def stage4_auto_fix_loop(run_id: str):
+    """Stage-4 auto-pilot: run fix-plan rounds (auto-pick highest confidence)
+    until a terminal state (PASS / best-effort / stagnant). Drives the
+    "Start auto probe-fixing" button on the frontend.
+    """
+    state = load_run(run_id)
+    try:
+        await _run_blocking(stages_mod.auto_fix_loop, state)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        # Surface RuntimeError (e.g. agent didn't write fix-plans file) so the
+        # frontend can show it; the loop already restored phase=ready before
+        # raising.
+        raise HTTPException(500, str(e))
+    state = load_run(run_id)
+    return _state_payload(state)
+
+
+@app.post("/api/runs/{run_id}/stage4/fix-plans/generate")
+async def stage4_fix_plans_generate(
+    run_id: str,
+    body: FixPlanGenerateBody | None = None,
+):
+    """Generate 3 candidate fix plans for the next iteration. Triggered after
+    a FAIL round when the user clicks "Continue fixing" → "Generate fixing
+    plans". Optional `hint` body parameter is passed to the generator agent
+    as user-provided direction (non-binding). Returns the JSON list so the
+    UI can render cards.
+    """
+    state = load_run(run_id)
+    hint = body.hint if body is not None else None
+    try:
+        result = await _run_blocking(stages_mod.generate_fix_plans, state, hint)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    state = load_run(run_id)
+    return {"state": _state_payload(state), **result}
+
+
+@app.get("/api/runs/{run_id}/stage4/fix-plans/artifact")
+def stage4_fix_plans_artifact(run_id: str):
+    """Return the open fix-plan set (if any). Used by the UI to re-render
+    after a page refresh or polling tick."""
+    state = load_run(run_id)
+    return stages_mod.read_fix_plans(state)
+
+
+@app.post("/api/runs/{run_id}/stage4/fix-plans/select")
+async def stage4_fix_plans_select(run_id: str, body: SelectBody):
+    """User picked one of the 3 fix plans — apply it + run training."""
+    state = load_run(run_id)
+    try:
+        await _run_blocking(stages_mod.select_and_apply_fix_plan, state, body.index)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     state = load_run(run_id)
     return _state_payload(state)
 
@@ -387,11 +437,16 @@ def live_metric(run_id: str):
         return {"source": "none", "values": []}
     n = max(nums)
     data = json.loads((metric_dir / f"probe_result_{n}.json").read_text())
+    # New schema uses `standard_threshold`; legacy probers wrote just
+    # `threshold`. Surface both names so the frontend doesn't have to know.
+    std_th = data.get("standard_threshold", data.get("threshold"))
     return {
         "source": "completed",
         "run_index": n,
         "metric_name": data.get("metric_name"),
-        "threshold": data.get("threshold"),
+        "threshold": std_th,
+        "standard_threshold": std_th,
+        "acceptable_threshold": data.get("acceptable_threshold"),
         "direction": data.get("direction"),
         "status": data.get("status"),
         "values": data.get("values", []),
@@ -432,6 +487,12 @@ def cancel():
         try:
             state = load_run(rid)
             new_phase = "ready" if state.record.stage == 4 else "input"
+            # If we cancelled in the middle of a fix-plan generation, drop the
+            # half-set round pointer — there's no usable JSON to render and
+            # the UI shouldn't get stuck on the fix-plan view.
+            action = state.record.current_action or ""
+            if action.startswith("fix-plan-generate:") or action.startswith("fix-plan-confidence:"):
+                state.set_fix_plan_round(None)
             state.set_action(None)
             state.set_phase(state.record.stage, new_phase)
             affected = rid

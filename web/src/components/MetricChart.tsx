@@ -79,11 +79,19 @@ export function MetricChart({
   }
 
   const lastValue = data.values[data.values.length - 1];
-  const thresholdNum =
-    typeof data.threshold === "number"
-      ? data.threshold
-      : typeof data.threshold === "string"
-        ? parseFloat(data.threshold)
+  const stdRaw = data.standard_threshold ?? data.threshold;
+  const accRaw = data.acceptable_threshold;
+  const stdNum =
+    typeof stdRaw === "number"
+      ? stdRaw
+      : typeof stdRaw === "string"
+        ? parseFloat(stdRaw)
+        : NaN;
+  const accNum =
+    typeof accRaw === "number"
+      ? accRaw
+      : typeof accRaw === "string"
+        ? parseFloat(accRaw)
         : NaN;
 
   return (
@@ -115,14 +123,26 @@ export function MetricChart({
       </div>
       <Sparkline
         values={data.values}
-        threshold={Number.isFinite(thresholdNum) ? thresholdNum : null}
+        standard={Number.isFinite(stdNum) ? stdNum : null}
+        acceptable={Number.isFinite(accNum) ? accNum : null}
         height={height}
         passing={data.status === "PASS"}
       />
-      {data.threshold != null && (
-        <div className="px-3 py-1.5 border-t border-ink-100 text-[11px] text-ink-500 flex items-center justify-between">
-          <span>
-            threshold: <span className="font-mono text-ink-700">{String(data.threshold)}</span>
+      {(stdRaw != null || accRaw != null) && (
+        <div className="px-3 py-1.5 border-t border-ink-100 text-[11px] text-ink-500 flex items-center justify-between flex-wrap gap-x-3 gap-y-1">
+          <span className="flex items-center gap-3 flex-wrap">
+            {stdRaw != null && (
+              <span>
+                standard:{" "}
+                <span className="font-mono text-green-600">{String(stdRaw)}</span>
+              </span>
+            )}
+            {accRaw != null && (
+              <span>
+                acceptable:{" "}
+                <span className="font-mono text-amber-600">{String(accRaw)}</span>
+              </span>
+            )}
           </span>
           {data.direction && (
             <span>
@@ -137,12 +157,14 @@ export function MetricChart({
 
 function Sparkline({
   values,
-  threshold,
+  standard,
+  acceptable,
   height,
   passing,
 }: {
   values: { epoch: number; value: number }[];
-  threshold: number | null;
+  standard: number | null;
+  acceptable: number | null;
   height: number;
   passing: boolean;
 }) {
@@ -157,8 +179,12 @@ function Sparkline({
   const vals = values.map((v) => v.value);
   const xMin = Math.min(...epochs);
   const xMax = Math.max(...epochs);
-  let yMin = Math.min(...vals, ...(threshold !== null ? [threshold] : []));
-  let yMax = Math.max(...vals, ...(threshold !== null ? [threshold] : []));
+  const extraY = [
+    ...(standard !== null ? [standard] : []),
+    ...(acceptable !== null ? [acceptable] : []),
+  ];
+  let yMin = Math.min(...vals, ...extraY);
+  let yMax = Math.max(...vals, ...extraY);
   if (yMin === yMax) {
     yMin -= 0.5;
     yMax += 0.5;
@@ -207,27 +233,51 @@ function Sparkline({
         );
       })}
 
-      {/* threshold */}
-      {threshold !== null && (
+      {/* acceptable threshold (drawn first so the standard line wins overlap) */}
+      {acceptable !== null && (
         <g>
           <line
             x1={padL}
             x2={w - padR}
-            y1={y(threshold)}
-            y2={y(threshold)}
-            stroke="#dc2626"
+            y1={y(acceptable)}
+            y2={y(acceptable)}
+            stroke="#d97706"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+          <text
+            x={w - padR - 4}
+            y={y(acceptable) - 4}
+            fontSize="9"
+            textAnchor="end"
+            fill="#d97706"
+            fontFamily="ui-monospace, monospace"
+          >
+            acceptable {acceptable.toFixed(3)}
+          </text>
+        </g>
+      )}
+      {/* standard threshold */}
+      {standard !== null && (
+        <g>
+          <line
+            x1={padL}
+            x2={w - padR}
+            y1={y(standard)}
+            y2={y(standard)}
+            stroke="#16a34a"
             strokeWidth={1}
             strokeDasharray="4 3"
           />
           <text
             x={w - padR - 4}
-            y={y(threshold) - 4}
+            y={y(standard) - 4}
             fontSize="9"
             textAnchor="end"
-            fill="#dc2626"
+            fill="#16a34a"
             fontFamily="ui-monospace, monospace"
           >
-            threshold {threshold.toFixed(3)}
+            standard {standard.toFixed(3)}
           </text>
         </g>
       )}

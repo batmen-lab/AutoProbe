@@ -26,9 +26,18 @@ export type IterationRow = {
   index: number;
   metric_name: string | null;
   metric_value: number | null;
+  // Standard threshold (PASS bar) — kept under `threshold` for backward-compat
+  // with older runs. The acceptable threshold is the looser bar.
   threshold: string | null;
+  acceptable_threshold: string | null;
+  tail_mean: number | null;
+  direction: "higher_is_better" | "lower_is_better" | null;
   status: string | null;
+  acceptable_met: boolean | null;
   note: string | null;
+  // When the round came from the fix-plan flow, the 1-based plan index that
+  // was applied. The full plan text is in response/<run>/fix_plans_<N>.json.
+  fix_plan_chosen_index: number | null;
   // Auto-research only: running best metric after this iteration. Used to
   // plot the monotonic per-run chart.
   best_value: number | null;
@@ -52,6 +61,11 @@ export type RunRecord = {
   auto_research_runs_completed: number;
   auto_research_best_value: number | null;
   auto_research_best_direction: "higher_is_better" | "lower_is_better" | null;
+  // Fix-plan flow (stage 4). `fix_plan_round` is the iteration index the
+  // currently-open set of fix plans belongs to. `fix_plan_index` is the
+  // 1-based selection the user made (cleared once apply completes).
+  fix_plan_round: number | null;
+  fix_plan_index: number | null;
   busy: boolean;
 };
 
@@ -66,8 +80,21 @@ export type ProbeDesign = {
 export type DevPlan = {
   content: string;
   metric: string;
-  threshold: string;
+  standard_threshold: string;
+  acceptable_threshold: string;
   confidence: number;
+};
+
+export type FixPlan = {
+  title: string;
+  content: string;
+  target_files: string[];
+  confidence: number;
+};
+
+export type FixPlansArtifact = {
+  round: number | null;
+  fix_plans: FixPlan[] | null;
 };
 
 export type BrowseEntry = {
@@ -89,7 +116,12 @@ export type LiveMetric = {
   source: "live" | "completed" | "none";
   run_index?: number;
   metric_name?: string | null;
+  // `threshold` is the standard threshold (PASS bar) — kept under this name
+  // for backward-compat with older probers. `standard_threshold` mirrors it
+  // explicitly. `acceptable_threshold` is the looser line.
   threshold?: string | number | null;
+  standard_threshold?: string | number | null;
+  acceptable_threshold?: string | number | null;
   direction?: "higher_is_better" | "lower_is_better" | null;
   status?: "PASS" | "FAIL" | null;
   values: LiveMetricPoint[];
@@ -189,11 +221,6 @@ export const api = {
     ),
 
   // stage 3 / 4
-  setThreshold: (runId: string, value: string) =>
-    http<RunRecord>(`/api/runs/${runId}/stage3/threshold`, {
-      method: "POST",
-      body: JSON.stringify({ value }),
-    }),
   implement: (runId: string) =>
     http<RunRecord>(`/api/runs/${runId}/stage3/implement`, {
       method: "POST",
@@ -206,6 +233,29 @@ export const api = {
     http<RunRecord>(`/api/runs/${runId}/stage4/auto-research-iterate`, {
       method: "POST",
       body: JSON.stringify({ count }),
+    }),
+
+  // stage 4: auto-pilot — loops fix-plan rounds until terminal state.
+  autoFixLoop: (runId: string) =>
+    http<RunRecord>(`/api/runs/${runId}/stage4/auto-fix-loop`, {
+      method: "POST",
+    }),
+
+  // stage 4: fix-plan flow
+  generateFixPlans: (runId: string, hint?: string) =>
+    http<{ state: RunRecord } & FixPlansArtifact>(
+      `/api/runs/${runId}/stage4/fix-plans/generate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ hint: hint ?? null }),
+      },
+    ),
+  getFixPlans: (runId: string) =>
+    http<FixPlansArtifact>(`/api/runs/${runId}/stage4/fix-plans/artifact`),
+  selectFixPlan: (runId: string, index: number) =>
+    http<RunRecord>(`/api/runs/${runId}/stage4/fix-plans/select`, {
+      method: "POST",
+      body: JSON.stringify({ index }),
     }),
 
   // revert

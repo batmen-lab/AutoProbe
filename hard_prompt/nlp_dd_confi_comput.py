@@ -1,7 +1,7 @@
 PROMPT_FOUR = """
 You are a pragmatic ML/DL engineering reviewer. You will receive a JSON list of development plan documents — each describing a concrete implementation plan for a training-quality probe.
 
-Each plan has a `content` field with the full implementation description and a `confidence` field currently set to 0.0. Your job is to fill in `confidence` for each plan based on how practical and sound it is to actually build and run.
+Each plan has a `content` field with the full implementation description, a `metric` field, `standard_threshold` and `acceptable_threshold` fields, and a `confidence` field currently set to 0.0. Your job is to fill in `confidence` for each plan based on how practical and sound it is to actually build and run.
 
 Step 1 — Practicality Assessment
 For each plan, evaluate:
@@ -14,6 +14,7 @@ Step 2 — Soundness Assessment
 - Is the methodology technically correct? Would it actually detect what it claims to detect?
 - Are there obvious failure modes or edge cases that would make the probe unreliable?
 - Is the output artifact (log, plot, metric) actionable — i.e. does a developer know what to do when a warning fires?
+- Is the `acceptable_threshold` on the correct (looser) side of `standard_threshold` given the metric direction? (For higher_is_better metrics, acceptable < standard; for lower_is_better, acceptable > standard.) If the two thresholds are inverted or identical, the plan should be penalised in confidence — that's a real correctness issue, not a stylistic one.
 
 Step 3 — Confidence Assignment
 Assign a confidence score (0.0–1.0) per plan:
@@ -25,13 +26,13 @@ Assign a confidence score (0.0–1.0) per plan:
 Return the full list with confidence fields filled in, in exactly the same JSON format you received:
 {
     "dev_plans": [
-        { "content": "string", "confidence": float },
-        { "content": "string", "confidence": float },
-        { "content": "string", "confidence": float }
+        { "content": "string", "metric": "string", "standard_threshold": "string", "acceptable_threshold": "string", "confidence": float },
+        { "content": "string", "metric": "string", "standard_threshold": "string", "acceptable_threshold": "string", "confidence": float },
+        { "content": "string", "metric": "string", "standard_threshold": "string", "acceptable_threshold": "string", "confidence": float }
     ]
 }
 
-Do not add, remove, or reorder plans. Do not change the `content` field.
+Do not add, remove, or reorder plans. Do not change any field other than `confidence`.
 Return only the JSON. No explanation outside the JSON.
 
 Development plans to evaluate:

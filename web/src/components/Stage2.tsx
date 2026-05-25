@@ -175,9 +175,18 @@ export function Stage2({
                     <p className="text-[12.5px] text-ink-700 leading-relaxed whitespace-pre-wrap">
                       {p.content}
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
                       <FieldBox label="metric" value={p.metric} />
-                      <FieldBox label="threshold" value={p.threshold} mono />
+                      <FieldBox
+                        label="standard threshold"
+                        value={p.standard_threshold}
+                        mono
+                      />
+                      <FieldBox
+                        label="acceptable threshold"
+                        value={p.acceptable_threshold}
+                        mono
+                      />
                     </div>
                     {run.stage === 2 && (
                       <div className="pt-1">
