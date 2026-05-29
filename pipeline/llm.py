@@ -15,6 +15,7 @@ stage action via cancel_current().
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import threading
 from pathlib import Path
@@ -230,7 +231,37 @@ def nlp_call(
     final_text, _stderr = _stream_claude(cmd, log_path=log_path, label=f"{label} → {model}")
     if not final_text.strip():
         raise RuntimeError(f"{label}: empty response from model")
-    return json.loads(final_text)
+    return _parse_json_response(final_text)
+
+
+# Some routed models (qwen via OpenRouter, etc.) ignore "return only the JSON"
+# instructions and emit preamble + ```json ... ``` fences. Be tolerant.
+_FENCE_RE = re.compile(r"```(?:json|JSON)?\s*\n?(.*?)\n?```", re.DOTALL)
+
+
+def _parse_json_response(text: str) -> dict:
+    s = (text or "").strip()
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+    m = _FENCE_RE.search(s)
+    if m:
+        try:
+            return json.loads(m.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+    for opener, closer in (("{", "}"), ("[", "]")):
+        start = s.find(opener)
+        end = s.rfind(closer)
+        if start != -1 and end > start:
+            try:
+                return json.loads(s[start : end + 1])
+            except json.JSONDecodeError:
+                continue
+    raise json.JSONDecodeError(
+        f"NLP response not valid JSON (first 200 chars): {s[:200]!r}", s[:1], 0
+    )
 
 
 def agent_call(
