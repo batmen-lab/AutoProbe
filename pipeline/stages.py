@@ -108,8 +108,10 @@ def auto_research_setup(state: RunState) -> None:
         log_path=state.log_path,
     )
 
-    # Validate the integration with a real training run.
-    run_training_with_autofix(state)
+    # Validate the integration with a real training run. Both setup-time runs
+    # use expected_index=1 — their outputs are wiped a few lines below before
+    # the first real iteration produces probe_result_1.
+    run_training_with_autofix(state, expected_index=1)
 
     # Commentor seeds train.py with the 10 improvement markers used by
     # PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT in stage 4.
@@ -119,7 +121,7 @@ def auto_research_setup(state: RunState) -> None:
         log_path=state.log_path,
     )
     # Re-validate after the commentor edits.
-    run_training_with_autofix(state)
+    run_training_with_autofix(state, expected_index=1)
 
     # Tag the post-setup train.py as `pre-iter` — the auto-research equivalent
     # of post-stage-3 implementation. revert_to(stage=4) restores from this.
@@ -238,7 +240,7 @@ def implement(state: RunState) -> None:
 
     # First training run (with auto-fix loop) to produce probe_result_1.
     state.set_action("post-impl-test-run")
-    run_training_with_autofix(state)
+    run_training_with_autofix(state, expected_index=1)
 
     # Round 1 is the stage-3 first run — tag the train.py that produced
     # probe_result_1 so future rounds can revert-on-regression back to it.
@@ -368,7 +370,7 @@ def iterate_once(state: RunState) -> dict:
     agent_call(iter_prompt, cwd=state.workspace, log_path=state.log_path)
 
     state.set_action(f"iteration-test-run:{next_idx}")
-    run_training_with_autofix(state)
+    run_training_with_autofix(state, expected_index=next_idx)
 
     # Orchestrator-level revert-on-regression: compares this round's tail_mean
     # to the prior iteration record and restores train.py from
@@ -625,7 +627,7 @@ def _do_auto_fix_round(state: RunState) -> None:
     )
 
     state.set_action(f"fix-plan-test-run:{round_idx}")
-    run_training_with_autofix(state)
+    run_training_with_autofix(state, expected_index=round_idx)
 
     # Revert-on-regression at the orchestrator level. If the new tail_mean is
     # worse than the prior round's, restore train.py from round-{N-1}-post.
@@ -711,7 +713,7 @@ def select_and_apply_fix_plan(state: RunState, index_1based: int) -> dict:
     agent_call(prompt, cwd=state.workspace, log_path=state.log_path)
 
     state.set_action(f"fix-plan-test-run:{round_idx}")
-    run_training_with_autofix(state)
+    run_training_with_autofix(state, expected_index=round_idx)
 
     # Orchestrator-level revert-on-regression — same as the auto-pilot path.
     revert_note = _maybe_revert_on_regression(state, round_idx)
@@ -796,7 +798,7 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
         )
 
         state.set_action(f"auto-research-test:{k}:{count}")
-        run_training_with_autofix(state)
+        run_training_with_autofix(state, expected_index=next_idx)
 
         tag_n = _round_post_tag(next_idx)
 
@@ -918,13 +920,20 @@ import shutil
 import subprocess
 
 
-def run_training_with_autofix(state: RunState) -> None:
-    """Run python train.py; on failure, ask agent to fix; retry up to MAX_FIX_RETRIES."""
+def run_training_with_autofix(state: RunState, expected_index: int) -> None:
+    """Run python train.py; on failure, ask agent to fix; retry up to MAX_FIX_RETRIES.
+
+    `expected_index` is the orchestrator-owned round number. _run_training
+    normalizes prober.py's output to probe_result_{expected_index}.json
+    regardless of what filename the agent picked, so the round counter never
+    drifts even if the agent invokes `python train.py` during a fix-exploration
+    step (the resulting debris is swept before the next canonical run).
+    """
     metric_dir = state.workspace / ".agent_probe" / "metric"
     plot_dir = state.workspace / ".agent_probe" / "plot"
     existing = _glob_indices(metric_dir, "probe_result_*.json")
 
-    success, err = _run_training(state)
+    success, err = _run_training(state, expected_index)
     retries = 0
     while not success:
         if retries >= MAX_FIX_RETRIES:
@@ -932,10 +941,22 @@ def run_training_with_autofix(state: RunState) -> None:
         retries += 1
         _purge_new_artifacts(metric_dir, plot_dir, existing)
         agent_call(f"{PROMPT_EIGHT}\n\nError output:\n{err}", cwd=state.workspace, log_path=state.log_path)
-        success, err = _run_training(state)
+        success, err = _run_training(state, expected_index)
 
 
-def _run_training(state: RunState) -> tuple[bool, str]:
+def _run_training(state: RunState, expected_index: int) -> tuple[bool, str]:
+    metric_dir = state.workspace / ".agent_probe" / "metric"
+    plot_dir = state.workspace / ".agent_probe" / "plot"
+
+    # Pre-sweep: any probe_result_*.{json,pdf} with index >= expected_index is
+    # debris (most often from the agent invoking `python train.py` during its
+    # mid-step exploration). Clear them so a clean orchestrator-driven run lands.
+    _sweep_at_or_above(metric_dir, "probe_result_*.json", expected_index)
+    _sweep_at_or_above(plot_dir, "probe_result_*.pdf", expected_index)
+
+    metric_pre = _snapshot_paths(metric_dir, "probe_result_*.json")
+    plot_pre = _snapshot_paths(plot_dir, "probe_result_*.pdf")
+
     log_path = state.log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
     # Prefer `python` if it exists (user may have set it up), otherwise fall back to
@@ -953,7 +974,58 @@ def _run_training(state: RunState) -> tuple[bool, str]:
         )
         f.write(result.stdout.encode())
         f.write(result.stderr.encode())
-    return result.returncode == 0, result.stderr
+    if result.returncode != 0:
+        return False, result.stderr
+
+    # Normalize the new probe_result.{json,pdf} the agent's prober.py emitted
+    # to the orchestrator-canonical probe_result_{expected_index}.{ext}.
+    if not _normalize_probe_output(metric_dir, "probe_result_*.json", metric_pre, expected_index):
+        return False, "prober.py exited 0 but wrote no probe_result_*.json"
+    _normalize_probe_output(plot_dir, "probe_result_*.pdf", plot_pre, expected_index)
+    return True, ""
+
+
+def _snapshot_paths(directory: Path, pattern: str) -> set[Path]:
+    if not directory.exists():
+        return set()
+    return set(directory.glob(pattern))
+
+
+def _sweep_at_or_above(directory: Path, pattern: str, threshold: int) -> None:
+    if not directory.exists():
+        return
+    for p in directory.glob(pattern):
+        try:
+            idx = int(p.stem.rsplit("_", 1)[-1])
+        except ValueError:
+            continue
+        if idx >= threshold:
+            p.unlink(missing_ok=True)
+
+
+def _normalize_probe_output(
+    directory: Path, pattern: str, pre: set[Path], expected_index: int
+) -> bool:
+    """Rename whichever new probe_result_*.{json,pdf} the agent wrote to
+    probe_result_{expected_index}.{ext}. Returns True iff at least one new
+    file was found. Multiple new files → take latest mtime, drop the rest.
+    """
+    if not directory.exists():
+        return False
+    post = set(directory.glob(pattern))
+    new = post - pre
+    if not new:
+        return False
+    canonical = max(new, key=lambda p: p.stat().st_mtime)
+    ext = canonical.suffix
+    target = directory / f"probe_result_{expected_index}{ext}"
+    if canonical.resolve() != target.resolve():
+        target.unlink(missing_ok=True)
+        canonical.rename(target)
+    for p in new:
+        if p.exists() and p.resolve() != target.resolve():
+            p.unlink(missing_ok=True)
+    return True
 
 
 def _glob_indices(directory: Path, pattern: str) -> set[int]:

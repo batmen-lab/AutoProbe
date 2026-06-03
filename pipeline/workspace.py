@@ -7,12 +7,16 @@ recent workspaces and the currently-opened one in response/_app_state.json.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 REPO_ROOT: Final = Path(__file__).resolve().parent.parent
-RUN_BASE: Final = REPO_ROOT / "response"
+# When LLM_BACKEND=codex, runs land under response_codex/ so the two backends
+# never share state. Default is the original response/ directory.
+_BACKEND = os.environ.get("LLM_BACKEND", "claude").lower()
+RUN_BASE: Final = REPO_ROOT / ("response_codex" if _BACKEND == "codex" else "response")
 APP_STATE_PATH: Final = RUN_BASE / "_app_state.json"
 MAX_RECENT: Final = 10
 

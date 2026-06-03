@@ -507,6 +507,7 @@ def health():
 
 
 # Convenience: `python -m server.app` runs uvicorn with reload off.
+# API_PORT env var overrides the default 8765 (codex backend uses 8766).
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    import os, uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("API_PORT", "8765")))

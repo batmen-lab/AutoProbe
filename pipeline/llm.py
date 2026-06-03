@@ -326,3 +326,19 @@ def agent_call(
                 if stderr:
                     ff.write(_truncate(stderr, 2000) + "\n")
         raise subprocess.CalledProcessError(p.returncode, p.args, None, stderr)
+
+
+# ── Backend swap (codex CLI) ────────────────────────────────────────────────
+# When LLM_BACKEND=codex is set in the environment, swap the three public
+# entry points to the codex CLI implementations. Default is "claude" — the
+# code above runs unchanged. stages.py / state.py / server/app.py never need
+# to know which backend is active.
+import os as _os  # noqa: E402
+
+if _os.environ.get("LLM_BACKEND", "claude").lower() == "codex":
+    from . import llm_codex as _codex
+    nlp_call = _codex.nlp_call
+    agent_call = _codex.agent_call
+    cancel_current = _codex.cancel_current
+    NLP_MODEL = _codex.NLP_MODEL
+    AGENT_MODEL = _codex.AGENT_MODEL
