@@ -12,6 +12,7 @@ import {
   stageName,
 } from "./ui";
 import { Header } from "./Stage1";
+import { useActionLatch } from "@/lib/useActionLatch";
 
 export function Stage2({
   run,
@@ -22,7 +23,7 @@ export function Stage2({
 }) {
   const [plans, setPlans] = useState<DevPlan[] | null>(null);
   const [probe, setProbe] = useState<ProbeDesign | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const { inProgress: generating, begin, fail } = useActionLatch(run.busy);
   const [picking, setPicking] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,14 +59,13 @@ export function Stage2({
 
   async function handleGenerate() {
     setError(null);
-    setGenerating(true);
+    begin();
     try {
       await api.generateDevPlans(run.run_id);
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
-    } finally {
-      setGenerating(false);
+      fail();
     }
   }
 

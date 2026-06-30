@@ -1,0 +1,57 @@
+============================================================
+M5 Forecasting - Accuracy — Project Information
+============================================================
+------------------------------------------------------------
+1. PROCEDURE (end to end)
+------------------------------------------------------------
+Task: Daily sales forecasting for Walmart product/store series. Metric in the
+seed: validation RMSE (lower is better) over a held-out window — a lightweight
+proxy for the competition's official WRMSSE. Single script: `python train.py`
+(loads data via data_loader.py).
+
+Original rough-baseline steps:
+   1. Load data: data_loader.load_sales() reads ONLY
+      data/sales_train_validation.csv (the wide table: one row per series,
+      daily-sales columns d_1 ... d_N). (data_loader downloads the competition
+      via the Kaggle API into data/ if files are absent.)
+   2. Build the matrix: take all "d_*" day columns -> numpy array
+      series of shape (n_series, n_days).
+   3. Hold-out: HORIZON = 28. The last 28 days are the validation actuals;
+      everything before is history.
+   4. Forecast (naive): LOOKBACK = 28. For each series compute the mean of the
+      last 28 days OF HISTORY, and repeat that single value across all 28
+      validation days — i.e. a flat-line forecast per series. No calendar, no
+      prices, no trend/seasonality, no per-day variation, no hierarchy.
+   5. Evaluate: plain RMSE = sqrt(mean((actual - forecast)^2)) across all
+      series and all 28 horizon days (no log transform, no per-series
+      normalization, no weighting).
+   6. Output: write result/validation_metrics.json; print
+      "Validation RMSE: <x>".
+
+Conclusion / result (original seed): validation RMSE = 2.218602. A flat mean
+forecast captures none of the day-to-day, calendar, or promotional structure,
+so it leaves large headroom — intentional for the pipeline to improve.
+
+------------------------------------------------------------
+2. DATA
+------------------------------------------------------------
+- Dataset: M5 Forecasting - Accuracy (Kaggle competition
+  "m5-forecasting-accuracy"), Walmart hierarchical daily unit sales.
+- Files present on disk after download: calendar.csv, sales_train_validation.csv,
+  sales_train_evaluation.csv, sell_prices.csv, sample_submission.csv. The
+  ORIGINAL code reads ONLY sales_train_validation.csv — it does NOT use
+  calendar (holidays/SNAP), sell_prices (promotions), the evaluation table, or
+  the hierarchy keys (item/dept/cat/store/state).
+- Processing actually applied: select d_* columns -> to numpy -> last-28-days
+  hold-out -> per-series mean of the preceding 28 days -> flat repeat.
+- Target: future daily unit sales (the held-out last 28 days).
+- Connection to the result: the RMSE of 2.2186 is a direct consequence of the
+  original code using sales history alone and collapsing it to one number per
+  series. The unused calendar/price/hierarchy data is precisely what a real
+  forecaster would use to drive the error down.
+
+------------------------------------------------------------
+3. NOTE
+------------------------------------------------------------
+Note on metric: the seed uses plain RMSE as a proxy. 
+

@@ -1,0 +1,93 @@
+============================================================
+AutoProbe — Auto-Research Datasets Summary
+============================================================
+Covers the four auto-research (performance-improvement) datasets:
+home_credit, ieee_cis_fraud_detection, rossmann, m5_forecast.
+Stats measured from the local data/ files; task/metric/baseline notes
+from each project's train.py + projectinfo.
+
+────────────────────────────────────────────────────────────
+1. HOME CREDIT DEFAULT RISK   (home_credit/)
+────────────────────────────────────────────────────────────
+Task        : Binary classification — predict loan default.
+Metric      : ROC-AUC (higher is better).
+Sample size : application_train = 307,511 rows; application_test = 48,744 rows.
+Features    : 122 columns in application_train (~106 numeric, ~16 categorical) —
+              demographics, income/credit amounts, EXT_SOURCE_1/2/3 scores,
+              document flags, housing/social features, etc.
+Label       : TARGET — binary; 24,825 positives = 8.07% default rate (imbalanced).
+              Identifier: SK_ID_CURR.
+Related tables (relational, joinable, NOT used by the baseline):
+              bureau                1,716,428 rows × 17 cols  (join SK_ID_CURR)
+              bureau_balance       27,299,925 rows ×  3 cols  (join SK_ID_BUREAU)
+              previous_application  1,670,214 rows × 37 cols  (join SK_ID_CURR)
+              POS_CASH_balance     10,001,358 rows ×  8 cols  (join SK_ID_PREV)
+              credit_card_balance   3,840,312 rows × 23 cols  (join SK_ID_PREV)
+              installments_payments 13,605,401 rows × 8 cols  (join SK_ID_PREV)
+Baseline    : logistic regression on a small subset of application_train numeric
+              columns only; aggregating the 6 related tables is the main headroom.
+
+────────────────────────────────────────────────────────────
+2. IEEE-CIS FRAUD DETECTION   (ieee_cis_fraud_detection/)
+────────────────────────────────────────────────────────────
+Task        : Binary classification — detect fraudulent transactions.
+Metric      : ROC-AUC (higher is better).
+Sample size : train_transaction = 590,540 rows; train_identity = 144,233 rows
+              (joinable on TransactionID; only ~24% of transactions have identity).
+Features    : train_transaction = 394 columns (~380 numeric, ~14 categorical):
+                - V1..V339   : 339 anonymized Vesta engineered features
+                - C1..C14    : 14 counting features
+                - D1..D15    : 15 timedelta features
+                - card1..card6: 6 payment-card features
+                - TransactionAmt, ProductCD, addr1/addr2, dist1/dist2,
+                  P_emaildomain, R_emaildomain, TransactionDT (time offset)
+              train_identity = 41 columns (DeviceType, DeviceInfo, id_01..id_38).
+Label       : isFraud — binary; 20,663 positives = 3.50% (highly imbalanced).
+              Identifier: TransactionID.
+Baseline    : model on a subset of transaction numeric features; identity table
+              not merged; V-feature reduction and identity join are headroom.
+
+────────────────────────────────────────────────────────────
+3. ROSSMANN STORE SALES   (rossmann/)
+────────────────────────────────────────────────────────────
+Task        : Regression / time-series forecasting — daily sales per store.
+Metric      : RMSPE = sqrt(mean(((y-ŷ)/y)^2)) over nonzero-sales rows (lower is better).
+Sample size : train = 1,017,209 rows = 1,115 stores × ~942 days
+              (Date range 2013-01-01 .. 2015-07-31).
+Features    : train (9 cols): Store, DayOfWeek, Date, Sales, Customers, Open,
+              Promo, StateHoliday, SchoolHoliday.  (~83% of rows are open days.)
+              store.csv (1,115 stores × 10 cols): StoreType, Assortment,
+              CompetitionDistance, CompetitionOpenSinceMonth/Year, Promo2,
+              Promo2SinceWeek/Year, PromoInterval.
+Label/target: Sales — continuous (mean ≈ 5,774, max = 41,551). Closed/zero-sales
+              days excluded by the metric.
+Baseline    : per-store mean predictor; ignores store.csv, Promo, DayOfWeek,
+              seasonality, holidays — all of which are headroom.
+
+────────────────────────────────────────────────────────────
+4. M5 FORECASTING - ACCURACY   (m5_forecast/)
+────────────────────────────────────────────────────────────
+Task        : Hierarchical daily-demand forecasting (28-day horizon per series).
+Metric      : RMSE — implemented here as mean of per-series log-space RMSE
+              (log1p); the official competition metric is WRMSSE.
+Sample size : sales_train_validation = 30,490 series × 1,913 day columns
+              (d_1 .. d_1913). (= 3,049 items × 10 stores.)
+Hierarchy   : item_id 3,049 · dept_id 7 · cat_id 3 (Hobbies/Household/Foods) ·
+              store_id 10 · state_id 3 (CA, TX, WI).
+Features/aux: sales (wide d_* columns) — intermittent unit-sales counts, many zeros.
+              calendar.csv: date, weekday, month, year, event_name_1/2,
+              event_type_1/2, snap_CA/TX/WI (SNAP benefit days).
+              sell_prices.csv: 6,841,121 rows (store_id, item_id, wm_yr_wk, sell_price).
+Label/target: daily unit sales (non-negative integer counts; intermittent demand).
+Baseline    : naive trailing-mean flat forecast on the sales series only;
+              ignores calendar (holidays/SNAP), prices, trend, seasonality and
+              the cross-series hierarchy — all headroom.
+
+────────────────────────────────────────────────────────────
+QUICK REFERENCE
+────────────────────────────────────────────────────────────
+dataset        task                metric   rows (train)   features                 label
+home_credit    binary classif.     ROC-AUC↑ 307,511        122 (+6 relational tables) TARGET 8.07% pos
+ieee_cis_fraud binary classif.     ROC-AUC↑ 590,540        394 (+41 identity)        isFraud 3.50% pos
+rossmann       regression/forecast RMSPE↓   1,017,209      9 (+10 store.csv)         Sales (continuous)
+m5_forecast    hierarchical forecast RMSE↓  30,490 series  1,913 day cols (+cal/prices) daily unit sales

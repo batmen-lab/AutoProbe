@@ -1,0 +1,114 @@
+============================================================
+AutoProbe — Probe Datasets Summary
+============================================================
+Covers the three probe-mode datasets: CelebFaces (CelebA), mimic (MIMIC-III),
+and scVI (PBMC). Stats measured from the actual data on this machine;
+task/model notes from each project's code + projectinfo. "TODO" marks
+anything not determinable from the code/data here.
+
+────────────────────────────────────────────────────────────
+1. CelebFaces — CelebA Facial Attributes   (CelebFaces_Attributes_Classification/)
+────────────────────────────────────────────────────────────
+Task        : Multi-label image classification — predict 40 binary face
+              attributes per image (ViT-small backbone, BCEWithLogitsLoss).
+Source      : CelebA (CelebFaces Attributes Dataset), Liu et al., "Deep Learning
+              Face Attributes in the Wild," ICCV 2015.
+              http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html  (loaded via
+              torchvision.datasets.CelebA / MyCelebA).
+Sample size : 202,599 aligned face images total.
+              Official split (list_eval_partition.txt): train 162,770 /
+              val 19,867 / test 19,962.
+              NOTE: the probe run truncates to limit_train/val_batches=100 ×
+              batch 64 ≈ 6,400 imgs per epoch (deliberate, for a fast probe).
+Features    : RGB face images. On disk: img_align_celeba 178×218 JPEGs;
+              pipeline Resize→224×224, ToTensor, ImageNet Normalize (train adds
+              vertical/horizontal flip + ColorJitter).
+Labels      : 40 binary attributes per image (multi-label), from
+              list_attr_celeba.txt. The 40:
+              5_o_Clock_Shadow, Arched_Eyebrows, Attractive, Bags_Under_Eyes,
+              Bald, Bangs, Big_Lips, Big_Nose, Black_Hair, Blond_Hair, Blurry,
+              Brown_Hair, Bushy_Eyebrows, Chubby, Double_Chin, Eyeglasses,
+              Goatee, Gray_Hair, Heavy_Makeup, High_Cheekbones, Male,
+              Mouth_Slightly_Open, Mustache, Narrow_Eyes, No_Beard, Oval_Face,
+              Pale_Skin, Pointy_Nose, Receding_Hairline, Rosy_Cheeks, Sideburns,
+              Smiling, Straight_Hair, Wavy_Hair, Wearing_Earrings, Wearing_Hat,
+              Wearing_Lipstick, Wearing_Necklace, Wearing_Necktie, Young.
+Data path   : /home/xuanhe_linux_001/probe_cnn/CelebFaces_Attributes_Classification/assets/inputs/celeba/
+              (img_align_celeba/, list_attr_celeba.txt, list_eval_partition.txt,
+              identity_CelebA.txt, list_bbox/landmarks).
+Other       : Backbone timm vit_small_patch16_224 (ImageNet-pretrained),
+              num_classes=40; fine-tune starts from weights/ViTsmall.ckpt.
+              Metric: macro Accuracy / macro F1 (torchmetrics, multilabel).
+              TODO: ViTsmall.ckpt provenance — "provided by the GitHub repo
+              owner," not in the repo and not reproducible from this code.
+
+────────────────────────────────────────────────────────────
+2. mimic — MIMIC-III ICU Mortality   (mimic/)
+────────────────────────────────────────────────────────────
+Task        : Binary classification — predict in-ICU mortality (mort_icu) from
+              a patient's first-48h clinical notes + demographics.
+Source      : MIMIC-III critical-care database (Johnson et al., Scientific Data
+              2016; PhysioNet, credentialed access). Built from raw tables
+              ADMISSIONS, ICUSTAYS, PATIENTS, NOTEEVENTS via preprocess.py.
+Sample size : one row per qualifying ICU stay; stratified 50/25/25 split (seed 42):
+              train 12,939 / val 6,469 / test 6,472  (≈ 25,880 total stays).
+              Inclusion: ICU LOS ≥ 48h, adult ICU, age < 300.
+Features    : input dim 10,005 = 10,000 TF-IDF features (TfidfVectorizer on
+              first-48h concatenated notes, English stop words, fit on TRAIN)
+              + 5-dim ethnicity one-hot. (Preprocessing also derives gender,
+              admission type, LOS, other mortality flags, but the model input
+              is only TF-IDF + ethnicity.)
+Labels      : mort_icu — binary; positive rate ≈ 9.5% (train 1,234/12,939,
+              val 617, test 618). Imbalanced (handled via pos_weight).
+Protected groups (ethnicity, regex-collapsed into 5; used as feature + for the
+              fairness probe), val-split sizes:
+              white 4,599 · black 591 · hispanic 216 · asian 158 · other 905
+              (train: white 9,163 · black 1,176 · hispanic 412 · asian 280 ·
+              other 1,908). hispanic/asian are small → noisy subgroup metrics.
+Data path   : /home/xuanhe_linux_001/aim_frontend_experiment3/aim/examples/
+              agent_example_repos/mimic/data/  ({split}_tfidf.npz [sparse CSR],
+              {split}_meta.npz [keys: eth, labels], tfidf_vectorizer.pkl).
+Other       : Model = logistic regression (nn.Linear 10005→1), SGD. Metric:
+              ROC-AUC. NOTE: raw MIMIC CSVs are NOT on disk here — only the
+              precomputed .npz feature files (raw tables need credentialed
+              PhysioNet access to regenerate).
+
+────────────────────────────────────────────────────────────
+3. scVI — PBMC Single-Cell RNA-seq Batch Integration   (scVI/)
+────────────────────────────────────────────────────────────
+Task        : Unsupervised representation learning / batch integration of
+              scRNA-seq with scVI (VAE, scvi-tools). Goal: mix the two batches
+              in latent space while preserving cell types.
+Source      : PBMC (peripheral blood mononuclear cells), two batches provided as
+              tab-separated expression + cell-type files (b1_*, b2_*).
+              TODO: exact public origin not documented in the code ("unknown"
+              per projectinfo); looks like a standard 2-batch PBMC integration
+              benchmark (10x-style), but the specific accession is unverified.
+Sample size : cached AnnData (pbmc_raw.h5ad) = 15,476 cells × 2,682 genes
+              (after barcode normalization, cell intersection, and inner-join
+              on common genes across batches).
+              NOTE: training subsamples to ≤ 8,000 cells (balanced across
+              batch × cell type, seed 42).
+Features    : gene expression — raw UMI counts (sparse CSR in .X and
+              .layers["counts"]) over 2,682 genes; .obs has n_counts.
+              No explicit normalization / HVG selection (scVI models raw counts).
+Labels/keys : batch (integration key): "0" = 8,098 cells, "1" = 7,378 cells.
+              cell type (str_labels / labels — used for coloring & balanced
+              sampling, NOT a supervised target), 9 types:
+              CD4 T cell 4,450 · Monocyte_CD14 4,090 · CD8 T cell 3,142 ·
+              B cell 2,371 · NK cell 593 · Monocyte_FCGR3A 561 ·
+              Plasmacytoid dendritic cell 139 · Megakaryocyte 106 ·
+              Hematopoietic stem cell 24.
+Data path   : scVI/data/pbmc_raw.h5ad (cache) and scVI/data/pbmc/
+              {b1,b2}_exprs.txt + {b1,b2}_celltype.txt (raw).
+Other       : Model = scvi.model.SCVI(n_latent=10, n_hidden=128, dropout 0.1),
+              10 epochs. No numeric metric in the base script (UMAP only); the
+              probe adds batch-integration metrics (e.g. kBET, latent dim 10).
+
+────────────────────────────────────────────────────────────
+QUICK REFERENCE
+────────────────────────────────────────────────────────────
+dataset    task                 size                         features                       label / target            source
+CelebFaces multi-label img cls  202,599 imgs (162,770 train) RGB 178×218→224×224             40 binary attributes      CelebA (ICCV'15)
+mimic      binary classif.      25,880 ICU stays (12,939 tr) 10,005 (10k TF-IDF + 5 eth)     mort_icu (~9.5% pos)      MIMIC-III (PhysioNet)
+scVI       batch integration    15,476 cells × 2,682 genes   raw UMI counts (+batch key)     batch(2) / cell-type(9)   PBMC scRNA-seq (TODO src)

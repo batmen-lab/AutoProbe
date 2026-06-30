@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ProbeDesign, RunRecord } from "@/lib/api";
+import { useActionLatch } from "@/lib/useActionLatch";
 import {
   Button,
   Card,
@@ -24,7 +25,7 @@ export function Stage1({
   const [autoResearch, setAutoResearch] = useState(
     run.debug_flags.auto_research,
   );
-  const [generating, setGenerating] = useState(false);
+  const { inProgress: generating, begin, fail } = useActionLatch(run.busy);
   const [picking, setPicking] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,28 +44,26 @@ export function Stage1({
 
   async function handleGenerate() {
     setError(null);
-    setGenerating(true);
+    begin();
     try {
       await api.setContext(run.run_id, context);
       await api.generateProbes(run.run_id);
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
-    } finally {
-      setGenerating(false);
+      fail();
     }
   }
 
   async function handleAutoResearch() {
     setError(null);
-    setGenerating(true);
+    begin();
     try {
       await api.autoResearch(run.run_id);
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
-    } finally {
-      setGenerating(false);
+      fail();
     }
   }
 

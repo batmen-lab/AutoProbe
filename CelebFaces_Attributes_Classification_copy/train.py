@@ -5,9 +5,8 @@ from datetime import datetime
 import numpy as np
 import torch
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
+from pytorch_lightning.callbacks import (EarlyStopping,
                                          ModelCheckpoint, RichProgressBar)
-from pytorch_lightning.loggers import WandbLogger
 
 from datamodules.celebadatamodule import CelebADataModule
 from hparams import Parameters
@@ -40,28 +39,20 @@ def main():
             model = Classification(config.train_param, ATTRIBUTES)
             print("[train] no checkpoint found; starting from ImageNet-pretrained backbone")
 
-        wdb_config = {}
-        for k, v in vars(config).items():
-            for key, value in vars(v).items():
-                wdb_config[f"{k}-{key}"] = value
-
-        wandb_logger = WandbLogger(
-            config=wdb_config,
-            project=config.hparams.wandb_project,
-            entity=config.hparams.wandb_entity,
-            allow_val_change=True,
-            save_dir=config.hparams.save_dir,
-        )
+        # wandb disabled — no experiment-tracker logger (was WandbLogger).
+        # Lightning still tracks metrics in callback_metrics for
+        # EarlyStopping/ModelCheckpoint, so nothing else needs a logger.
 
         callbacks = [EarlyStopping(**config.callback_param.early_stopping_params),
                      MetricsCallback(config.train_param.n_classes),
                      WandbImageCallback(config.callback_param.nb_image),
                      ModelCheckpoint(**config.callback_param.model_checkpoint_params),
                      RichProgressBar(),
-                     LearningRateMonitor(),
+                     # LearningRateMonitor removed — it requires a logger, and
+                     # wandb logging is disabled (logger=False).
         ]
 
-        trainer = Trainer(logger=wandb_logger,
+        trainer = Trainer(logger=False,  # wandb disabled
                           accelerator=accelerator,
                           devices=devices,
                           # auto_scale_batch_size="power",

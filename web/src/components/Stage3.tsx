@@ -5,6 +5,7 @@ import { api, DevPlan, RunRecord } from "@/lib/api";
 import { Button, Card, Pill, SectionLabel, Spinner } from "./ui";
 import { Header } from "./Stage1";
 import { MetricChart } from "./MetricChart";
+import { useActionLatch } from "@/lib/useActionLatch";
 
 export function Stage3({
   run,
@@ -13,7 +14,7 @@ export function Stage3({
   run: RunRecord;
   onUpdate: () => void;
 }) {
-  const [running, setRunning] = useState(false);
+  const { inProgress: running, begin, fail } = useActionLatch(run.busy);
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<DevPlan | null>(null);
 
@@ -33,15 +34,14 @@ export function Stage3({
   }, [run.run_id, run.plan_index]);
 
   async function handleImplement() {
-    setRunning(true);
+    begin();
     setError(null);
     try {
       await api.implement(run.run_id);
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
-    } finally {
-      setRunning(false);
+      fail();
     }
   }
 

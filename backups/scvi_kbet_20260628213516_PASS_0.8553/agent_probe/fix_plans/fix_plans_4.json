@@ -1,0 +1,22 @@
+{
+    "fix_plans": [
+        {
+            "title": "Deepen and widen the scVI encoder",
+            "content": "In train.py, modify the scvi.model.SCVI(...) constructor call inside main() (currently at lines 385-390) and the matching argparse defaults in build_parser(). Change --n-latent default from 10 to 20, --n-hidden default from 128 to 256, and add a new layer-depth argument parser.add_argument('--n-layers', type=int, default=2) which is then passed into the constructor as n_layers=args.n_layers. The current single-layer, 10-dim, 128-hidden VAE is the smallest standard scVI configuration and plateaus at a kBET tail mean of ~0.59; a two-layer encoder/decoder with a 20-dim latent and 256 hidden units gives the model enough capacity to disentangle shared biological structure from batch-specific nuisance variation, which scVI explicitly conditions out via the batch covariate, so the latent neighbourhoods become more batch-homogeneous and kBET acceptance rises. This is a pure architecture-capacity change and does not touch any data handling or the optimization schedule.",
+            "target_files": ["train.py"],
+            "confidence": 0.0
+        },
+        {
+            "title": "Lengthen KL warmup and anneal learning rate",
+            "content": "In train.py, modify the vae.train(...) call inside main() (currently at lines 398-407) by adding a plan_kwargs argument: plan_kwargs={'n_epochs_kl_warmup': 200, 'reduce_lr_on_plateau': True, 'lr_patience': 12, 'lr_factor': 0.5}. With max_epochs already 200, setting n_epochs_kl_warmup=200 makes the KL term ramp linearly across the entire run instead of saturating early (scVI default warmup is 400 steps), so the encoder is not prematurely pushed toward a tight prior that re-encodes batch structure; the plateau-triggered learning-rate decay then lets the model settle into a flatter, better-mixed optimum rather than oscillating in the 0.55-0.63 band seen in probe_result_3. This targets the optimization/regularization schedule only and leaves architecture and data untouched. Do not alter the conclude(0.75, 0.55) or record(...) lines.",
+            "target_files": ["train.py"],
+            "confidence": 0.0
+        },
+        {
+            "title": "Force fully uniform batch balancing",
+            "content": "In train.py, change the build_parser() default for --batch-balance-strength from 0.5 to 1.0 (line 75). The sample_cells() function already implements stratified subsampling where balance_strength linearly interpolates the per-batch target proportions between the observed proportions and a uniform 1/n_batches split; at strength 0.5 the two PBMC batches remain unequally represented, which biases the global batch composition that kBET's chi-squared test compares each neighbourhood against. Setting strength to 1.0 yields equal cell counts per batch, so the expected per-neighbourhood batch frequencies are balanced and well-mixed embeddings are far more likely to pass the chi-squared goodness-of-fit test, directly lifting the acceptance rate. This is a data-composition lever distinct from the previously-tried HVG gene subsetting (which regressed the metric) and does not reduce the gene feature space.",
+            "target_files": ["train.py"],
+            "confidence": 0.0
+        }
+    ]
+}

@@ -1,0 +1,110 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "data",
+      "probe_name": "Per-attribute label imbalance & subset representativeness",
+      "content": "CelebA's 40 attributes are highly imbalanced (e.g. Bald ~2%, Wearing_Necktie ~7%, Smiling ~48%). With limit_train_batches=100 (~6,400 random images/epoch), rare positives may be near-absent, making macro-F1 dominated by attributes the model never learns. Probe: compute positive prevalence per attribute over the actual sampled subset vs. the full CelebA prior, and report which attributes have <50 positive examples per epoch. Healthy: subset prevalence tracks full-dataset prevalence and every attribute sees enough positives; unhealthy: rare attributes have zero/near-zero positives, indicating macro-F1 is being computed on under-trained labels.",
+      "possible_sources": [
+        "Liu et al., 'Deep Learning Face Attributes in the Wild' (ICCV 2015, CelebA)",
+        "He et al., 'Learning from Imbalanced Data' (IEEE TKDE 2009)",
+        "torchmetrics multilabel documentation"
+      ],
+      "confidence": 0.92
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Per-attribute threshold sensitivity vs. fixed 0.5",
+      "content": "Metrics threshold the sigmoid at a fixed 0.5, but BCE-optimal decision thresholds for imbalanced attributes are usually far from 0.5. Probe: sweep per-attribute thresholds and compare macro-F1 at 0.5 against F1 at per-attribute optimal thresholds (tuned on val). Also inspect predicted-probability histograms per attribute. Healthy: 0.5 is near-optimal and probabilities are well spread; unhealthy: large F1 gain from re-thresholding and probability mass collapsed near 0 for rare attributes, signaling the 0.5 metric understates true discriminative ability.",
+      "possible_sources": [
+        "Guo et al., 'On Calibration of Modern Neural Networks' (ICML 2017)",
+        "Lipton et al., 'Optimal Thresholding of Classifiers to Maximize F1 Measure' (ECML 2014)"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Attribute accuracy disparity across the Male subgroup",
+      "content": "CelebA is widely used to audit demographic bias; 'Male' acts as a protected-attribute proxy. Probe: stratify per-attribute F1/accuracy by the ground-truth Male attribute and compute disparities (e.g. for Smiling, Young, Attractive). Healthy: comparable performance across male/female groups; unhealthy: systematic gaps (e.g. better Smiling detection on one gender) revealing learned spurious correlations and fairness risk.",
+      "possible_sources": [
+        "Buolamwini & Gebru, 'Gender Shades' (FAT* 2018)",
+        "Ramaswamy et al., 'Fair Attribute Classification through Latent Space De-biasing' (CVPR 2021)",
+        "Denton et al., 'Image Counterfactual Sensitivity Analysis for Detecting Unintended Bias' (2019)"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Vertical-flip augmentation validity for faces",
+      "content": "Train transforms include RandomVerticalFlip(p=0.4). Faces are not vertically symmetric, so upside-down faces are out-of-distribution and may corrupt orientation-dependent attributes (Eyeglasses, Wearing_Hat, hair). Probe: train/eval with and without vertical flip and measure per-attribute F1 delta; also test invariance by evaluating on vertically flipped val images. Healthy: removing vertical flip leaves metrics stable or improves them; unhealthy: vertical flip measurably degrades spatially-grounded attributes, indicating a harmful augmentation choice.",
+      "possible_sources": [
+        "Shorten & Khoshgoftaar, 'A survey on Image Data Augmentation for Deep Learning' (J Big Data 2019)",
+        "timm augmentation recipes (Wightman)"
+      ],
+      "confidence": 0.8
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Train/val gap under heavy data truncation",
+      "content": "Only ~6,400 of ~200k images are used per epoch with a pretrained ViT-S and lr=1e-5. Probe: track train vs. val macro-F1/loss curves across epochs and compare against a full-data run on a budget. Healthy: small, stable train-val gap with val/F1 plateauing near reported ~0.76; unhealthy: large gap (overfit to the truncated subset) or val/F1 stuck well below historical baselines, indicating the truncation harms generalization rather than acting as a benign 'probe head'.",
+      "possible_sources": [
+        "Hestness et al., 'Deep Learning Scaling is Predictable, Empirically' (2017)",
+        "Dosovitskiy et al., 'An Image is Worth 16x16 Words' (ViT, ICLR 2021)"
+      ],
+      "confidence": 0.83
+    },
+    {
+      "probe_type": "loss",
+      "probe_name": "BCE loss weighting vs. macro-F1 objective mismatch",
+      "content": "Loss is unweighted BCEWithLogitsLoss (per-element averaged), which is dominated by majority/easy attributes, while the reported metric is macro-averaged across 40 attributes. Probe: decompose loss contribution per attribute and correlate with per-attribute F1; test pos_weight or focal loss. Healthy: low-loss attributes also have high F1 and the objective tracks macro-F1; unhealthy: rare attributes carry tiny loss yet poor F1, showing the optimization objective is misaligned with the evaluation metric.",
+      "possible_sources": [
+        "Lin et al., 'Focal Loss for Dense Object Detection' (ICCV 2017)",
+        "torch.nn.BCEWithLogitsLoss pos_weight documentation",
+        "Cui et al., 'Class-Balanced Loss Based on Effective Number of Samples' (CVPR 2019)"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "probe_type": "correlation",
+      "probe_name": "Inter-attribute correlation exploitation & shortcut learning",
+      "content": "CelebA attributes are strongly correlated (e.g. Heavy_Makeup\u2194Wearing_Lipstick\u2194Male, 5_o_Clock_Shadow\u2194Male). A model may predict one attribute by leaning on a correlated proxy rather than visual evidence. Probe: compare the model's predicted attribute co-occurrence matrix against the ground-truth label correlation matrix, and test on counterfactual/decorrelated subsets. Healthy: predictions reflect genuine per-attribute signal; unhealthy: predicted correlations exceed label correlations, revealing shortcut reliance that fails on atypical combinations.",
+      "possible_sources": [
+        "Geirhos et al., 'Shortcut Learning in Deep Neural Networks' (Nature MI 2020)",
+        "Liu et al., CelebA (ICCV 2015)",
+        "Sagawa et al., 'Distributionally Robust Neural Networks' (ICLR 2020)"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "probe_type": "interpretability",
+      "probe_name": "Attention/saliency localization on relevant facial regions",
+      "content": "For a ViT-S, attribute predictions should attend to the relevant region (Eyeglasses\u2192eye region, Smiling\u2192mouth, Wearing_Hat\u2192top). Probe: use attention rollout or Grad-CAM on validation images and qualitatively/quantitatively check whether high-attention regions overlap the semantically relevant face area. Healthy: attention concentrates on plausible regions; unhealthy: diffuse or background-focused attention (e.g. relying on hair/background for Eyeglasses), suggesting the model learned spurious cues despite decent F1.",
+      "possible_sources": [
+        "Abnar & Zuidema, 'Quantifying Attention Flow in Transformers' (ACL 2020)",
+        "Selvaraju et al., 'Grad-CAM' (ICCV 2017)",
+        "Chefer et al., 'Transformer Interpretability Beyond Attention Visualization' (CVPR 2021)"
+      ],
+      "confidence": 0.72
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Corruption & low-quality input robustness",
+      "content": "Inference accepts arbitrary .png/.jpg files (CustomImageDataset), so production inputs differ from the curated CelebA distribution. Probe: evaluate macro-F1 under common corruptions (JPEG compression, blur, brightness/contrast shifts, occlusion) following the ImageNet-C protocol. Healthy: graceful, gradual degradation; unhealthy: sharp F1 collapse under mild corruption, indicating brittleness for real-world inference. Note that ColorJitter in training may help photometric but not blur/occlusion robustness.",
+      "possible_sources": [
+        "Hendrycks & Dietterich, 'Benchmarking Neural Network Robustness to Common Corruptions and Perturbations' (ICLR 2019)",
+        "Bhojanapalli et al., 'Understanding Robustness of Transformers for Image Classification' (ICCV 2021)"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "reproducibility",
+      "probe_name": "Pipeline integrity: checkpoint provenance, disabled logging, metric reporting",
+      "content": "Several integrity risks: ViTsmall.ckpt is external and unverified, Trainer uses logger=False (W&B disabled), and README accuracies (ViT 0.7622) are owner-provided, not computed by this code. Probe: verify the actual loaded weights' source, confirm metrics are computed on a held-out test split (not the truncated val), and reproduce the reported numbers from the saved best-model.ckpt. Healthy: metrics reproducible on test split with documented seed and known checkpoint origin; unhealthy: reported figures cannot be regenerated, or evaluation only ever runs on the 6,400-image truncated val, undermining the stated result.",
+      "possible_sources": [
+        "Pineau et al., 'ML Reproducibility Checklist' (NeurIPS 2019)",
+        "PyTorch Lightning Trainer/ModelCheckpoint documentation",
+        "Gundersen & Kjensmo, 'State of the Art: Reproducibility in AI' (AAAI 2018)"
+      ],
+      "confidence": 0.8
+    }
+  ]
+}

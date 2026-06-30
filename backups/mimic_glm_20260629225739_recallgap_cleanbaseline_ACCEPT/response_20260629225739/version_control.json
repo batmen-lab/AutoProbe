@@ -1,0 +1,39 @@
+{
+  "run_id": "20260629225739",
+  "events": [
+    {
+      "timestamp": "2026-06-29T23:22:46",
+      "round": 2,
+      "outcome": "kept",
+      "reason": "improved",
+      "tail_mean": 0.20242914979757085,
+      "prev_tail_mean": 0.3775222396650968
+    },
+    {
+      "timestamp": "2026-06-29T23:30:53",
+      "round": 3,
+      "outcome": "kept",
+      "reason": "improved",
+      "tail_mean": 0.09663461538461537,
+      "prev_tail_mean": 0.20242914979757085
+    },
+    {
+      "timestamp": "2026-06-29T23:35:16",
+      "round": 4,
+      "outcome": "reverted",
+      "reason": "no improvement",
+      "tail_mean": 0.12051282051282056,
+      "prev_tail_mean": 0.09663461538461537,
+      "restored_from": "round-3-post"
+    },
+    {
+      "timestamp": "2026-06-29T23:43:23",
+      "round": 5,
+      "outcome": "reverted",
+      "reason": "no improvement",
+      "tail_mean": 0.14170040485829954,
+      "prev_tail_mean": 0.12051282051282056,
+      "restored_from": "round-4-post"
+    }
+  ]
+}

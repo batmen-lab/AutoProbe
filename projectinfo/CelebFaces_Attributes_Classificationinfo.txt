@@ -1,0 +1,86 @@
+============================================================
+CelebFaces Attributes Classification — Project Information
+============================================================
+------------------------------------------------------------
+1. PROCEDURE (end to end)
+------------------------------------------------------------
+Task: Multi-label facial-attribute classification — predict 40 binary
+attributes per face image. Built on PyTorch Lightning + timm. A single
+script train.py runs either training or inference depending on flags in
+hparams.py (train / predict booleans).
+
+A) MODEL INIT (train.py)
+   - Backbone: timm `vit_small_patch16_224`, pretrained=True (ImageNet
+     weights), num_classes=40 (hparams.py).
+   - Fine-tune starting point: if weights/ViTsmall.ckpt exists it is loaded
+     via Classification.load_from_checkpoint; otherwise a fresh model with
+     ImageNet-pretrained backbone is created. (The ViTsmall.ckpt file itself
+     is not part of the repo — provided by script provider in github)
+
+B) DATA LOADING (datamodules/celebadatamodule.py)
+   - CelebADataModule wraps MyCelebA (extends torchvision.datasets.CelebA).
+   - Splits are requested by passing split="train"/"valid"/"test" to
+     torchvision's CelebA loader. HOW the actual train/valid/test partition
+     and file reading are performed is encapsulated inside
+     torchvision.datasets.CelebA
+   - A separate "predict" split uses CustomImageDataset over arbitrary
+     .png/.jpg files for inference mode.
+
+C) TRANSFORMS (in order)
+   - Train: RandomVerticalFlip(p=0.4), RandomHorizontalFlip(p=0.4),
+     ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2),
+     Resize(224,224), ToTensor, Normalize(ImageNet mean/std).
+   - Val/Test/Predict: Resize(224,224), ToTensor, Normalize(ImageNet mean/std)
+     (no augmentation).
+
+D) TRAINING (PyTorch Lightning Trainer)
+   - Loss: BCEWithLogitsLoss (multi-label).
+   - Optimizer: Adam, lr = 0.00001 (1e-5).
+   - Batch size = 64. Max epochs = 30.
+   - limit_train_batches = 100 and limit_val_batches = 100 -> ~6,400 images
+     per epoch each (100 x 64), a deliberate truncation (hparams.py comment:
+     "plenty for a probe head, full set took >1 day"). The full dataset size
+     itself is encapsulated by torchvision (README states ~200,000 images;
+     not verified in code).
+   - Callbacks: EarlyStopping (monitor val/F1, patience=10, mode=max),
+     MetricsCallback, a WandbImageCallback, ModelCheckpoint (best val/F1),
+     RichProgressBar. Note: Trainer is created with logger=False, so W&B
+     logging is effectively disabled in this version.
+
+E) EVALUATION / OUTPUT / CONCLUSION
+   - Metrics (utils/callbacks.py): torchmetrics multilabel, num_labels=40,
+     average='macro' — macro Accuracy and macro F1, logged at epoch end.
+   - Checkpoint: best model by val/F1 saved to weights/best-model.ckpt.
+   - The script does not print a single summary metric; the "result" is the
+     best checkpoint. README reports historical accuracies (ViT small 0.7622,
+     ResNet50 0.8055) but these are NOT computed by this code, instead, being 
+     simply provided by owner of this github repo
+   - Inference mode (predict=True) writes output/output_dict-<timestamp>.json
+     with filenames, raw logits, predicted attribute names, and
+     attribute:confidence dicts.
+
+------------------------------------------------------------
+2. DATA
+------------------------------------------------------------
+- Dataset: CelebA (CelebFaces Attributes), 40 binary attributes per image.
+- Source/loading: read through torchvision.datasets.CelebA (via MyCelebA).
+  The on-disk file layout, download, and split assignment are encapsulated by
+  torchvision — not implemented in this repo.
+  "/home/xuanhe_linux_001/probe_cnn/CelebFaces_Attributes_Classification/
+  assets/inputs" (a local path, not shipped in the repo).
+- What the original code uses each epoch: a ~6,400-image subset of train and
+  of val (because of limit_train/val_batches=100), not the full dataset.
+- Label / target: a 40-dim binary vector per image (attribute present/absent);
+  attribute names listed in utils/constant.py (e.g. Smiling, Male, Eyeglasses,
+  Young, ...). Multi-label (an image can carry several attributes at once).
+- Connection to the result: metrics are macro-averaged across the 40
+  attributes, so each attribute (including rare ones like Bald) counts
+  equally; loss optimizes per-attribute BCE on logits, metrics threshold the
+  sigmoid at 0.5.
+
+
+------------------------------------------------------------
+3. NOTE
+------------------------------------------------------------
+Not by now;
+

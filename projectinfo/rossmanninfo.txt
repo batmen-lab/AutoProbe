@@ -1,0 +1,65 @@
+============================================================
+Rossmann Store Sales — Project Information
+============================================================
+Scope: Describes the ORIGINAL, non-pipeline (rough seed) version of this
+       auto-research workspace — the deliberately weak baseline that exists
+       BEFORE the AutoProbe pipeline integrates a prober or applies any
+       improvement. (The current train.py on disk is the pipeline-improved
+       version; this document describes the pre-pipeline seed.)
+
+------------------------------------------------------------
+1. PROCEDURE (end to end)
+------------------------------------------------------------
+Task: Forecast daily sales per Rossmann store. Metric: validation RMSPE (root
+mean squared percentage error; lower is better), matching the competition
+metric (rows with actual Sales == 0 are ignored). Single script:
+`python train.py` (loads data via data_loader.py).
+
+Original rough-baseline steps:
+   1. Load data: data_loader.load_train() reads ONLY data/train.csv
+      (parse_dates=["Date"]). (data_loader downloads the competition via the
+      Kaggle API into data/ if files are absent.)
+   2. Filter: keep only open days (Open == 1) — closed days have trivially
+      zero sales.
+   3. Split (time-based): cutoff = max Date - VALID_DAYS (VALID_DAYS = 42).
+      Rows on/before cutoff = training; rows after = validation (the most
+      recent ~6 weeks).
+   4. Model (per-store mean): store_mean = training rows grouped by Store,
+      mean of Sales; global_mean = overall training mean as a fallback. No
+      day-of-week, promo, holiday, seasonality, or store.csv features.
+   5. Predict: each validation row's prediction = its store's mean
+      (fallback to global_mean for unseen stores).
+   6. Evaluate: RMSPE over validation rows with actual Sales != 0
+      (rmspe = sqrt(mean(((y - yhat)/y)^2))).
+   7. Output: write result/validation_metrics.json; print
+      "Validation RMSPE: <x>".
+
+Conclusion / result (original seed): validation RMSPE = 0.330494. A single
+mean per store ignores all within-store variation (promotions, weekday
+effects, holidays, trend), leaving large headroom — intentional for the
+pipeline to improve.
+
+------------------------------------------------------------
+2. DATA
+------------------------------------------------------------
+- Dataset: Rossmann Store Sales (Kaggle competition "rossmann-store-sales"),
+  daily sales for ~1,115 drug stores.
+- Files present on disk after download: train.csv, test.csv, store.csv,
+  sample_submission.csv. The ORIGINAL code reads ONLY train.csv — it does NOT
+  use store.csv (StoreType, Assortment, CompetitionDistance, Promo2, ...) and
+  does NOT touch test.csv. Within train.csv it uses only Store, Date, Sales,
+  and Open; the Promo / DayOfWeek / StateHoliday / SchoolHoliday / Customers
+  columns are present but unused by the seed.
+- Processing actually applied: keep Open == 1 -> time-based 42-day hold-out ->
+  per-store mean -> global-mean fallback.
+- Target: daily Sales (validation = most recent 42 open days).
+- Connection to the result: the RMSPE of 0.3305 follows directly from the
+  original code predicting a flat per-store average — the promo/weekday/holiday
+  and store-metadata signals it leaves on the table are exactly what a real
+  model would use to cut the error.
+
+------------------------------------------------------------
+3. NOTE
+------------------------------------------------------------
+nay.
+

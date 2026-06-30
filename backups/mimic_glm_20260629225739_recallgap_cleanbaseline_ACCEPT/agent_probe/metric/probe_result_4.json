@@ -1,0 +1,99 @@
+{
+  "metric_name": "equal_opportunity_difference",
+  "standard_threshold": 0.05,
+  "acceptable_threshold": 0.1,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.1942307692307692
+    },
+    {
+      "epoch": 2,
+      "value": 0.21457489878542507
+    },
+    {
+      "epoch": 3,
+      "value": 0.2301282051282051
+    },
+    {
+      "epoch": 4,
+      "value": 0.27935222672064774
+    },
+    {
+      "epoch": 5,
+      "value": 0.1255060728744939
+    },
+    {
+      "epoch": 6,
+      "value": 0.13963480128893668
+    },
+    {
+      "epoch": 7,
+      "value": 0.13963480128893668
+    },
+    {
+      "epoch": 8,
+      "value": 0.13963480128893668
+    },
+    {
+      "epoch": 9,
+      "value": 0.13076923076923075
+    },
+    {
+      "epoch": 10,
+      "value": 0.1255060728744939
+    },
+    {
+      "epoch": 11,
+      "value": 0.13910256410256405
+    },
+    {
+      "epoch": 12,
+      "value": 0.14743589743589736
+    },
+    {
+      "epoch": 13,
+      "value": 0.14743589743589736
+    },
+    {
+      "epoch": 14,
+      "value": 0.0955128205128205
+    },
+    {
+      "epoch": 15,
+      "value": 0.0955128205128205
+    },
+    {
+      "epoch": 16,
+      "value": 0.11217948717948723
+    },
+    {
+      "epoch": 17,
+      "value": 0.11217948717948723
+    },
+    {
+      "epoch": 18,
+      "value": 0.11217948717948723
+    },
+    {
+      "epoch": 19,
+      "value": 0.15384615384615385
+    },
+    {
+      "epoch": 20,
+      "value": 0.11217948717948723
+    }
+  ],
+  "min": 0.0955128205128205,
+  "max": 0.27935222672064774,
+  "mean": 0.1473267991407089,
+  "std": 0.046278446482959285,
+  "first_value": 0.1942307692307692,
+  "final_value": 0.11217948717948723,
+  "delta": -0.08205128205128198,
+  "tail_mean": 0.12051282051282056,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "Equal-opportunity difference (lower is better) went from 0.1942 to 0.1122 over 20 epochs, never reaching the 0.05 standard threshold; tail_mean=0.1205 -> FAIL (acceptable_met=False)."
+}

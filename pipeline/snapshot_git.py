@@ -84,7 +84,10 @@ def commit_train(
     if not train.exists():
         raise FileNotFoundError(f"train.py missing: {train}")
     if not has_repo(workspace):
-        raise RuntimeError(f"snapshot.git not initialized at {_git_dir(workspace)}")
+        # Auto-initialize instead of crashing: reverting to an early stage wipes
+        # the workspace's .agent_probe/ (snapshot.git included), and the next
+        # implement would otherwise fail with "snapshot.git not initialized".
+        init(workspace)
     _git(workspace, "add", "--", "train.py")
     _git(workspace, "commit", "--allow-empty", "--quiet", "-m", message)
     sha = _git(workspace, "rev-parse", "HEAD").stdout.strip()

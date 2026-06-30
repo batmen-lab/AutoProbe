@@ -1,0 +1,81 @@
+{
+  "run_id": "20260628213516",
+  "workspace": "/home/xuanhe_linux_001/AutoProbe/scVI",
+  "created_at": "2026-06-28T21:35:16",
+  "stage": 4,
+  "phase": "ready",
+  "context": "============================================================\nscVI \u2014 Project Information\n============================================================\n------------------------------------------------------------\n1. PROCEDURE (end to end)\n------------------------------------------------------------\nTask: Unsupervised representation learning / batch integration of single-cell\nRNA-seq data with scVI (a variational autoencoder from the scvi-tools\nlibrary). A single script train.py builds the dataset, trains an scVI model,\nand renders before/after UMAP plots. Run: `python train.py` (with optional\nflags below).\n\nA) DATA BUILD (train.py build_dataset / load_local_pbmc_dataset)\n   - Cache: if data/pbmc_raw.h5ad exists and is valid, load it; otherwise\n     rebuild from raw text files and cache to that .h5ad.\n   - Raw files (two PBMC batches, tab-separated):\n       b1_exprs.txt, b1_celltype.txt  (batch 1)\n       b2_exprs.txt, b2_celltype.txt  (batch 2)\n     read via pd.read_csv(sep=\"\\t\", index_col=0).\n   - Cell barcodes normalized by regex; keep intersecting cells; merge the two\n     batches on common genes (inner join on gene names).\n   - Build an AnnData: expression as sparse CSR float32 in .X, a copy in\n     .layers[\"counts\"]; .obs gets n_counts, batch (\"0\"/\"1\"), labels/str_labels\n     (cell type); .var gets per-batch and overall gene counts.\n\nB) CELL SAMPLING (train.py sample_cells)\n   - Default max_cells = 8000, batch_balance_strength = 0.5: a balanced/\n     stratified subsample across batches and cell types (>=1 cell per cell\n     type per batch where possible), RNG seeded by --seed (default 42).\n\nC) MODEL + TRAINING (scvi-tools)\n   - scvi.model.SCVI.setup_anndata(adata, layer=\"counts\", batch_key=\"batch\")\n     -> trains on RAW COUNTS, with batch registered for integration.\n   - Model: scvi.model.SCVI(n_latent=10, n_hidden=128, dropout_rate=0.1)\n     (defaults; overridable by CLI flags).\n   - vae.train(max_epochs=10, batch_size=128, accelerator=\"auto\",\n     devices=\"auto\", check_val_every_n_epoch=1, enable_checkpointing=False,\n     logger=False).\n   - Gene likelihood, optimizer, learning rate, and the internal train/val\n     split are NOT set in this script \u2014 they default to scvi-tools' internals\n     (unknown / encapsulated).\n\nD) OUTPUT / CONCLUSION\n   - Saves the trained model to checkpoint/scvi_model/ (save_anndata=False).\n   - Extracts the latent representation get_latent_representation()\n     -> shape (n_cells, 10).\n   - Writes two PDFs to result/: umap_before_training.pdf and\n     umap_after_scvi.pdf, each colored by batch and by cell type.\n   - The script does NOT print or save any numerical metric (no ELBO /\n     reconstruction-loss reported). The \"result\" is purely the saved model +\n     the qualitative before/after UMAP comparison.\n------------------------------------------------------------\n2. DATA\n------------------------------------------------------------\n- Dataset: PBMC (peripheral blood mononuclear cells) single-cell RNA-seq,\n  provided as two batches of local tab-separated expression + cell-type files.\n  The originating public dataset is not documented in the script \u2014 unknown.\n- What the original code reads: b1_exprs.txt / b1_celltype.txt /\n  b2_exprs.txt / b2_celltype.txt (or the cached pbmc_raw.h5ad).\n- Processing actually applied: cell-barcode normalization, cell intersection,\n  gene inner-join across batches, sparse float32 counts, per-cell/per-gene\n  count annotations, then balanced subsampling to <=8000 cells. Training uses\n  the raw counts layer (no explicit normalization / HVG selection in the\n  script).\n- \"Labels\": cell type per cell (used only for coloring/sampling, not as a\n  supervised target \u2014 scVI is unsupervised). batch is the integration key.\n- Connection to the result: there is no quantitative metric. Output quality is\n  judged visually from the UMAPs \u2014 good batch integration shows the two\n  batches overlapping after training, while cell types stay separated. Exact\n  final cell/gene counts after intersection+sampling are not logged by the\n  script \u2014 unknown without running it.\n\n------------------------------------------------------------\n3. NOTE\n------------------------------------------------------------\nnot by now",
+  "probe_index": 3,
+  "plan_index": 2,
+  "iterations": [
+    {
+      "index": 1,
+      "metric_name": "kBET acceptance rate",
+      "metric_value": 0.44799999999999995,
+      "threshold": "0.75",
+      "acceptable_threshold": "0.55",
+      "tail_mean": 0.4078666666666667,
+      "direction": "higher_is_better",
+      "status": "FAIL",
+      "acceptable_met": false,
+      "note": "stage 3 first run",
+      "fix_plan_chosen_index": null,
+      "best_value": null
+    },
+    {
+      "index": 2,
+      "metric_name": "kBET acceptance rate",
+      "metric_value": 0.6613333333333333,
+      "threshold": "0.75",
+      "acceptable_threshold": "0.55",
+      "tail_mean": 0.6602666666666667,
+      "direction": "higher_is_better",
+      "status": "FAIL",
+      "acceptable_met": true,
+      "note": "auto-pick fix plan #1: Train far longer to cure underfitting",
+      "fix_plan_chosen_index": 1,
+      "best_value": null
+    },
+    {
+      "index": 3,
+      "metric_name": "kBET acceptance rate",
+      "metric_value": 0.5713333333333334,
+      "threshold": "0.75",
+      "acceptable_threshold": "0.55",
+      "tail_mean": 0.5940000000000001,
+      "direction": "higher_is_better",
+      "status": "FAIL",
+      "acceptable_met": true,
+      "note": "auto-pick fix plan #2: Select highly variable genes before training \u2014 reverted (no improvement)",
+      "fix_plan_chosen_index": 2,
+      "best_value": null
+    },
+    {
+      "index": 4,
+      "metric_name": "kBET acceptance rate",
+      "metric_value": 0.85,
+      "threshold": "0.75",
+      "acceptable_threshold": "0.55",
+      "tail_mean": 0.8553333333333335,
+      "direction": "higher_is_better",
+      "status": "PASS",
+      "acceptable_met": true,
+      "note": "auto-pick fix plan #1: Deepen and widen the scVI encoder",
+      "fix_plan_chosen_index": 1,
+      "best_value": null
+    }
+  ],
+  "debug_flags": {
+    "auto_research": false,
+    "threshold_override": null
+  },
+  "tried_probe_indices": [],
+  "tried_plan_indices": [],
+  "current_action": null,
+  "auto_research_target_runs": 0,
+  "auto_research_runs_completed": 0,
+  "auto_research_best_value": null,
+  "auto_research_best_direction": null,
+  "fix_plan_round": null,
+  "fix_plan_index": null
+}

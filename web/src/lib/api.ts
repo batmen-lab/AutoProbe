@@ -67,6 +67,9 @@ export type RunRecord = {
   fix_plan_round: number | null;
   fix_plan_index: number | null;
   busy: boolean;
+  // Last background stage-action failure, surfaced via polling (long actions
+  // run detached now, so errors no longer come back on the POST itself).
+  last_error?: string | null;
 };
 
 export type ProbeDesign = {

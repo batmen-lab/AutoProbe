@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Add weight decay via AdamW optimizer",
+      "content": "Edit lightningmodules/classification.py, configure_optimizers(). Replace `from torch.optim import Adam` with `from torch.optim import AdamW`, and change the optimizer construction to `AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-2)`. The current Adam optimizer applies zero weight decay, so the ViT is free to fit the CelebA Male x target co-occurrence shortcut with large, sharply-tuned weights. Adding decoupled L2 regularization (weight_decay=1e-2, the standard AdamW value for ViT fine-tuning) pulls weights toward zero, discourages the model from memorizing the spurious gender->attribute correlation, and reduces the residual conditional MI between predictions and Male. This is an optimization-regularization lever, distinct from the data-balancing sampler (which already helped) and complements it. Round-2 augmentation removal hurt the metric, so this avoids touching augmentation entirely.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "title": "Insert classifier-head dropout before logits",
+      "content": "Edit lightningmodules/classification.py, the Classification.__init__ and forward methods. After `self.net = timm.create_model(...)`, set the timm backbone's stochastic-depth/head dropout by passing `drop_rate=0.3` into `timm.create_model(config.model_name, pretrained=config.pretrained, num_classes=config.n_classes, drop_rate=0.3)`. timm ViT applies drop_rate as dropout on the pooled features immediately before the classification head, so a 0.3 rate forces the head to spread evidence across many tokens/features rather than locking onto a few gender-discriminative ones, lowering I(pred_target; Male | true_target). This is an architecture/regularization lever, orthogonal to the optimizer and the data sampler. It does not require new modules or forward-pass restructuring since timm wires drop_rate internally.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "title": "Widen training coverage and epochs",
+      "content": "Edit hparams.py, Hparams dataclass. Change `limit_train_batches: int = 32` to `limit_train_batches: int = 96` (~6,144 imgs/epoch) and `max_epochs: int = 5` to `max_epochs: int = 8`. The round-3 sampler made groups balanced but only 2,048 imgs/epoch over 5 epochs is a thin slice; with so few balanced examples the model still sees too little de-correlated data to fully unlearn the gender shortcut, leaving conditional MI around 0.042. Tripling the per-epoch balanced sample count and extending to 8 epochs gives the WeightedRandomSampler enough draws to actually flatten the Male x target joint the model trains on, driving the residual MI below 0.03. EarlyStopping patience=10 still exceeds 8 epochs so all epochs run. This is a data-volume/training-budget lever distinct from the optimizer and architecture plans.",
+      "target_files": [
+        "hparams.py"
+      ],
+      "confidence": 0.0
+    }
+  ],
+  "chosen_index": 1,
+  "round": 4
+}

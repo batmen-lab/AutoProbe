@@ -67,3 +67,11 @@ response_codex/
 
 # local virtualenv (untracked)
 venv/
+
+# large local artifacts (model checkpoints / prediction dumps / scratch) — keep out of git
+scVI/
+scVI copy/
+wandb/
+**/wandb/
+*.ckpt
+*.npz

@@ -1,0 +1,17 @@
+Plan: Train far longer to cure underfitting
+
+Edit applied:
+- File: train.py
+- Symbol: build_parser(), the parser.add_argument("--train-epochs", ...) line
+- Before: default=10
+- After: default=200
+
+Rationale: probe_result_1 trajectory rises monotonically (0.342 -> 0.448) with no
+plateau, the signature of an undertrained scVI model. Extending the optimization
+budget to 200 epochs lets kBET acceptance continue its established upward path so
+the tail-mean settles above the 0.75 standard threshold.
+
+Discrepancy: none. Single-constant change, exactly as specified.
+
+Integration check: record(...) and conclude(0.75, 0.55) call sites in train.py
+remain present and unmodified; both threshold values still passed to conclude.

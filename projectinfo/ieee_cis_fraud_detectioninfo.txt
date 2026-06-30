@@ -1,0 +1,62 @@
+============================================================
+IEEE-CIS Fraud Detection — Project Information
+============================================================
+------------------------------------------------------------
+1. PROCEDURE (end to end)
+------------------------------------------------------------
+Task: Binary classification — predict probability a transaction is fraud
+(isFraud = 1). Metric: validation ROC-AUC (higher is better). Single script:
+`python train.py` (loads data via data_loader.py).
+
+Original rough-baseline steps:
+   1. Load data: data_loader.load_transaction_numeric(30) reads ONLY
+      data/train_transaction.csv, and only a thin slice of it: it reads the
+      header, picks numeric-looking feature columns whose names start with
+      TransactionAmt / card / addr / dist / C / D, keeps the FIRST 30 of them
+      (MAX_FEATURE_COLUMNS = 30), and uses pandas usecols to read just
+      [isFraud + those 30 columns] (kept small on purpose / for memory). The
+      identity table is NOT merged; the test table is NOT read.
+   2. Feature prep: impute missing values with fillna(0.0) (naive zero-fill);
+      no scaling, no categorical encoding, no class weighting.
+   3. Split: sequential head/tail split, last 20% as validation
+      (VALID_FRACTION = 0.2) — TransactionID order is roughly chronological;
+      no shuffling, no stratification.
+   4. Model: logistic regression trained by hand with full-batch gradient
+      descent. weights init = 0; NUM_EPOCHS = 5; LEARNING_RATE = 1e-3;
+      gradient = X^T (sigmoid(Xw) - y) / n. No bias, no regularization,
+      no momentum.
+   5. Evaluate: sigmoid on the validation features -> roc_auc_score.
+   6. Output: write result/validation_metrics.json; print
+      "Validation ROC-AUC: <x>". (No test submission is produced.)
+
+Conclusion / result (original seed): validation ROC-AUC = 0.500 — random.
+With only 30 raw, unscaled features and 5 gradient steps at lr=1e-3, the
+weights barely move and predictions are near-constant. Intentional: large,
+obvious headroom for the pipeline.
+
+------------------------------------------------------------
+2. DATA
+------------------------------------------------------------
+- Dataset: IEEE-CIS Fraud Detection (Kaggle competition
+  "ieee-fraud-detection"), real e-commerce transactions (Vesta).
+- Full competition files present on disk: train/test transaction + train/test
+  identity + sample_submission. The ORIGINAL code uses ONLY a 30-column
+  numeric slice of train_transaction.csv — it ignores the identity tables,
+  the test set, the anonymized V1–V339 block (not matched by the name
+  filter), and all categorical columns.
+- Processing actually applied: name-based column pick -> first 30 numeric ->
+  zero-fill imputation -> no scaling -> sequential split.
+- Label / target: isFraud (1 = fraud, 0 = legitimate), highly imbalanced
+  (~3–4% fraud); the seed applies no class weighting.
+- Connection to the result: the 0.500 AUC follows directly from the original
+  data choices — a tiny arbitrary feature slice (dropping the V-features and
+  identity signal), no scaling, naive imputation, unstratified split — plus an
+  under-trained optimizer. The discarded features are where the real fraud
+  signal lives.
+
+------------------------------------------------------------
+3. NOTE
+------------------------------------------------------------
+Not
+by
+now

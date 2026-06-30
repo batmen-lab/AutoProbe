@@ -26,8 +26,21 @@ setup:
 	$(PIP) install -q -r requirements.txt
 	cd web && npm install
 
+# Probe the actual port, not `ccr status`: after a WSL/host restart ccr's
+# pidfile can go stale (recycled PID reads as "Running") so the status string
+# lies. We curl :3456, (re)start if it's not really serving, then poll until
+# it binds (ccr needs ~4s — a fixed `sleep` races the bind and loses).
 ccr-up:
-	@ccr status 2>/dev/null | grep -q Running || { echo "Starting ccr..."; nohup ccr start >/dev/null 2>&1 & sleep 1.5; }
+	@curl -s -o /dev/null --max-time 2 http://127.0.0.1:3456/ && echo "ccr already up on :3456" || { \
+		echo "ccr not serving on :3456 — (re)starting..."; \
+		nohup sh -c 'ccr restart || ccr start' >/dev/null 2>&1 & \
+		for i in $$(seq 1 30); do \
+			curl -s -o /dev/null --max-time 2 http://127.0.0.1:3456/ && break || sleep 0.5; \
+		done; \
+		curl -s -o /dev/null --max-time 2 http://127.0.0.1:3456/ \
+			&& echo "ccr is up on :3456" \
+			|| { echo "ERROR: ccr failed to bind :3456 after ~15s — run 'ccr start' manually and check ~/.claude-code-router/logs"; exit 1; }; \
+	}
 
 ccr-down:
 	-@ccr stop 2>/dev/null

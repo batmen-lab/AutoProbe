@@ -1,0 +1,23 @@
+{
+    "fix_plans": [
+        {
+            "title": "Add batch decorrelation penalty to loss",
+            "content": "In lightningmodules/classification.py, modify training_step (and its helper _get_preds_loss_accuracy) to add a soft decorrelation penalty that directly attacks the quantity the probe measures: the dependence between target predictions and the Male attribute. Concretely, in training_step compute probs = torch.sigmoid(logits); build name_to_idx from ATTRIBUTES (imported already) and locate male_idx and the six probed target indices (Heavy_Makeup, Wearing_Lipstick, Attractive, Wavy_Hair, No_Beard, Arched_Eyebrows). Take the predicted prob columns for those six targets, p_t (shape B x 6), and the float Male label column m = y[:, male_idx] (shape B). Center both over the batch (subtract per-column mean and the mean of m), then compute the mean squared batch covariance penalty pen = ((p_t_centered * m_centered.unsqueeze(1)).mean(dim=0) ** 2).mean(); add total_loss = bce_loss + 0.5 * pen and return that as 'loss' while still returning logits. This penalizes prediction-vs-Male correlation conditioned implicitly per batch, pushing residual conditional MI toward zero. Use lambda = 0.5 as the penalty weight. Do not touch train.py record/conclude lines.",
+            "target_files": ["lightningmodules/classification.py"],
+            "confidence": 0.82
+        },
+        {
+            "title": "Mask facial regions with RandomErasing and crop",
+            "content": "In datamodules/celebadatamodule.py, get_transforms(), edit only the 'train' Compose list. Replace transforms.Resize(input_size) with transforms.RandomResizedCrop(input_size, scale=(0.6, 1.0), ratio=(0.85, 1.15)) so the model cannot rely on a fixed holistic face framing, and append transforms.RandomErasing(p=0.5, scale=(0.05, 0.18), ratio=(0.3, 3.3), value='random') immediately after transforms.ToTensor() (RandomErasing operates on tensors, so it must follow ToTensor and precede/replace nothing else). This forces predictions to draw on spatially distributed, attribute-local evidence rather than a global gender gestalt, which is the shortcut driving I(pred_target; Male | true_target). This augmentation angle is orthogonal to the prior color/grayscale change (change_log_2) because it perturbs geometry and occludes regions rather than color. Keep ToTensor/Normalize order valid. Do not touch prober.py or train.py call sites.",
+            "target_files": ["datamodules/celebadatamodule.py"]
+            ,
+            "confidence": 0.5
+        },
+        {
+            "title": "Add cosine LR schedule and more epochs",
+            "content": "Two coordinated config edits to stabilize the oscillating tail (values bounced 0.049 -> 0.071 -> 0.046, so the 5-point tail_mean stays inflated). In hparams.py set Hparams.max_epochs = 12 (EarlyStopping patience=10 still permits the full run) and TrainParams.lr = 3e-5 (slightly lower peak for a gentler descent). In lightningmodules/classification.py, change configure_optimizers() to return a dict with the existing AdamW optimizer plus a lr_scheduler: from torch.optim.lr_scheduler import CosineAnnealingLR; scheduler = CosineAnnealingLR(optimizer, T_max=12, eta_min=1e-6); return {'optimizer': optimizer, 'lr_scheduler': scheduler}. A decaying learning rate over more epochs lets the model settle into a flatter solution where it stops re-fitting the Male x target co-occurrence late in training, reducing tail-epoch leakage variance and lowering tail_mean toward the 0.03 threshold. This optimization-schedule angle differs from the prior weight-decay change (change_log_4). Do not touch train.py record/conclude lines.",
+            "target_files": ["hparams.py", "lightningmodules/classification.py"],
+            "confidence": 0.38
+        }
+    ]
+}

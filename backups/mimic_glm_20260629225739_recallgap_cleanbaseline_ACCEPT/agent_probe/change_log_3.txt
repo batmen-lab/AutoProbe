@@ -1,0 +1,74 @@
+Iteration 3 — AutoProbe mimic fairness agent.
+
+Step 0 status: N=2. probe_result_2.json status=FAIL, tail_mean=0.2024
+(standard_threshold=0.05, lower_is_better). Previous tail_mean was
+probe_result_1.json's 0.3775. 0.2024 < 0.3775 → iter 2 improved the metric,
+no revert needed. Proceeding to diagnosis.
+
+Step 1–3 (diagnosis):
+  - Metric: equal_opportunity_difference = max per-ethnicity recall - min
+    per-ethnicity recall, at shared threshold t fixed on epoch 1 (here t=0.52).
+  - probe_result_2 per-epoch: EOD drops from 0.275 (epoch 1) to a min of
+    0.097 (epoch 10) but then climbs back to 0.202 and stays flat at 0.202
+    for epochs 12-20. The model has saturated its linear weight on the
+    TF-IDF vocabulary.
+  - Per-group recall at epoch 20 (logs/fairness_eod.csv):
+      asian   0.895  (max)
+      white   0.745
+      black   0.714
+      other   0.725
+      hispanic 0.692 (min)
+    EOD = 0.895 - 0.692 = 0.202.
+  - Iter 2 already removed the eth one-hot from the model input (use_eth=False)
+    so the model can no longer lean on a direct per-group bias term. The
+    remaining dispersion is driven by group-conditional feature distributions
+    in the TF-IDF vocabulary (different admission-note term mix per
+    ethnicity) combined with the imbalanced training prior: white/other
+    positives dominate, asian positives are rare (~12 of 158 in val), so the
+    linear separator is fit to the majority (white/other) score statistics.
+    At the shared threshold t=0.52, asian positives cross it more often
+    (high recall) while hispanic positives cross it less often (low recall).
+  - Highest-leverage change NOT yet tried: balance the training distribution
+    across (ethnicity x label) strata so the linear separator is pulled
+    toward a score distribution that is approximately group-conditional
+    invariant on positives. This directly targets TPR parity at the fixed
+    threshold — the exact quantity EOD measures.
+
+Step 4 (change):
+  - File: train.py
+    * Replaced `DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)`
+      with a WeightedRandomSampler over (ethnicity, label) strata. Each
+      stratum gets weight 1/count, so each batch sees each (group, label)
+      combination at ~equal frequency. Replacement=True so small strata
+      (asian positives, hispanic positives) can be upsampled without
+      exhausting.
+    * Set pos_weight=1.0 (was n_neg/n_pos ~ 10x). The balanced sampler
+      already equalizes label frequency inside each batch, so keeping the
+      old pos_weight would double-compensate and shift the epoch-1 score
+      distribution — and the probe fixes its threshold on epoch 1, so a
+      shifted distribution would also shift t and confound the comparison.
+      With pos_weight=1.0 the epoch-1 threshold is comparable to iter 2
+      while the balanced sampler does the fairness work during training.
+  - File: dataset.py
+    * Added `eth` to the per-sample dict returned by __getitem__ so the
+      sampler's stratification (computed from train_ds.eth in main) is
+      consistent with any downstream consumer. The probe still reads
+      loader.dataset.eth directly (unchanged); the new dict key is unused
+      by the probe but harmless and keeps the data flow explicit.
+
+Expected effect: per-group positive score distributions converge toward a
+common shape, so per-group TPR at the shared threshold narrows. tail_mean
+should drop materially below 0.202. The dominant residual failure mode is
+if the TF-IDF vocabulary encodes strongly group-specific terms that a
+linear separator cannot equalize via reweighting alone — in that case the
+next iteration would add an explicit fairness regularizer (e.g. group-TPR
+penalty) or threshold-per-group post-hoc, but those are speculative
+relative to this single high-leverage change.
+
+Step 6 (integration check):
+  - record(...) call in train.py unchanged:
+      probe_record(epoch, model, val_loader, device,
+                   standard_threshold=0.05, acceptable_threshold=0.10)
+  - conclude(...) call unchanged:
+      probe_conclude(standard_threshold=0.05, acceptable_threshold=0.10)
+  - Both arguments preserved. prober.py was not touched.

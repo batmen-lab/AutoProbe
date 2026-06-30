@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Strengthen batch decorrelation penalty weight",
+      "content": "In lightningmodules/classification.py, training_step(), increase the decorrelation penalty coefficient from 0.5 to 4.0 in the line 'total_loss = bce_loss + 0.5 * pen'. The existing penalty (added in change_log_6) drives the per-batch covariance between the six target-prediction probabilities and the Male label toward zero, which is the exact dependence the conditional-MI probe measures; it helped pull the metric from the ~0.06 range into the ~0.04 range but at weight 0.5 it is too weak to clear 0.03. Raising the multiplier to 4.0 makes the decorrelation term dominate residual gender leakage in the gradient while BCE still keeps the classifier accurate (per-attribute F1 stays well above the degenerate floor because the penalty only acts on the conditional covariance, not the marginal class signal). This is the single most direct lever on the metric and is a sharpening of a confirmed-helpful approach, not a repeat of a harmful one. Change only the scalar literal; do not alter the penalty math or the record/conclude calls.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "title": "Increase balanced training data per epoch",
+      "content": "In hparams.py, change Hparams.limit_train_batches from 32 to 128 (leaving batch_size=64, limit_val_batches=32, max_epochs=15, and val_check_interval=1.0 untouched). The WeightedRandomSampler from change_log_3 group-balances the Male x target joint distribution, but at only 32 train batches (~2,048 imgs) per epoch each epoch sees a thin, high-variance slice of the rare balanced groups (e.g. Male+Heavy_Makeup), so the de-biasing signal is noisy and the metric oscillates around 0.04. Quadrupling to 128 batches (~8,192 imgs/epoch) gives the sampler far more coverage of the under-represented spurious-pair combinations every epoch, letting the model learn per-attribute visual evidence instead of the gender proxy and stabilizing the tail epochs below threshold. This is a data-quantity angle distinct from optimizer, loss, and architecture levers, and does not repeat the LR-schedule approach that regressed the metric in round 8.",
+      "target_files": [
+        "hparams.py"
+      ],
+      "confidence": 0.58
+    },
+    {
+      "title": "Raise stochastic depth regularization",
+      "content": "In lightningmodules/classification.py, Classification.__init__(), increase drop_path_rate from 0.2 to 0.45 in the timm.create_model(...) call (keep drop_rate=0.3 unchanged). Stochastic depth (added in change_log_5) randomly drops whole residual blocks during training, which helped spread prediction evidence across redundant features and lowered residual I(pred_target; Male | true_target); but at 0.2 the ViT-small still retains enough capacity to fit a few sharply-tuned attention paths that encode the Male->attribute shortcut, leaving the metric stuck near 0.04. A stronger drop_path_rate of 0.45 (a standard upper-range value for ViT-small fine-tuning) forces the network to rely on an ensemble of diverse sub-paths, preventing any single path from memorizing the gender co-occurrence and pushing the conditional MI toward zero. This is an architecture/regularization angle that sharpens a confirmed-helpful lever and is orthogonal to the loss-weight and data-coverage plans.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.48
+    }
+  ],
+  "chosen_index": 2,
+  "round": 9
+}

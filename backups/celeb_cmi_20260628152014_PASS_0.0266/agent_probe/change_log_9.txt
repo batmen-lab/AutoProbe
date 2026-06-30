@@ -1,0 +1,25 @@
+Plan title: Increase balanced training data per epoch
+
+Applied edit:
+- File: hparams.py
+- Symbol: Hparams.limit_train_batches
+  - Before: limit_train_batches: int = 32   (~2,048 imgs/epoch, batch 64)
+  - After:  limit_train_batches: int = 128  (~8,192 imgs/epoch, batch 64)
+- Unchanged (per plan): batch_size=64, limit_val_batches=32, max_epochs=15,
+  val_check_interval=1.0.
+
+Rationale: The WeightedRandomSampler from change_log_3 group-balances the
+Male x target joint distribution, but at only 32 train batches/epoch each epoch
+sees a thin, high-variance slice of the rare balanced groups (e.g.
+Male+Heavy_Makeup), so the de-biasing signal is noisy and the metric oscillates
+around 0.04 (tail_mean 0.0421 in probe_result_8, FAIL). Quadrupling to 128
+batches gives the sampler far more coverage of under-represented spurious-pair
+combinations per epoch, letting the model learn per-attribute visual evidence
+instead of the gender proxy and stabilizing the tail below threshold. Distinct
+data-quantity lever, not the LR-schedule approach that regressed in round 8.
+
+Discrepancy: None. Plan applied exactly as specified.
+
+Integration integrity: train.py record(...) (via ProbeCallback) and
+conclude(0.03, 0.07) call sites were not touched; both threshold args still
+passed.

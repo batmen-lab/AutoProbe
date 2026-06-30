@@ -1,0 +1,62 @@
+============================================================
+Home Credit Default Risk — Project Information
+============================================================
+------------------------------------------------------------
+1. PROCEDURE (end to end)
+------------------------------------------------------------
+Task: Binary classification — predict probability of loan default
+(TARGET = 1) per applicant. Metric: validation ROC-AUC (higher is better).
+Single script: `python train.py` (loads data via data_loader.py).
+
+Steps:
+   1. Load data: data_loader.load_application_tables() reads
+      data/application_train.csv and data/application_test.csv. (The
+      data_loader downloads the competition via the Kaggle API into data/ if
+      the CSVs are absent.)
+   2. Feature prep (_numeric_features): keep numeric columns only; impute
+      missing values with fillna(0.0) (naive zero-fill); drop TARGET from the
+      feature frame.
+   3. Feature selection (_select_columns): take the FIRST 20 shared numeric
+      columns (MAX_FEATURE_COLUMNS = 20) — arbitrary head-of-list slice, no
+      ranking. No feature scaling.
+   4. Split: sequential head/tail split, last 20% as validation
+      (VALID_FRACTION = 0.2) — no shuffling, no stratification.
+   5. Model: logistic regression trained by hand with full-batch gradient
+      descent. weights init = 0; NUM_EPOCHS = 3; LEARNING_RATE = 1e-3;
+      gradient = X^T (sigmoid(Xw) - y) / n. No bias term, no class weighting,
+      no regularization, no momentum.
+   6. Predict: sigmoid on validation and test features.
+   7. Evaluate: roc_auc_score on the validation split.
+   8. Output: write result/submission.csv (SK_ID_CURR, TARGET) and
+      result/validation_metrics.json; print "Validation ROC-AUC: <x>".
+
+Conclusion / result (original seed): validation ROC-AUC = 0.500 — i.e. no
+better than random. With lr=1e-3, 3 epochs, and unscaled features, the weights
+barely move, so predictions are near-constant. This is intentional: the seed
+is built to have large, obvious headroom for the pipeline to improve.
+
+------------------------------------------------------------
+2. DATA
+------------------------------------------------------------
+- Dataset: Home Credit Default Risk (Kaggle competition
+  "home-credit-default-risk").
+- What the ORIGINAL code actually reads: ONLY application_train.csv and
+  application_test.csv. The competition's six auxiliary history tables
+  (bureau, bureau_balance, previous_application, POS_CASH_balance,
+  installments_payments, credit_card_balance) are present on disk but are NOT
+  loaded or used by the rough baseline.
+- Processing actually applied: numeric columns only -> zero-fill imputation ->
+  first 20 shared columns -> no scaling -> sequential split.
+- Label / target: TARGET (1 = payment difficulty / default, 0 = repaid),
+  class-imbalanced (~8% positives), but the seed applies no class weighting.
+- Connection to the result: the 0.500 AUC is a direct consequence of the data
+  choices in the original code — tiny arbitrary feature subset, no scaling,
+  naive imputation, and an unstratified split — combined with the
+  under-trained optimizer (3 steps at lr 1e-3). The unused auxiliary tables
+  are exactly the signal a stronger model would exploit.
+
+------------------------------------------------------------
+3. NOTE
+------------------------------------------------------------
+Not by now.
+

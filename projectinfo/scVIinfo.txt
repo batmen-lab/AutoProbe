@@ -1,0 +1,76 @@
+============================================================
+scVI — Project Information
+============================================================
+------------------------------------------------------------
+1. PROCEDURE (end to end)
+------------------------------------------------------------
+Task: Unsupervised representation learning / batch integration of single-cell
+RNA-seq data with scVI (a variational autoencoder from the scvi-tools
+library). A single script train.py builds the dataset, trains an scVI model,
+and renders before/after UMAP plots. Run: `python train.py` (with optional
+flags below).
+
+A) DATA BUILD (train.py build_dataset / load_local_pbmc_dataset)
+   - Cache: if data/pbmc_raw.h5ad exists and is valid, load it; otherwise
+     rebuild from raw text files and cache to that .h5ad.
+   - Raw files (two PBMC batches, tab-separated):
+       b1_exprs.txt, b1_celltype.txt  (batch 1)
+       b2_exprs.txt, b2_celltype.txt  (batch 2)
+     read via pd.read_csv(sep="\t", index_col=0).
+   - Cell barcodes normalized by regex; keep intersecting cells; merge the two
+     batches on common genes (inner join on gene names).
+   - Build an AnnData: expression as sparse CSR float32 in .X, a copy in
+     .layers["counts"]; .obs gets n_counts, batch ("0"/"1"), labels/str_labels
+     (cell type); .var gets per-batch and overall gene counts.
+
+B) CELL SAMPLING (train.py sample_cells)
+   - Default max_cells = 8000, batch_balance_strength = 0.5: a balanced/
+     stratified subsample across batches and cell types (>=1 cell per cell
+     type per batch where possible), RNG seeded by --seed (default 42).
+
+C) MODEL + TRAINING (scvi-tools)
+   - scvi.model.SCVI.setup_anndata(adata, layer="counts", batch_key="batch")
+     -> trains on RAW COUNTS, with batch registered for integration.
+   - Model: scvi.model.SCVI(n_latent=10, n_hidden=128, dropout_rate=0.1)
+     (defaults; overridable by CLI flags).
+   - vae.train(max_epochs=10, batch_size=128, accelerator="auto",
+     devices="auto", check_val_every_n_epoch=1, enable_checkpointing=False,
+     logger=False).
+   - Gene likelihood, optimizer, learning rate, and the internal train/val
+     split are NOT set in this script — they default to scvi-tools' internals
+     (unknown / encapsulated).
+
+D) OUTPUT / CONCLUSION
+   - Saves the trained model to checkpoint/scvi_model/ (save_anndata=False).
+   - Extracts the latent representation get_latent_representation()
+     -> shape (n_cells, 10).
+   - Writes two PDFs to result/: umap_before_training.pdf and
+     umap_after_scvi.pdf, each colored by batch and by cell type.
+   - The script does NOT print or save any numerical metric (no ELBO /
+     reconstruction-loss reported). The "result" is purely the saved model +
+     the qualitative before/after UMAP comparison.
+------------------------------------------------------------
+2. DATA
+------------------------------------------------------------
+- Dataset: PBMC (peripheral blood mononuclear cells) single-cell RNA-seq,
+  provided as two batches of local tab-separated expression + cell-type files.
+  The originating public dataset is not documented in the script — unknown.
+- What the original code reads: b1_exprs.txt / b1_celltype.txt /
+  b2_exprs.txt / b2_celltype.txt (or the cached pbmc_raw.h5ad).
+- Processing actually applied: cell-barcode normalization, cell intersection,
+  gene inner-join across batches, sparse float32 counts, per-cell/per-gene
+  count annotations, then balanced subsampling to <=8000 cells. Training uses
+  the raw counts layer (no explicit normalization / HVG selection in the
+  script).
+- "Labels": cell type per cell (used only for coloring/sampling, not as a
+  supervised target — scVI is unsupervised). batch is the integration key.
+- Connection to the result: there is no quantitative metric. Output quality is
+  judged visually from the UMAPs — good batch integration shows the two
+  batches overlapping after training, while cell types stay separated. Exact
+  final cell/gene counts after intersection+sampling are not logged by the
+  script — unknown without running it.
+
+------------------------------------------------------------
+3. NOTE
+------------------------------------------------------------
+not by now

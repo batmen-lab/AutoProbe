@@ -66,6 +66,13 @@ class CelebADataModule(LightningDataModule):
             )
 
     def train_dataloader(self):
+        # NOTE: plain `shuffle=True` preserves CelebA's natural attribute co-occurrence
+        # (e.g. Male x Wearing_Lipstick / Heavy_Makeup) at its real skew, which the
+        # classifier readily exploits as a shortcut -> inflated conditional MI between its
+        # predictions and the correlated attribute. Re-balancing the joint distribution of
+        # those spurious pairs with a WeightedRandomSampler over self.train.attr
+        # (group-balanced sampling, inverse group-frequency weights) removes the skew so
+        # predictions rest on per-attribute visual evidence rather than the proxy.
         train = DataLoader(
             self.train,
             batch_size=self.batch_size,

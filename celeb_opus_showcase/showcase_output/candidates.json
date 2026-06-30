@@ -1,0 +1,542 @@
+[
+ {
+  "fname": "163740.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.064,
+  "p_fix": 0.93,
+  "improve": 0.866
+ },
+ {
+  "fname": "167143.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.121,
+  "p_fix": 0.963,
+  "improve": 0.842
+ },
+ {
+  "fname": "180130.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.115,
+  "p_fix": 0.956,
+  "improve": 0.841
+ },
+ {
+  "fname": "163833.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.095,
+  "p_fix": 0.932,
+  "improve": 0.837
+ },
+ {
+  "fname": "173186.jpg",
+  "attr": "Wearing_Lipstick",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.045,
+  "p_fix": 0.855,
+  "improve": 0.81
+ },
+ {
+  "fname": "167580.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.094,
+  "p_fix": 0.902,
+  "improve": 0.807
+ },
+ {
+  "fname": "168489.jpg",
+  "attr": "No_Beard",
+  "male": 0,
+  "true": 0,
+  "p_base": 0.995,
+  "p_fix": 0.192,
+  "improve": 0.803
+ },
+ {
+  "fname": "173520.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.033,
+  "p_fix": 0.836,
+  "improve": 0.803
+ },
+ {
+  "fname": "178302.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.145,
+  "p_fix": 0.947,
+  "improve": 0.802
+ },
+ {
+  "fname": "167507.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.085,
+  "p_fix": 0.886,
+  "improve": 0.8
+ },
+ {
+  "fname": "171127.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.119,
+  "p_fix": 0.919,
+  "improve": 0.8
+ },
+ {
+  "fname": "179170.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.079,
+  "p_fix": 0.873,
+  "improve": 0.794
+ },
+ {
+  "fname": "177635.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.164,
+  "p_fix": 0.95,
+  "improve": 0.786
+ },
+ {
+  "fname": "169016.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.192,
+  "p_fix": 0.976,
+  "improve": 0.784
+ },
+ {
+  "fname": "171729.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.052,
+  "p_fix": 0.834,
+  "improve": 0.782
+ },
+ {
+  "fname": "174777.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.117,
+  "p_fix": 0.894,
+  "improve": 0.777
+ },
+ {
+  "fname": "169722.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.165,
+  "p_fix": 0.937,
+  "improve": 0.773
+ },
+ {
+  "fname": "164966.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.048,
+  "p_fix": 0.81,
+  "improve": 0.762
+ },
+ {
+  "fname": "170894.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.137,
+  "p_fix": 0.895,
+  "improve": 0.758
+ },
+ {
+  "fname": "169598.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.109,
+  "p_fix": 0.863,
+  "improve": 0.754
+ },
+ {
+  "fname": "173889.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.138,
+  "p_fix": 0.891,
+  "improve": 0.753
+ },
+ {
+  "fname": "181905.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.117,
+  "p_fix": 0.869,
+  "improve": 0.753
+ },
+ {
+  "fname": "171801.jpg",
+  "attr": "Wearing_Lipstick",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.093,
+  "p_fix": 0.845,
+  "improve": 0.751
+ },
+ {
+  "fname": "171605.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.134,
+  "p_fix": 0.882,
+  "improve": 0.748
+ },
+ {
+  "fname": "174113.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.203,
+  "p_fix": 0.949,
+  "improve": 0.746
+ },
+ {
+  "fname": "166091.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.101,
+  "p_fix": 0.845,
+  "improve": 0.743
+ },
+ {
+  "fname": "179352.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.234,
+  "p_fix": 0.977,
+  "improve": 0.743
+ },
+ {
+  "fname": "173421.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.05,
+  "p_fix": 0.792,
+  "improve": 0.742
+ },
+ {
+  "fname": "164826.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.119,
+  "p_fix": 0.859,
+  "improve": 0.741
+ },
+ {
+  "fname": "182608.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.072,
+  "p_fix": 0.814,
+  "improve": 0.741
+ },
+ {
+  "fname": "163342.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.137,
+  "p_fix": 0.877,
+  "improve": 0.74
+ },
+ {
+  "fname": "179456.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.1,
+  "p_fix": 0.84,
+  "improve": 0.74
+ },
+ {
+  "fname": "172347.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.141,
+  "p_fix": 0.879,
+  "improve": 0.739
+ },
+ {
+  "fname": "164865.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.22,
+  "p_fix": 0.956,
+  "improve": 0.736
+ },
+ {
+  "fname": "172361.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.206,
+  "p_fix": 0.935,
+  "improve": 0.73
+ },
+ {
+  "fname": "175152.jpg",
+  "attr": "Wearing_Lipstick",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.036,
+  "p_fix": 0.761,
+  "improve": 0.725
+ },
+ {
+  "fname": "170112.jpg",
+  "attr": "Wavy_Hair",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.141,
+  "p_fix": 0.865,
+  "improve": 0.724
+ },
+ {
+  "fname": "174441.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.234,
+  "p_fix": 0.958,
+  "improve": 0.724
+ },
+ {
+  "fname": "177206.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.098,
+  "p_fix": 0.818,
+  "improve": 0.72
+ },
+ {
+  "fname": "172922.jpg",
+  "attr": "Attractive",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.183,
+  "p_fix": 0.901,
+  "improve": 0.718
+ },
+ {
+  "fname": "178784.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.143,
+  "p_fix": 0.861,
+  "improve": 0.718
+ },
+ {
+  "fname": "181096.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.165,
+  "p_fix": 0.883,
+  "improve": 0.718
+ },
+ {
+  "fname": "175258.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.121,
+  "p_fix": 0.837,
+  "improve": 0.717
+ },
+ {
+  "fname": "170938.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.247,
+  "p_fix": 0.961,
+  "improve": 0.714
+ },
+ {
+  "fname": "167190.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.235,
+  "p_fix": 0.945,
+  "improve": 0.71
+ },
+ {
+  "fname": "177893.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.018,
+  "p_fix": 0.727,
+  "improve": 0.71
+ },
+ {
+  "fname": "163689.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.173,
+  "p_fix": 0.881,
+  "improve": 0.708
+ },
+ {
+  "fname": "173321.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.239,
+  "p_fix": 0.947,
+  "improve": 0.708
+ },
+ {
+  "fname": "168070.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.229,
+  "p_fix": 0.937,
+  "improve": 0.707
+ },
+ {
+  "fname": "179091.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.274,
+  "p_fix": 0.981,
+  "improve": 0.707
+ },
+ {
+  "fname": "163557.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.155,
+  "p_fix": 0.86,
+  "improve": 0.705
+ },
+ {
+  "fname": "171683.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.228,
+  "p_fix": 0.932,
+  "improve": 0.705
+ },
+ {
+  "fname": "179017.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.042,
+  "p_fix": 0.745,
+  "improve": 0.702
+ },
+ {
+  "fname": "168970.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.27,
+  "p_fix": 0.967,
+  "improve": 0.697
+ },
+ {
+  "fname": "164055.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.201,
+  "p_fix": 0.898,
+  "improve": 0.696
+ },
+ {
+  "fname": "169275.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.223,
+  "p_fix": 0.919,
+  "improve": 0.696
+ },
+ {
+  "fname": "175206.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.114,
+  "p_fix": 0.807,
+  "improve": 0.692
+ },
+ {
+  "fname": "172628.jpg",
+  "attr": "Wavy_Hair",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.113,
+  "p_fix": 0.804,
+  "improve": 0.691
+ },
+ {
+  "fname": "179455.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.244,
+  "p_fix": 0.933,
+  "improve": 0.69
+ },
+ {
+  "fname": "181777.jpg",
+  "attr": "Arched_Eyebrows",
+  "male": 1,
+  "true": 1,
+  "p_base": 0.195,
+  "p_fix": 0.883,
+  "improve": 0.688
+ }
+]

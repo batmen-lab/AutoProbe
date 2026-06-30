@@ -1,0 +1,23 @@
+{
+  "metric_name": "equal_opportunity_recall_gap",
+  "standard_threshold": 0.08,
+  "acceptable_threshold": 0.15,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.0498604218362283
+    }
+  ],
+  "min": 0.0498604218362283,
+  "max": 0.0498604218362283,
+  "mean": 0.0498604218362283,
+  "std": 0.0,
+  "first_value": 0.0498604218362283,
+  "final_value": 0.0498604218362283,
+  "delta": 0.0,
+  "tail_mean": 0.0498604218362283,
+  "status": "PASS",
+  "acceptable_met": true,
+  "conclusion": "Equal-opportunity recall gap went from 0.050 to 0.050 (flat), crossing the 0.08 standard threshold at epoch 0; tail mean 0.050 (overall AUROC 0.847) -> PASS."
+}

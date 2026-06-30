@@ -48,25 +48,58 @@ app.add_middleware(
 
 
 # ── Single-active-stage gate ─────────────────────────────────────────────────
-_action_lock = asyncio.Lock()
+# Long stage actions (probe/plan generation, implement, iterate, fix-loops) run
+# for many minutes. We do NOT hold the HTTP request open for their duration:
+# a browser fetch that timed out mid-action used to cancel the request and
+# strand the run at phase="running" (the "Failed to fetch" symptom). Instead an
+# action is launched as a DETACHED background task — the POST returns the
+# current state immediately and the frontend polls /api/runs/{id} for progress.
+# The task ALWAYS finalizes state (even on crash) so a run can never be wedged.
+_busy = False
 _current_run_id: str | None = None
+_last_error: dict[str, str] = {}  # run_id -> last failure message (UI surfaces it)
+_cancelled: set[str] = set()      # runs whose action was intentionally cancelled
 
 
-async def _run_blocking(fn, *args, **kwargs):
-    """Run blocking pipeline fn in a thread. Wraps with the active-stage lock.
+def _safe_phase(state: RunState) -> str:
+    """Where to park a run whose action ended unexpectedly (mirrors cancel())."""
+    return "ready" if state.record.stage == 4 else "input"
 
-    Records which run owns the in-flight action so cancel() can reset its phase.
-    """
-    global _current_run_id
-    if _action_lock.locked():
-        raise HTTPException(409, "Another stage action is already running.")
-    rid = args[0].record.run_id if args and isinstance(args[0], RunState) else None
-    async with _action_lock:
-        _current_run_id = rid
+
+async def _run_action(fn, args: tuple, run_id: str) -> None:
+    """Body of a background stage action. Runs the blocking fn in a thread and,
+    no matter how it ends, leaves the run in a consistent, non-"running" state."""
+    global _busy, _current_run_id
+    try:
+        await asyncio.to_thread(fn, *args)
+    except Exception as e:  # noqa: BLE001 — a failure must never strand the run
         try:
-            return await asyncio.to_thread(fn, *args, **kwargs)
-        finally:
-            _current_run_id = None
+            st = load_run(run_id)
+            st.set_action(None)
+            st.set_phase(st.record.stage, _safe_phase(st))
+        except Exception:
+            pass
+        if run_id not in _cancelled:
+            _last_error[run_id] = f"{type(e).__name__}: {e}"
+    finally:
+        _busy = False
+        _current_run_id = None
+        _cancelled.discard(run_id)
+
+
+def _launch(fn, *args, run_id: str) -> None:
+    """Start a long stage action off the request path. 409 if one is running.
+
+    `_busy` is set synchronously here (before the route returns) so a second
+    concurrent request reliably 409s instead of racing into the background.
+    """
+    global _busy, _current_run_id
+    if _busy:
+        raise HTTPException(409, "Another stage action is already running.")
+    _busy = True
+    _current_run_id = run_id
+    _last_error.pop(run_id, None)
+    asyncio.create_task(_run_action(fn, args, run_id))
 
 
 # ── Models ───────────────────────────────────────────────────────────────────
@@ -200,9 +233,8 @@ def set_context(run_id: str, body: ContextBody):
 @app.post("/api/runs/{run_id}/stage1/generate")
 async def stage1_generate(run_id: str):
     state = load_run(run_id)
-    await _run_blocking(stages_mod.generate_probes, state)
-    state = load_run(run_id)  # reload after blocking write
-    return _stage1_artifact(state)
+    _launch(stages_mod.generate_probes, state, run_id=run_id)
+    return _stage1_artifact(load_run(run_id))  # null until the task completes
 
 
 @app.post("/api/runs/{run_id}/stage1/select")
@@ -229,18 +261,16 @@ async def stage1_auto_research(run_id: str):
     training + commentor + training. After this the run is parked at stage 4.
     """
     state = load_run(run_id)
-    await _run_blocking(stages_mod.auto_research_setup, state)
-    state = load_run(run_id)
-    return _state_payload(state)
+    _launch(stages_mod.auto_research_setup, state, run_id=run_id)
+    return _state_payload(load_run(run_id))
 
 
 # ── Stage 2 ──────────────────────────────────────────────────────────────────
 @app.post("/api/runs/{run_id}/stage2/generate")
 async def stage2_generate(run_id: str):
     state = load_run(run_id)
-    await _run_blocking(stages_mod.generate_dev_plans, state)
-    state = load_run(run_id)
-    return _stage2_artifact(state)
+    _launch(stages_mod.generate_dev_plans, state, run_id=run_id)
+    return _stage2_artifact(load_run(run_id))  # null until the task completes
 
 
 @app.post("/api/runs/{run_id}/stage2/select")
@@ -263,18 +293,16 @@ def stage2_artifact(run_id: str):
 @app.post("/api/runs/{run_id}/stage3/implement")
 async def stage3_implement(run_id: str):
     state = load_run(run_id)
-    await _run_blocking(stages_mod.implement, state)
-    state = load_run(run_id)
-    return _state_payload(state)
+    _launch(stages_mod.implement, state, run_id=run_id)
+    return _state_payload(load_run(run_id))
 
 
 # ── Stage 4 ──────────────────────────────────────────────────────────────────
 @app.post("/api/runs/{run_id}/stage4/iterate")
 async def stage4_iterate(run_id: str):
     state = load_run(run_id)
-    await _run_blocking(stages_mod.iterate_once, state)
-    state = load_run(run_id)
-    return _state_payload(state)
+    _launch(stages_mod.iterate_once, state, run_id=run_id)
+    return _state_payload(load_run(run_id))
 
 
 @app.post("/api/runs/{run_id}/stage4/auto-fix-loop")
@@ -284,17 +312,11 @@ async def stage4_auto_fix_loop(run_id: str):
     "Start auto probe-fixing" button on the frontend.
     """
     state = load_run(run_id)
-    try:
-        await _run_blocking(stages_mod.auto_fix_loop, state)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except RuntimeError as e:
-        # Surface RuntimeError (e.g. agent didn't write fix-plans file) so the
-        # frontend can show it; the loop already restored phase=ready before
-        # raising.
-        raise HTTPException(500, str(e))
-    state = load_run(run_id)
-    return _state_payload(state)
+    # Failures (ValueError / agent didn't write fix-plans / etc.) are caught in
+    # _run_action: it parks the run at phase=ready and records `last_error`,
+    # which the frontend surfaces via polling.
+    _launch(stages_mod.auto_fix_loop, state, run_id=run_id)
+    return _state_payload(load_run(run_id))
 
 
 @app.post("/api/runs/{run_id}/stage4/fix-plans/generate")
@@ -310,12 +332,9 @@ async def stage4_fix_plans_generate(
     """
     state = load_run(run_id)
     hint = body.hint if body is not None else None
-    try:
-        result = await _run_blocking(stages_mod.generate_fix_plans, state, hint)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    state = load_run(run_id)
-    return {"state": _state_payload(state), **result}
+    _launch(stages_mod.generate_fix_plans, state, hint, run_id=run_id)
+    # Fix plans aren't ready yet — the UI polls /stage4/fix-plans/artifact.
+    return {"state": _state_payload(load_run(run_id)), **stages_mod.read_fix_plans(load_run(run_id))}
 
 
 @app.get("/api/runs/{run_id}/stage4/fix-plans/artifact")
@@ -330,12 +349,8 @@ def stage4_fix_plans_artifact(run_id: str):
 async def stage4_fix_plans_select(run_id: str, body: SelectBody):
     """User picked one of the 3 fix plans — apply it + run training."""
     state = load_run(run_id)
-    try:
-        await _run_blocking(stages_mod.select_and_apply_fix_plan, state, body.index)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    state = load_run(run_id)
-    return _state_payload(state)
+    _launch(stages_mod.select_and_apply_fix_plan, state, body.index, run_id=run_id)
+    return _state_payload(load_run(run_id))
 
 
 @app.post("/api/runs/{run_id}/stage4/auto-research-iterate")
@@ -344,12 +359,8 @@ async def stage4_auto_research_iterate(run_id: str, body: AutoResearchIterateBod
     if body.count <= 0 or body.count > 100:
         raise HTTPException(400, "count must be between 1 and 100")
     state = load_run(run_id)
-    try:
-        await _run_blocking(stages_mod.auto_research_iterate_batch, state, body.count)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    state = load_run(run_id)
-    return _state_payload(state)
+    _launch(stages_mod.auto_research_iterate_batch, state, body.count, run_id=run_id)
+    return _state_payload(load_run(run_id))
 
 
 # ── Revert ───────────────────────────────────────────────────────────────────
@@ -456,7 +467,10 @@ def live_metric(run_id: str):
 # ── Payload builders ─────────────────────────────────────────────────────────
 def _state_payload(state: RunState) -> dict:
     rec = asdict(state.record)
-    rec["busy"] = _action_lock.locked()
+    rec["busy"] = _busy
+    # Surface the last background-action failure (if any) so the polling UI can
+    # show it — previously these came back as an HTTP 500 on the POST.
+    rec["last_error"] = _last_error.get(state.record.run_id)
     return rec
 
 
@@ -481,6 +495,9 @@ def cancel():
     Returns the run that was killed (if any) so the UI can refresh it.
     """
     rid = _current_run_id
+    if rid:
+        # Mark intentional so _run_action doesn't record this as a `last_error`.
+        _cancelled.add(rid)
     killed = cancel_current()
     affected: str | None = None
     if rid:
@@ -495,6 +512,7 @@ def cancel():
                 state.set_fix_plan_round(None)
             state.set_action(None)
             state.set_phase(state.record.stage, new_phase)
+            _last_error.pop(rid, None)
             affected = rid
         except FileNotFoundError:
             pass
@@ -503,7 +521,7 @@ def cancel():
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "busy": _action_lock.locked()}
+    return {"ok": True, "busy": _busy}
 
 
 # Convenience: `python -m server.app` runs uvicorn with reload off.

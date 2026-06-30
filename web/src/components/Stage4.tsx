@@ -14,6 +14,7 @@ import {
 } from "./ui";
 import { Header } from "./Stage1";
 import { MetricChart } from "./MetricChart";
+import { useActionLatch } from "@/lib/useActionLatch";
 
 // One state machine drives every popup on this stage. Only TERMINAL
 // classifications open a modal — auto-pilot handles non-terminal rounds
@@ -50,7 +51,7 @@ export function Stage4({
   // back to 1.
   onKeepRebase?: () => void;
 }) {
-  const [running, setRunning] = useState(false);
+  const { inProgress: running, begin, fail } = useActionLatch(run.busy);
   const [error, setError] = useState<string | null>(null);
   const [reverting, setReverting] = useState(false);
   const [step, setStep] = useState<ModalStep>(null);
@@ -154,20 +155,19 @@ export function Stage4({
   // highest confidence) until terminal state. Only stops at PASS /
   // best-effort / stagnant.
   async function handleAutoFixLoop() {
-    setRunning(true);
+    begin();
     setError(null);
     try {
       await api.autoFixLoop(run.run_id);
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
-    } finally {
-      setRunning(false);
+      fail();
     }
   }
 
   const handleGenerateFixPlans = useCallback(async () => {
-    setRunning(true);
+    begin();
     setError(null);
     const hintToSend = fixHint.trim() || undefined;
     try {
@@ -177,12 +177,12 @@ export function Stage4({
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
-    } finally {
-      setRunning(false);
+      fail();
     }
-  }, [run.run_id, onUpdate, fixHint]);
+  }, [run.run_id, onUpdate, fixHint, begin, fail]);
 
   async function handlePickFixPlan(index: number) {
+    begin();
     setPickingPlan(index);
     setError(null);
     try {
@@ -191,6 +191,7 @@ export function Stage4({
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
+      fail();
     } finally {
       setPickingPlan(null);
     }
@@ -199,7 +200,7 @@ export function Stage4({
   async function handleAutoResearchBatch(count: number) {
     if (count <= 0) return;
     lastArBatchKeyRef.current = null;
-    setRunning(true);
+    begin();
     setError(null);
     setStep(null);
     try {
@@ -207,8 +208,7 @@ export function Stage4({
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
-    } finally {
-      setRunning(false);
+      fail();
     }
   }
 
