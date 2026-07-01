@@ -12,6 +12,7 @@ phase/output suitable for the API response.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from hard_prompt.nlp_prober_gen import PROMPT_ONE
@@ -131,10 +132,12 @@ def auto_research_setup(state: RunState) -> None:
     # Setup produced two validation runs (post-prober + post-commentor). We
     # seed best_value off the post-commentor tail_mean first, then wipe the
     # setup artifacts so iter 1 produces probe_result_1 / change_log_1.
-    seed = _read_tail_mean_and_direction(state.workspace)
+    seed = _read_best_stats_and_direction(state.workspace)
     if seed is not None:
         state.record.auto_research_best_value = seed[0]
-        state.record.auto_research_best_direction = seed[1]
+        state.record.auto_research_best_max = seed[1]
+        state.record.auto_research_best_mean = seed[2]
+        state.record.auto_research_best_direction = seed[3]
 
     metric_dir = state.workspace / ".agent_probe" / "metric"
     if metric_dir.exists():
@@ -267,8 +270,123 @@ def _round_post_tag(n: int) -> str:
     return f"round-{n}-post"
 
 
+# ── Anchor guard (original-train-metric utility floor) ───────────────────────
+# The probe metric is the optimization target, so anything NOT in it is free to
+# be sacrificed (Goodhart). The anchor re-couples the fix-loop to train.py's own
+# objective: the agent records train.py's original loss/eval metric(s) into each
+# probe_result under `original_train_metric` (or `original_train_metric_0/1/…`),
+# and we auto-revert any round that degrades an anchor by more than this fraction
+# from the round-1 baseline — regardless of what the probe metric did.
+ANCHOR_MAX_SACRIFICE = 0.20  # accept at most a 20% degradation of any anchor
+_ANCHOR_KEY_RE = re.compile(r"^original_train_metric(?:_\d+)?$")
+_ANCHOR_WARNING_REL = Path(".agent_probe") / ".anchor_warning.txt"
+
+
+def _read_probe_result(workspace: Path, n: int) -> dict | None:
+    p = workspace / ".agent_probe" / "metric" / f"probe_result_{n}.json"
+    if not p.exists():
+        return None
+    try:
+        doc = json.loads(p.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def _extract_anchor_metrics(probe_result: dict | None) -> dict[str, dict]:
+    """Pull the human-marked original train.py metric(s) from a probe_result.
+
+    Accepts a single `original_train_metric` object or indexed
+    `original_train_metric_0`, `original_train_metric_1`, … Each value is
+    {name, value, direction}; `value` may be a scalar or a per-epoch series (we
+    take the last epoch). Returns {name -> {"value": float, "direction": str}}
+    keyed by the metric's own name (so baseline/current align by name).
+    """
+    out: dict[str, dict] = {}
+    if not isinstance(probe_result, dict):
+        return out
+    for key, val in probe_result.items():
+        if not _ANCHOR_KEY_RE.match(str(key)) or not isinstance(val, dict):
+            continue
+        value = _coerce_float(val.get("value"))
+        if value is None:
+            series = val.get("values")
+            if isinstance(series, list) and series:
+                last = series[-1]
+                value = _coerce_float(last.get("value") if isinstance(last, dict) else last)
+        if value is None:
+            continue
+        name = str(val.get("name") or key)
+        direction = val.get("direction") or "higher_is_better"
+        out[name] = {"value": _round4(value), "direction": direction}
+    return out
+
+
+def _anchor_guard_breach(workspace: Path, cur_raw: dict | None) -> str | None:
+    """Compare this round's anchor(s) to the round-1 baseline. If any degraded by
+    more than ANCHOR_MAX_SACRIFICE in its own direction, return a human-readable
+    breach note; else None (guard is a no-op if either side lacks anchors)."""
+    base = _extract_anchor_metrics(_read_probe_result(workspace, 1))
+    cur = _extract_anchor_metrics(cur_raw)
+    if not base or not cur:
+        return None
+    for name, b in base.items():
+        c = cur.get(name)
+        if c is None:
+            continue
+        bv, cv = b.get("value"), c.get("value")
+        if bv is None or cv is None or bv == 0:
+            continue
+        direction = c.get("direction") or b.get("direction") or "higher_is_better"
+        # frac > 0 means the anchor got WORSE.
+        if direction == "lower_is_better":
+            frac = (cv - bv) / abs(bv)
+        else:
+            frac = (bv - cv) / abs(bv)
+        if frac > ANCHOR_MAX_SACRIFICE:
+            return (
+                f"anchor '{name}' degraded {frac * 100:.1f}% "
+                f"(baseline {bv:.4f} -> {cv:.4f}; max allowed "
+                f"{ANCHOR_MAX_SACRIFICE * 100:.0f}%)"
+            )
+    return None
+
+
+def _set_anchor_warning(workspace: Path, round_idx: int, breach: str) -> None:
+    """Leave a one-shot warning that the NEXT iteration's agent will read and
+    then consume (see _consume_anchor_warning). File-based so it survives state
+    reloads between API calls."""
+    msg = (
+        f"[ANCHOR GUARD] Round {round_idx} was AUTO-REVERTED: it sacrificed the "
+        f"original train.py metric ({breach}). The probe metric is NOT the only "
+        f"objective — you must NOT degrade the original train.py loss/eval "
+        f"(the anchor) by more than {int(ANCHOR_MAX_SACRIFICE * 100)}% from the "
+        f"round-1 baseline. Do NOT undertrain, cut epochs, slow/disable learning, "
+        f"or collapse the model toward a trivial constant / flag-everyone "
+        f"predictor. Improve the probe metric while holding every anchor within "
+        f"{int(ANCHOR_MAX_SACRIFICE * 100)}% of baseline, and keep "
+        f"`original_train_metric*` recorded."
+    )
+    try:
+        (workspace / _ANCHOR_WARNING_REL).write_text(msg)
+    except OSError:
+        pass
+
+
+def _consume_anchor_warning(workspace: Path) -> str | None:
+    p = workspace / _ANCHOR_WARNING_REL
+    if not p.exists():
+        return None
+    try:
+        msg = p.read_text().strip()
+        p.unlink(missing_ok=True)
+    except OSError:
+        return None
+    return msg or None
+
+
 def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
-    """If round `round_idx`'s tail_mean is worse than round `round_idx - 1`'s,
+    """If round `round_idx`'s last_epoch is worse than round `round_idx - 1`'s,
     restore train.py from `round-{N-1}-post` and return a note string. Else
     commit the kept train.py as `round-N-post` and return None.
 
@@ -278,7 +396,8 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
     """
     iters = state.record.iterations
     cur_snap = _read_latest_metric(state.workspace)
-    cur_tm = (cur_snap or {}).get("tail_mean")
+    # last-epoch value (metric_value in the snapshot is values[-1]).
+    cur_tm = (cur_snap or {}).get("metric_value")
     direction = (cur_snap or {}).get("direction") or "higher_is_better"
     tag_n = _round_post_tag(round_idx)
     prev_tag = _round_post_tag(round_idx - 1)
@@ -295,7 +414,7 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
     # No prior round → nothing to compare; just keep.
     prev_tm: float | None = None
     if len(iters) >= 1:
-        prev_tm = iters[-1].get("tail_mean")
+        prev_tm = iters[-1].get("last_epoch")
         if prev_tm is None:
             prev_tm = iters[-1].get("metric_value")
     if prev_tm is None:
@@ -304,6 +423,25 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
         )
         state.log_round_outcome(round_idx, "kept", "baseline", tail_mean=cur_tm)
         return None
+    # Anchor guard (utility floor). Overrides the probe-metric decision: even if
+    # the probe metric improved, a >20% collapse of train.py's original
+    # loss/eval metric auto-reverts this round and warns the next agent.
+    anchor_breach = _anchor_guard_breach(state.workspace, (cur_snap or {}).get("raw"))
+    if anchor_breach is not None:
+        reverted = False
+        if snap.tag_exists(state.workspace, prev_tag):
+            snap.restore_train(state.workspace, prev_tag)
+            reverted = True
+        snap.commit_train(
+            state.workspace, f"round {round_idx} reverted (anchor breach)", tag=tag_n,
+        )
+        state.log_round_outcome(
+            round_idx, "reverted", f"anchor breach: {anchor_breach}",
+            tail_mean=cur_tm, prev_tail_mean=prev_tm,
+            restored_from=prev_tag if reverted else None,
+        )
+        _set_anchor_warning(state.workspace, round_idx, anchor_breach)
+        return f"reverted (anchor breach: {anchor_breach})"
     if _better_strict(cur_tm, prev_tm, direction):
         snap.commit_train(
             state.workspace, f"round {round_idx} kept (improved)", tag=tag_n,
@@ -331,19 +469,129 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
     return "reverted (no improvement)" if reverted else "reverted (no prior snapshot)"
 
 
+def _round4(x):
+    """Keep 4 digits after the dot. The metric is compared/stored at this
+    precision so that sub-0.0001 wobble counts as 'equal' (=> revert)."""
+    return round(float(x), 4) if x is not None else None
+
+
+def _epoch_stats(probe_result: dict) -> tuple[float | None, float | None, float | None]:
+    """(last_epoch, max_epoch, mean_epoch) over a probe_result's per-epoch values,
+    each rounded to 4 decimals.
+
+    last_epoch is the actual end-of-training metric (the model produced). Falls
+    back to the scalar metric_value/tail_mean if no per-epoch series exists.
+    """
+    raw = []
+    for v in (probe_result.get("values") or []):
+        x = v.get("value") if isinstance(v, dict) else v
+        if x is not None:
+            raw.append(float(x))
+    if not raw:
+        fb = probe_result.get("metric_value")
+        if fb is None:
+            fb = probe_result.get("tail_mean")
+        return (_round4(fb), _round4(fb), _round4(fb))
+    return (_round4(raw[-1]), _round4(max(raw)), _round4(sum(raw) / len(raw)))
+
+
+def _archive_user_analysis(workspace: Path, round_idx: int) -> None:
+    """Snapshot the human-owned `user_analyze()` output for this round so each
+    iteration is traceable. Copies the flat files in
+    `.agent_probe/.user_analysis/` into `.agent_probe/.user_analysis/round_<N>/`
+    (only files, so existing round_* subdirs are never re-copied; overwrites on
+    a same-round retry so the canonical run wins)."""
+    src = workspace / ".agent_probe" / ".user_analysis"
+    if not src.is_dir():
+        return
+    dst = src / f"round_{round_idx}"
+    try:
+        dst.mkdir(parents=True, exist_ok=True)
+        for p in src.iterdir():
+            if p.is_file() and p.suffix.lower() in (".json", ".png", ".pdf", ".csv", ".svg"):
+                shutil.copy2(p, dst / p.name)
+    except OSError:
+        pass
+
+
+def _round_metric_file(path: Path) -> None:
+    """Round every numeric value in a probe_result JSON to 4 decimals — the
+    per-epoch `values` series and all scalar summary fields. Display-only:
+    the backend already compares/stores at 4-digit precision, so this only
+    cleans up the stored artifact (no effect on keep/revert or PASS/FAIL)."""
+    try:
+        doc = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    if not isinstance(doc, dict):
+        return
+
+    def _r(x):
+        return round(x, 4) if isinstance(x, float) else x
+
+    for k, v in list(doc.items()):
+        if k == "values" and isinstance(v, list):
+            for e in v:
+                if isinstance(e, dict) and isinstance(e.get("value"), float):
+                    e["value"] = round(e["value"], 4)
+        else:
+            doc[k] = _r(v)
+    try:
+        path.write_text(json.dumps(doc, indent=2))
+    except OSError:
+        pass
+
+
+def _coerce_float(v) -> float | None:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _status_from_last_epoch(
+    last_epoch: float | None, std_th, acc_th, direction: str | None,
+) -> tuple[str | None, bool | None]:
+    """Recompute PASS/FAIL + acceptable_met from the LAST-EPOCH value vs the
+    thresholds — the backend source of truth (overrides the prober's
+    tail_mean-based status so PASS/FAIL is last-epoch everywhere)."""
+    if last_epoch is None:
+        return (None, None)
+    lower = direction == "lower_is_better"
+
+    def meets(th):
+        t = _coerce_float(th)
+        if t is None:
+            return None
+        return (last_epoch <= t) if lower else (last_epoch >= t)
+
+    s = meets(std_th)
+    status = None if s is None else ("PASS" if s else "FAIL")
+    return (status, meets(acc_th))
+
+
 def _iteration_record_from_snapshot(snapshot: dict, *, note: str | None = None, best_value: float | None = None) -> IterationRecord:
     def _as_str(v):
         return str(v) if v is not None else None
+    raw = snapshot.get("raw", {}) or {}
+    last_epoch, _max_e, _mean_e = _epoch_stats(raw)
+    if last_epoch is None:
+        last_epoch = snapshot.get("metric_value")
+    # Recompute status from last_epoch (don't trust the prober's tail_mean status).
+    status, acceptable_met = _status_from_last_epoch(
+        last_epoch, snapshot.get("threshold"),
+        snapshot.get("acceptable_threshold"), snapshot.get("direction"),
+    )
     return IterationRecord(
         index=snapshot["index"],
         metric_name=snapshot.get("metric_name"),
-        metric_value=snapshot.get("metric_value"),
+        metric_value=last_epoch,
         threshold=_as_str(snapshot.get("threshold")),
         acceptable_threshold=_as_str(snapshot.get("acceptable_threshold")),
-        tail_mean=snapshot.get("tail_mean"),
+        last_epoch=last_epoch,
         direction=snapshot.get("direction"),
-        status=snapshot.get("status"),
-        acceptable_met=snapshot.get("acceptable_met"),
+        status=status,
+        acceptable_met=acceptable_met,
         note=note,
         best_value=best_value,
     )
@@ -367,6 +615,11 @@ def iterate_once(state: RunState) -> dict:
         if state.record.debug_flags.get("auto_research")
         else PROMPT_SEVEN
     )
+    # If the previous round was auto-reverted for breaching the anchor floor,
+    # surface that to this round's agent (one-shot; consumed on read).
+    anchor_warning = _consume_anchor_warning(state.workspace)
+    if anchor_warning:
+        iter_prompt = f"{iter_prompt}\n\n{anchor_warning}"
     agent_call(iter_prompt, cwd=state.workspace, log_path=state.log_path)
 
     state.set_action(f"iteration-test-run:{next_idx}")
@@ -493,7 +746,7 @@ def _trd_signed(iters: list) -> float | None:
     last = iters[-1]
     ref = iters[-4]
     def _tm(r: dict):
-        tm = r.get("tail_mean")
+        tm = r.get("last_epoch")
         return tm if tm is not None else r.get("metric_value")
     latest = _tm(last)
     refv = _tm(ref)
@@ -525,7 +778,7 @@ def _at_terminal_state(state: RunState) -> bool:
     if len(iters) < 4:
         return False  # not enough rows yet — keep iterating
     trd = _trd_signed(iters)
-    last_tm = last.get("tail_mean")
+    last_tm = last.get("last_epoch")
     if last_tm is None:
         last_tm = last.get("metric_value") or 1.0
     noise = max(0.01 * abs(last_tm or 1.0), 1e-6)
@@ -620,8 +873,12 @@ def _do_auto_fix_round(state: RunState) -> None:
     _persist_fix_plans(state, round_idx, data, chosen_index=one_based)
 
     state.set_action(f"fix-plan-apply:{round_idx}")
+    anchor_warning = _consume_anchor_warning(state.workspace)
+    apply_prompt = f"{PROMPT_ELEVEN}\n\n{json.dumps(selected, indent=2)}"
+    if anchor_warning:
+        apply_prompt = f"{apply_prompt}\n\n{anchor_warning}"
     agent_call(
-        f"{PROMPT_ELEVEN}\n\n{json.dumps(selected, indent=2)}",
+        apply_prompt,
         cwd=state.workspace,
         log_path=state.log_path,
     )
@@ -706,10 +963,13 @@ def select_and_apply_fix_plan(state: RunState, index_1based: int) -> dict:
     _persist_fix_plans(state, round_idx, data, chosen_index=index_1based)
 
     state.set_action(f"fix-plan-apply:{round_idx}")
+    anchor_warning = _consume_anchor_warning(state.workspace)
     prompt = (
         f"{PROMPT_ELEVEN}\n\n"
         f"{json.dumps(selected, indent=2)}"
     )
+    if anchor_warning:
+        prompt = f"{prompt}\n\n{anchor_warning}"
     agent_call(prompt, cwd=state.workspace, log_path=state.log_path)
 
     state.set_action(f"fix-plan-test-run:{round_idx}")
@@ -745,12 +1005,48 @@ def _better(value: float, best: float, direction: str) -> bool:
     return value > best
 
 
+def _annotate_metric_history(
+    workspace: Path,
+    round_idx: int,
+    prev_best_last_epoch: float | None,
+    prev_best_max: float | None,
+    prev_best_mean: float | None,
+) -> None:
+    """Stamp the round's metric artifact with the running-best iteration it is
+    judged against. All three describe that same best iteration:
+
+      previous_best_last_epoch — its last-epoch value (drives keep/revert)
+      previous_best_max        — its max-over-epochs value
+      previous_best_mean       — its mean value
+
+    Written into .agent_probe/metric/probe_result_<round_idx>.json so the
+    comparison is visible in the artifact itself.
+    """
+    p = workspace / ".agent_probe" / "metric" / f"probe_result_{round_idx}.json"
+    if not p.exists():
+        return
+    try:
+        doc = json.loads(p.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    if not isinstance(doc, dict):
+        return
+    doc["previous_best_last_epoch"] = prev_best_last_epoch
+    doc["previous_best_max"] = prev_best_max
+    doc["previous_best_mean"] = prev_best_mean
+    try:
+        p.write_text(json.dumps(doc, indent=2))
+    except OSError:
+        pass
+
+
 def auto_research_iterate_batch(state: RunState, count: int) -> dict:
     """Run `count` auto-research rounds with revert-on-regression.
 
-    Each round: snapshot train.py → run agent → run training → compare new
-    `tail_mean` to the running best. If improved, keep the change and update
-    best. If not, restore train.py from the pre-iteration snapshot so the
+    Each round: snapshot train.py → run agent → run training → compare the new
+    `last_epoch` (end-of-training metric) to the running best's last_epoch. If
+    improved, keep the change and update best. If not, restore train.py from the
+    pre-iteration snapshot so the
     workspace only ever holds the best version seen. Each recorded
     IterationRecord stores `best_value` so the UI's per-run chart is
     monotonic by construction.
@@ -768,13 +1064,17 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
     state.save()
 
     # Seed best from the latest existing probe result if we haven't yet.
-    best = state.record.auto_research_best_value
+    best = state.record.auto_research_best_value          # best iteration's last_epoch
+    best_max = state.record.auto_research_best_max
+    best_mean = state.record.auto_research_best_mean
     direction = state.record.auto_research_best_direction
     if best is None:
-        seed = _read_tail_mean_and_direction(state.workspace)
+        seed = _read_best_stats_and_direction(state.workspace)
         if seed is not None:
-            best, direction = seed
+            best, best_max, best_mean, direction = seed
             state.record.auto_research_best_value = best
+            state.record.auto_research_best_max = best_max
+            state.record.auto_research_best_mean = best_mean
             state.record.auto_research_best_direction = direction
             state.save()
 
@@ -818,12 +1118,15 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
             continue
 
         raw = snapshot.get("raw", {}) or {}
-        tail_mean = raw.get("tail_mean")
-        if tail_mean is None:
-            # Fall back to last value if prober didn't emit tail_mean.
-            tail_mean = snapshot.get("metric_value")
-        cur = float(tail_mean) if tail_mean is not None else None
+        # The decision metric is the LAST-EPOCH value (the model actually produced).
+        cur, cur_max, cur_mean = _epoch_stats(raw)
+        if cur is None:
+            cur = snapshot.get("metric_value")
         direction = raw.get("direction", direction or "higher_is_better")
+
+        # Stamp the artifact with the running-best iteration this round is judged
+        # against (its last_epoch / max / mean). `best` is updated below on a keep.
+        _annotate_metric_history(state.workspace, next_idx, best, best_max, best_mean)
 
         if cur is None:
             snap.restore_train(state.workspace, prev_ref)
@@ -836,7 +1139,7 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
             )
             note = "reverted (no metric)"
         elif best is None:
-            best = cur
+            best, best_max, best_mean = cur, cur_max, cur_mean
             snap.commit_train(
                 state.workspace, f"round {next_idx} kept (baseline)", tag=tag_n,
             )
@@ -846,7 +1149,7 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
             )
             note = "kept (baseline of batch)"
         elif _better(cur, best, direction):
-            best = cur
+            best, best_max, best_mean = cur, cur_max, cur_mean
             snap.commit_train(
                 state.workspace, f"round {next_idx} kept (improved)", tag=tag_n,
             )
@@ -869,6 +1172,8 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
             note = "reverted (no improvement)"
 
         state.record.auto_research_best_value = best
+        state.record.auto_research_best_max = best_max
+        state.record.auto_research_best_mean = best_mean
         state.record.auto_research_best_direction = direction
         # Auto-research has no thresholds; build the record so threshold fields
         # stay None even if the snapshot carries them from a stale schema.
@@ -889,8 +1194,11 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
     }
 
 
-def _read_tail_mean_and_direction(workspace: Path) -> tuple[float, str] | None:
-    """Return (tail_mean, direction) from the latest probe_result, if any."""
+def _read_best_stats_and_direction(
+    workspace: Path,
+) -> tuple[float, float, float, str] | None:
+    """Return (last_epoch, max_epoch, mean_epoch, direction) from the latest
+    probe_result, if any."""
     metric_dir = workspace / ".agent_probe" / "metric"
     if not metric_dir.exists():
         return None
@@ -899,15 +1207,11 @@ def _read_tail_mean_and_direction(workspace: Path) -> tuple[float, str] | None:
         return None
     n = max(nums)
     data = json.loads((metric_dir / f"probe_result_{n}.json").read_text())
-    tm = data.get("tail_mean")
-    if tm is None:
-        # Fall back to mean of values if tail_mean wasn't written.
-        vals = [v.get("value") for v in (data.get("values") or []) if isinstance(v, dict)]
-        if not vals:
-            return None
-        tm = sum(vals[-5:]) / max(1, len(vals[-5:]))
+    last_epoch, mx, mn = _epoch_stats(data)
+    if last_epoch is None:
+        return None
     direction = data.get("direction", "higher_is_better")
-    return float(tm), direction
+    return float(last_epoch), float(mx), float(mn), direction
 
 
 def probe_passed(state: RunState) -> bool:
@@ -982,6 +1286,16 @@ def _run_training(state: RunState, expected_index: int) -> tuple[bool, str]:
     if not _normalize_probe_output(metric_dir, "probe_result_*.json", metric_pre, expected_index):
         return False, "prober.py exited 0 but wrote no probe_result_*.json"
     _normalize_probe_output(plot_dir, "probe_result_*.pdf", plot_pre, expected_index)
+    # Archive the human-owned user_analyze() output for THIS round so every
+    # iteration is traceable (round-indexed by the orchestrator's expected_index,
+    # which is robust to prober self-indexing / retries). user_analyze() itself
+    # stays untouched — it keeps writing the flat "latest" files.
+    _archive_user_analysis(state.workspace, expected_index)
+    # Auto-research: round the stored artifact to 4 digits everywhere (the
+    # per-epoch values series included). Display-only — decisions already use
+    # 4-digit precision.
+    if state.record.debug_flags.get("auto_research"):
+        _round_metric_file(metric_dir / f"probe_result_{expected_index}.json")
     return True, ""
 
 
@@ -1073,7 +1387,7 @@ def _read_latest_metric(workspace: Path) -> dict | None:
     last_value: float | None = None
     if values:
         v = values[-1]
-        last_value = v.get("value") if isinstance(v, dict) else v
+        last_value = _round4(v.get("value") if isinstance(v, dict) else v)
     # Prober writes `standard_threshold` in the new schema; legacy probers may
     # still write `threshold` only. Accept both, prefer the new field.
     std_th = data.get("standard_threshold", data.get("threshold"))

@@ -1,4 +1,12 @@
 PROMPT_FIVE = """
+PROTECTED CODE - user_analyze() (HARD RULE): If train.py contains a function named `user_analyze` or any block marked "USER ANALYSIS - DO NOT MODIFY", you MUST leave it completely untouched. Do NOT modify, remove, rename, reorder, wrap, gate, comment out, or change its body, its arguments, its call site, or its `.agent_probe/.user_analysis` output. It is a human-owned independent audit and is NOT part of the probe metric. Preserve it verbatim across every edit; make all your changes elsewhere.
+
+ORIGINAL TRAIN METRIC ANCHOR (HARD RULE): The probe metric is NOT the only thing that matters. train.py already has its OWN training objective — a LOSS it minimizes and a primary EVAL / checkpoint-selection metric it reports on validation (e.g. the metric used to pick the best checkpoint). This is the "anchor": the model's original purpose, which the probe must never be allowed to destroy. You MUST:
+  (1) Read train.py and identify (a) the training loss and (b) the primary eval / checkpoint-selection metric computed on the validation set. This is train.py's OWN loss/eval — it is NOT `user_analyze()` (that is the human audit; do not treat it as the anchor).
+  (2) Mark each at its definition/computation site in train.py with a one-line comment exactly of the form `# ANCHOR: original train metric - do not remove` so later edit-rounds can see it.
+  (3) Record the FINAL-EPOCH value of each anchor (measured on the same validation data train.py evaluates on) into the probe_result JSON under the key `original_train_metric` if there is exactly one, or `original_train_metric_0`, `original_train_metric_1`, … if there is more than one. Each entry is an object {"name": string, "value": float, "direction": "higher_is_better" | "lower_is_better"}. Record the primary eval/selection metric first, then the loss. Wire train.py to pass these final-epoch values through to `prober.conclude()` (or have `record()` capture them each epoch and `conclude()` emit the last epoch's). Do NOT fold the anchor into the probe metric — it is a separate, independent record that lives ALONGSIDE the probe fields.
+The orchestrator enforces a hard utility floor from these: any later edit that degrades an anchor by more than 20% from the round-1 baseline (lower for a higher-is-better anchor, higher for a lower-is-better anchor) is auto-reverted. Recording them accurately every run is mandatory.
+
 You are an expert ML/DL software engineer. You will receive a development document describing a training-quality probe — including its implementation plan, the metric it computes, the `standard_threshold` (the strict PASS bar), and the `acceptable_threshold` (the loose "we'd settle for this" bar).
 
 Your task is to implement this probe by writing `prober.py` and integrating it into the existing `train.py` in this workspace.
@@ -51,7 +59,13 @@ Write a self-contained `prober.py` that exposes two entry points:
          "tail_mean": float,
          "status": "PASS" | "FAIL",
          "acceptable_met": bool,
-         "conclusion": "string"
+         "conclusion": "string",
+         "original_train_metric": {"name": "string", "value": float, "direction": "higher_is_better" | "lower_is_better"}
+         // ^ the anchor (train.py's own final-epoch loss/eval). If train.py has MORE THAN ONE
+         //   primary loss/eval metric, OMIT "original_train_metric" and instead include one
+         //   object per anchor: "original_train_metric_0": {...}, "original_train_metric_1": {...}.
+         //   Record the primary eval/selection metric first, the loss next. This is a separate,
+         //   independent record — do NOT let it change how the probe metric itself is computed.
      }
 
   C. Generate a Plotly line chart and save it as `WORKING_SPACE/.agent_probe/plot/probe_result_N.pdf`, using the same N as the JSON file above.
