@@ -1,0 +1,7 @@
+Round 2 change log.
+
+- Chosen item: potential_improvement_4 (raise NUM_LEAVES from 2 to 31).
+- Change: set NUM_LEAVES = 31 so trees are no longer decision stumps; the booster can now model weekday x dept x store interactions given the 9 features now in use.
+- Why this is expected to move the metric in the better direction: prior round (MAX_FEATURES=2 -> 9) dropped tail_mean to 3.3756 with RMSE still descending across the 3 boosting rounds, indicating the model is learning but is interaction-starved — stumps (num_leaves=2) cannot partition on combinations of weekday and series-id. Letting trees branch on 31 leaves gives LightGBM interaction terms that are the dominant driver of M5 sales variance, which should push the per-round RMSE lower. Moderate Regime-B step (15x) toward the comment's 31-63 range; no epoch cap change, no other code touched.
+
+Integration integrity verified: record(epoch, rmse) and conclude() call sites are present and unmodified; record still receives (int, float) from the existing history loop; conclude() still takes no arguments.

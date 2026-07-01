@@ -1,0 +1,7 @@
+Round 3 change log.
+
+- Chosen item: potential_improvement_3 (raise N_ESTIMATORS from 3 to 200).
+- Change: set N_ESTIMATORS = 200 so the booster has enough rounds to converge; the round-2 trajectory [3.3579, 3.154, 2.9765] was still descending sharply at round 3 (every-round improvement, no plateau), the classic under-fit signature for a GBDT.
+- Why this is expected to move the metric in the better direction: at N_ESTIMATORS=3 the booster cannot accumulate the residual corrections that push val RMSE down to its plateau; raising it to 200 gives LightGBM room to converge while still being well under the 2000 GBDT ceiling and the 50-epoch cap (epochs == boosting rounds here, but 200 << 2000 and is a moderate Regime-B step from 3 — about 66x, justified because the prior 3-round trajectory shows the metric is starved for rounds, not for capacity). 200 rounds at LEARNING_RATE=0.1 with NUM_LEAVES=31 is a standard LightGBM starting config and should lower final RMSE below the round-2 value of 2.9765. No epoch cap raised past 50, no other code touched.
+
+Integration integrity verified: record(epoch, rmse) and conclude() call sites are present and unmodified; record still receives (int, float) from the existing history loop (history = list(model.evals_result_["valid_0"]["rmse"])); conclude() still takes no arguments.

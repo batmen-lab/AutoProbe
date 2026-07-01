@@ -1,0 +1,5 @@
+Iteration 8 — potential_improvement_5
+
+Change: Set min_samples_leaf=20 on the RandomForestClassifier so each leaf retains at least 20 samples, dampening leaf-isolated noise nodes that hurt calibrated probability ranking on the ~8% positive class.
+
+Why: AUPRC has plateaued at 0.2215 for three rounds (iters 5, 6, 7), with negligible deltas from max_features="sqrt" and the -9999 sentinel fill. Per the recent-progress check (negligible prior delta, prior edits were small/categorical), try a different lever rather than double down. min_samples_leaf=20 is the comment's named lower bound — a moderate refinement step (Regime B) that should reduce overfit on the minority class and lift AUPRC without overshooting. Expect a modest positive delta this round.

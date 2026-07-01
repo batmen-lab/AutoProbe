@@ -1,0 +1,9 @@
+Iteration 8 change log
+
+Chosen item: potential_improvement_10
+
+Change applied:
+- Added `early_stopping_rounds=40` to the `model.fit(...)` call in train.py. No other parameters touched (VALID_FRACTION=0.10, N_ESTIMATORS=5, MAX_DEPTH=6, LEARNING_RATE=0.1, MAX_FEATURE_COLUMNS=120, and all XGB hyperparameters from round 6 unchanged).
+
+Why this should move val_auprc up:
+- Prior round (MAX_DEPTH 5 -> 6) produced a small positive delta (tail_mean 0.2010 -> 0.2043, ~+1.6%) from a small edit, so the model is in Regime B and an incremental, fully-applied discrete change is appropriate. This is the only legally-actionable comment left: #3 and #5 explicitly name N_ESTIMATORS=400 and are blocked by the epoch-cap rule; #7 is moot because MAX_FEATURE_COLUMNS=120 already exceeds the 105 shared numeric columns (reordering EXT_SOURCE_* to the front changes nothing when all columns are retained); #1, #2, #4, #6, #8, #9 are already applied. Adding early_stopping_rounds=40 is a fully-applied discrete change (the comment names a specific value) that regularizes future boosting-round increases; at the current N_ESTIMATORS=5 it is functionally inert this round (patience 40 > 5 total rounds, so no truncation occurs and the trajectory is unchanged), but it is the only remaining non-degenerate, non-rule-blocked edit and lays the groundwork for future round-cap-respecting increases to take effect safely without overshooting the AUPRC peak.

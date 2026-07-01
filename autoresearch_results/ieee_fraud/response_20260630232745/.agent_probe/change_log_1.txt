@@ -1,0 +1,16 @@
+Round 1 change log
+===================
+
+Item: potential_improvement_8
+
+Change: Set scale_pos_weight=26.0 on the XGBClassifier (fraud rate ~3.5%,
+neg/pos ≈ 26:1). Previously no class reweighting was configured, so the
+log-loss was dominated by the majority class and the model under-predicted
+positives — the most direct cause of degenerate val_auprc on this dataset.
+
+Why: With N_ESTIMATORS=5 and MAX_DEPTH=2 still in place (Regime A, first
+round — no prior probe history), the metric is expected near random
+baseline. Reweighting the positive class is described in the comment as the
+"single biggest AUPRC lever on this dataset" and targets the root cause
+(minority-class under-prediction) directly rather than just adding
+capacity. Should lift val_auprc off the floor; orchestrator reverts if not.

@@ -1,0 +1,1 @@
+{"metric_name": "val_auprc", "direction": "higher_is_better", "values": [{"epoch": 0, "value": 0.39754316494030895}, {"epoch": 1, "value": 0.43882044450555086}, {"epoch": 2, "value": 0.4503295190410328}, {"epoch": 3, "value": 0.45793805465066795}, {"epoch": 4, "value": 0.46822501290189716}, {"epoch": 5, "value": 0.46629082491378665}]}

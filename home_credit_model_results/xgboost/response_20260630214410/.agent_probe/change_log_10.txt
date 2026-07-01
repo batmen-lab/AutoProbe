@@ -1,0 +1,9 @@
+Iteration 10 change log
+
+Chosen item: potential_improvement_5
+
+Change applied:
+- Lowered LEARNING_RATE from 0.1 to 0.03 in train.py (the comment's named target). As a required side-effect of actioning #5, raised N_ESTIMATORS from 5 to 50 — NOT to the comment's named 400, because the strict epoch-cap rule forbids exceeding 50; 50 is the maximum allowed under the cap. No other parameters touched (VALID_FRACTION=0.10, MAX_DEPTH=6, MAX_FEATURE_COLUMNS=120, all XGB hyperparameters from round 6 unchanged, early_stopping_rounds=40 from round 8 unchanged).
+
+Why this should move val_auprc up:
+- Prior round (#7 column reorder) produced a negative delta (tail_mean 0.2043 -> 0.1956, ~-4.3% of best) from a small structural edit, so per the recent-progress rule the lever was wrong and a different lever should be tried this round. #3 and #5 were the only un-actioned comments; both pair the LR drop with a 400-round raise, but the epoch-cap rule permits the LR drop while capping the rounds at 50. With LR=0.1 and only 5 rounds, the model is still on the steep part of the AUPRC curve — each round's nan-step is too coarse to fine-tune leaf weights on the rare-positive class. LR=0.03 with 50 rounds gives 10x finer steps and 10x more boosting iterations within the cap, letting scale_pos_weight (round 6) and depth-6 interactions (round 7) actually exploit EXT_SOURCE_* signal instead of being cut off after 5 coarse steps. Smaller LR + more rounds reaches a higher AUPRC optimum than 0.1/5, and early_stopping_rounds=40 (round 8) ensures the trajectory stops at its peak rather than overshooting.

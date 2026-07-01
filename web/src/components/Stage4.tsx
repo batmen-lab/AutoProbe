@@ -317,7 +317,7 @@ export function Stage4({
           {!passed && trd != null && (
             <span
               className="text-[12px] text-ink-500 font-mono"
-              title="Signed improvement between the latest tail_mean and the tail_mean 3 rounds ago, relative to direction. Positive = improving."
+              title="Signed improvement between the latest last-epoch value and the last-epoch value 3 rounds ago, relative to direction. Positive = improving."
             >
               TRD: {trd.toFixed(4)}
             </span>
@@ -779,8 +779,8 @@ export function Stage4({
 }
 
 // ── TRD computation ─────────────────────────────────────────────────────────
-// TRD = signed delta between the latest tail_mean and the tail_mean 3 rounds
-// ago, oriented so positive always means "moving toward better". TRD is only
+// TRD = signed delta between the latest last-epoch value and the last-epoch
+// value 3 rounds ago, oriented so positive always means "moving toward better". TRD is only
 // meaningful once we have at least 3 actual fix-attempt rounds — row 1 is
 // the stage-3 integration baseline (not a fix attempt), so the minimum row
 // count for a valid TRD is 4 (baseline + 3 fix attempts).
@@ -790,7 +790,7 @@ function computeTrd(rows: IterationRow[]): number | null {
   if (rows.length < MIN_ROWS_FOR_TRD) return null;
   const last = rows[rows.length - 1];
   const tm = (r: IterationRow): number | null =>
-    r.tail_mean != null ? r.tail_mean : r.metric_value;
+    r.last_epoch != null ? r.last_epoch : (r.tail_mean ?? r.metric_value);
   const latest = tm(last);
   if (latest == null) return null;
   const ref = rows[rows.length - MIN_ROWS_FOR_TRD];
@@ -806,7 +806,7 @@ function isImproving(rows: IterationRow[]): boolean {
   const trd = computeTrd(rows);
   if (trd == null) return false;
   const last = rows[rows.length - 1];
-  const ref = last.tail_mean ?? last.metric_value ?? 1;
+  const ref = last.last_epoch ?? last.tail_mean ?? last.metric_value ?? 1;
   const noise = Math.max(0.01 * Math.abs(ref), 1e-6);
   return trd > noise;
 }

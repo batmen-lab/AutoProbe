@@ -1,0 +1,5 @@
+Iteration 2 — potential_improvement_2
+
+Change: Raised N_ESTIMATORS from 5 to 300 to cut ensemble variance. 5 trees produces unstable probability estimates that dominate the residual AUPRC gap now that EXT_SOURCE_* are in the feature matrix.
+
+Why: After iteration 1 lifted AUPRC from 0.1097 to 0.1586 by including EXT_SOURCE_*, the next biggest degenerate knob is the tiny forest. Comment 2 names 300 directly and it's a fully-applied categorical/structural fix, not a 2x-5x refinement step. Expect a visible positive delta this round.

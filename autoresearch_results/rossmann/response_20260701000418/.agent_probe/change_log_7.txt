@@ -1,0 +1,59 @@
+Iteration 7 change log
+======================
+
+Comment actioned: potential_improvement_3 (raise NUM_LEAVES further toward 63-127)
+
+Change made:
+- Raised NUM_LEAVES from 8 to 31 (a ~4x step on the current value,
+  inside Regime B's 2x-5x recommended range; comment's full target is
+  63-127, so 31 is still the conservative end of that range).
+- Updated the trailing note on the comment line to document the
+  incremental step (8→31 this round, 2→8 last time).
+- No change to N_ESTIMATORS (still 5), LEARNING_RATE, FEATURES,
+  VALID_QUANTILE, Sales_log target, the _rmspe_lgb eval metric,
+  the record()/conclude() call sites, or any other comment's
+  referenced code.
+
+Why this is expected to move the metric in the better direction:
+Round 6 (regularization: min_data_in_leaf=200, feature_fraction=0.8,
+bagging_fraction=0.8, bagging_freq=1) was reverted by the orchestrator
+— tail_mean went 0.4484 -> 0.4504, a regression — so the current
+train.py matches round 5's state. Round 5 itself was flat vs round 4
+(tail_mean -0.0001) after a structural feature-engineering edit.
+
+Per the recent-progress check: the last two rounds produced
+negligible/negative deltas. Round 6's structural regularization edit
+failed outright, so per the "prior delta negligible AND prior edit
+was structural -> switch levers" rule, regularization is wrong, not
+the magnitude. Round 2's successful 2->8 NUM_LEAVES bump produced
+clearly-positive deltas (tail_mean 0.5172 -> 0.5092, ~1.5% drop), so
+the NUM_LEAVES lever is validated. With N_ESTIMATORS still capped at
+5 (epoch cap respected) and the model still under-fit, the single
+most plausible lever to break the plateau is more tree capacity:
+8-leaf trees can only begin fitting Store×Promo×DoW structure, but
+31-leaf trees can represent genuine 2- and 3-way interactions among
+the 15 FEATURES now in play (Store × Promo × DayOfWeek × month). With
+only 5 boosting rounds the model still cannot overshoot — each round
+contributes one small step, so the larger tree simply gives each step
+more partition granularity rather than increasing the step count.
+31 is chosen over the comment's 63-127 because: (a) the prior NUM_LEAVES
+edit at 2->8 already produced a clearly-positive delta, so we are in
+"stay incremental" territory and should not jump straight to 127;
+(b) 31 is the LightGBM canonical default for a reason — it sits at the
+knee where additional leaves yield diminishing returns on typical
+tabular regressions; (c) the orchestrator reverts if 31 overshoots
+or does nothing, so the downside is bounded.
+
+Step magnitude rationale (per recent-progress check):
+- Round 5 -> round 6 delta: negligible/regression (-0.0001 tail_mean
+  at round 5, then +0.0020 regression at round 6 that was reverted).
+- Prior edit (round 6) was structural (added four regularization
+  hyperparameters) and failed -> switch levers, do not double down on
+  regularization.
+- The NUM_LEAVES lever has prior validated success (round 2: 2->8,
+  clearly-positive delta) and is structurally unrelated to the failed
+  regularization edit.
+- 8 -> 31 is a ~4x step, inside Regime B's 2x-5x range, below the
+  comment's 63-127 upper target. This is the smallest edit on the
+  validated NUM_LEAVES lever that plausibly produces a meaningful
+  delta without the overshoot risk of jumping to 63 or 127.

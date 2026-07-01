@@ -1,0 +1,23 @@
+Round 4 change log
+===================
+
+Item: potential_improvement_4
+
+Change: Lowered LEARNING_RATE from 0.1 to 0.05 (the comment's named
+target, 0.03–0.05 optimal range; halved from 0.1). N_ESTIMATORS=5,
+MAX_DEPTH=6, MAX_FEATURE_COLUMNS=30, scale_pos_weight unset, and all
+other parameters left untouched.
+
+Why: Round 3 applied MAX_FEATURE_COLUMNS 8→30 and produced a large
+positive delta (tail_mean 0.1502→0.4286, +185%). Per the
+recent-progress rules, this is Regime B refinement with a clearly
+positive prior delta — stay incremental and prefer the smaller end of
+Regime B's range. Halving learning_rate (a 2x step, smallest end of
+2x–5x) is the natural next layer: the comment names 0.1 as too high
+on this dataset and pairs 0.05 with more estimators to reduce
+overfit to the majority class and lift per-round val_auprc. With
+N_ESTIMATORS still capped at 5 (epoch budget prevents raising it),
+the lower learning_rate is the traceable next increment — modest
+enough that the orchestrator can attribute any delta to this single
+lever. #2 skipped (n_estimators raise blocked by epoch cap), #8
+skipped (already reverted in round 1).

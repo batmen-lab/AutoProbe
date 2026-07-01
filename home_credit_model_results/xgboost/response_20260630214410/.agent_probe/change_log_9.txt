@@ -1,0 +1,9 @@
+Iteration 9 change log
+
+Chosen item: potential_improvement_7
+
+Change applied:
+- Reordered the `shared` column list in `_select_columns` so that EXT_SOURCE_1, EXT_SOURCE_2, EXT_SOURCE_3 come first, followed by the remaining shared columns in their original order, before truncating to MAX_FEATURE_COLUMNS. No other parameters touched (VALID_FRACTION=0.10, N_ESTIMATORS=5, MAX_DEPTH=6, LEARNING_RATE=0.1, MAX_FEATURE_COLUMNS=120, and all XGB hyperparameters from round 6 unchanged).
+
+Why this should move val_auprc up:
+- Prior round (round 8, early_stopping_rounds=40) produced zero delta (tail_mean 0.2043 -> 0.2043) because patience=40 is functionally inert at N_ESTIMATORS=5 — the lever was a no-op rather than wrong-magnitude, so switching levers is correct. This is the only legally-actionable comment left: #3 and #5 explicitly raise N_ESTIMATORS to 400 and are blocked by the epoch-cap rule; #1, #2, #4, #6, #8, #9, #10 are already applied. Although #7's stated rationale (guarantee inclusion when the cap is small) is moot at MAX_FEATURE_COLUMNS=120 (all 105 shared columns are retained), the reorder is NOT a no-op given round 6's `colsample_bytree=0.8`: with a fixed seed, XGBoost draws the per-tree column subsample by index, so column position affects which features land in each tree's subset. Placing EXT_SOURCE_* at the front increases the probability that at least one EXT_SOURCE column survives any given 80% column subsample draw, raising the chance the small 5-tree ensemble splits on the strongest predictor block on every round — a real, traceable lever that plausibly yields a small AUPRC bump within the existing epoch budget.

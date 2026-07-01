@@ -5,7 +5,8 @@ Important: this is a PERFORMANCE-MONITORING probe. There is NO threshold, NO tar
 
 Your task:
 1. Read the project (especially `train.py`) to understand what the model is trying to do.
-2. Pick ONE common, standard performance metric that reflects how well training is going on this task. A second complementary metric is acceptable only if it adds clear value, but one is preferred. Use widely-accepted choices for the task type — for example: validation loss for general supervised training, RMSE / MAE for regression and forecasting, ROC-AUC / accuracy / F1 for classification, mAP for detection, perplexity for language modelling. Do not invent novel metrics.
+2. Pick ONE common, standard performance metric that reflects how well training is going on this task. A second complementary metric is acceptable only if it adds clear value, but one is preferred. Use widely-accepted choices for the task type — for example: validation loss for general supervised training, RMSE / MAE for regression and forecasting, mAP for detection, perplexity for language modelling. Do not invent novel metrics.
+   METRIC RULE — AUPRC FIRST (mandatory when applicable): if AUPRC (area under the precision-recall curve, a.k.a. average precision) CAN be used for this task, you MUST use AUPRC as the tracked metric. AUPRC applies whenever the task is classification with a well-defined positive class and the model produces per-example scores/probabilities — this includes binary classification and, via one-vs-rest / per-class averaging, multi-label and multi-class classification. In those cases choose AUPRC over ROC-AUC, accuracy, or F1 (it is far more informative under class imbalance, which is common). ONLY if AUPRC genuinely does not apply to this task (e.g. regression, forecasting, ranking/retrieval scored by a different measure, or any task with no meaningful positive class / probabilistic score) do you fall back and decide the most appropriate standard metric yourself.
 3. Implement `prober.py` and integrate it into `train.py` exactly as specified below.
 
 Step 1 — Read the codebase
@@ -15,7 +16,7 @@ Read `train.py` carefully. Understand:
 - What variables, objects, or hooks are accessible at each stage
 
 Step 2 — Decide the metric and its direction
-Based on standard practice for the identified task type, choose the metric and note its direction — "higher_is_better" (e.g. ROC-AUC, accuracy, F1, mAP) or "lower_is_better" (e.g. validation loss, RMSE, MAE, perplexity). Do NOT pick a threshold; do NOT decide a target. The probe just monitors the metric.
+Apply the AUPRC-FIRST rule above: for any classification task where AUPRC is applicable, the tracked metric is AUPRC (higher_is_better). Otherwise choose the metric per standard practice for the identified task type. Note its direction — "higher_is_better" (e.g. AUPRC, ROC-AUC, accuracy, F1, mAP) or "lower_is_better" (e.g. validation loss, RMSE, MAE, perplexity). Do NOT pick a threshold; do NOT decide a target. The probe just monitors the metric.
 
 Step 3 — Implement `prober.py`
 Write a self-contained `prober.py` that exposes two entry points:

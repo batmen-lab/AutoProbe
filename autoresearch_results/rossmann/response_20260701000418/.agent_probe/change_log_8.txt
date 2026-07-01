@@ -1,0 +1,46 @@
+Iteration 8 change log
+======================
+
+Comment actioned: potential_improvement_3 (raise NUM_LEAVES further toward 63-127)
+
+Change made:
+- Raised NUM_LEAVES from 31 to 63 (a 2x step on the current value,
+  inside Regime B's 2x-5x recommended range; 63 is the lower end of
+  the comment's 63-127 target).
+- Updated the trailing note on the comment line to document the
+  incremental step (31→63 this round).
+- No change to N_ESTIMATORS (still 5), LEARNING_RATE, FEATURES,
+  VALID_QUANTILE, Sales_log target, the _rmspe_lgb eval metric,
+  the record()/conclude() call sites, regularization params (none
+  present — round 6's were reverted), or any other comment's
+  referenced code.
+
+Why this is expected to move the metric in the better direction:
+Round 7 (NUM_LEAVES 8 -> 31) produced a clearly-positive delta:
+tail_mean dropped 0.4484 -> 0.4311 (~3.6% drop, well beyond noise).
+Per the recent-progress check, "prior delta is clearly positive"
+-> stay incremental; prefer the smaller end of Regime B's 2x-5x
+range. 31 -> 63 is exactly a 2x step, the smallest move on the
+validated NUM_LEAVES lever that plausibly produces another
+meaningful delta without overshoot risk.
+
+The NUM_LEAVES lever has now been validated twice (round 2: 2->8,
+round 7: 8->31, both clearly positive), and 63 is the lower end of
+the comment's named 63-127 target — so this is simultaneously
+"stay incremental" and "move fully into the comment's named range".
+With N_ESTIMATORS still capped at 5 (epoch cap respected) and the
+model still under-fit, more tree capacity remains the most
+plausible lever: 63-leaf trees can represent genuine 3-way
+interactions among Store x Promo x DayOfWeek x month, which 31-leaf
+trees can only begin fitting. The orchestrator reverts if 63
+overshoots or does nothing, so downside is bounded.
+
+Step magnitude rationale (per recent-progress check):
+- Round 6 -> round 7 delta: clearly positive (tail_mean 0.4484 ->
+  0.4311, ~3.6% drop).
+- Prior edit (round 7) was a small numeric bump on a validated
+  lever (NUM_LEAVES 8 -> 31).
+- "Clearly positive delta" rule says: stay incremental, prefer
+  smaller end of 2x-5x range. 31 -> 63 is exactly 2x, the smallest
+  step within the regime that crosses into the comment's named
+  63-127 target range.

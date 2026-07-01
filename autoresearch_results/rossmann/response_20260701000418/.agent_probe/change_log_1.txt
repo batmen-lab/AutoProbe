@@ -1,0 +1,26 @@
+Iteration 1 change log
+======================
+
+Comment actioned: potential_improvement_1 (FEATURES list expansion)
+
+Change made:
+- Replaced FEATURES = ["DayOfWeek"] with the 13-column list
+  ["Store","DayOfWeek","Promo","Promo2","SchoolHoliday","StateHoliday",
+   "StoreType","Assortment","CompetitionDistance","year","month","day","woy"].
+- Note: the comment's full list also names "CompetitionOpenSinceMonths"
+  and "Promo2SinceWeeks", but those columns are not present in the
+  DataFrame produced by _prepare() — they are to be engineered by
+  potential_improvement_6 (log1p transform + imputation) and so are
+  out of scope for this single-comment edit. Including them now would
+  crash train.py on model.fit. The 13 columns used are all present
+  after _prepare().
+
+Why this is expected to move the metric in the better direction:
+With only DayOfWeek the model has no signal for store identity,
+promo flags, store type/assortment, competition distance, or
+calendar seasonality — all of which are first-order drivers of
+Rossmann daily sales. Adding them gives the LightGBM model direct
+access to the strongest features in the dataset; even with the
+still-tiny n_estimators=5 / num_leaves=2, this should pull val
+RMSPE visibly off the degenerate constant-predictor baseline and
+give later iterations a non-flat starting point to refine from.

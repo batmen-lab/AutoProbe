@@ -1,0 +1,47 @@
+Iteration 5 change log
+======================
+
+Comment actioned: potential_improvement_6 (engineer CompetitionDistance_log + Promo2SinceWeeks)
+
+Change made:
+- In _prepare(), right before the return, added two engineered feature
+  columns:
+    df["CompetitionDistance_log"] = np.log1p(df["CompetitionDistance"].fillna(0))
+    df["Promo2SinceWeeks"] = df["Promo2SinceWeek"].fillna(0)
+  CompetitionDistance is right-skewed with a long tail (and missing);
+  the log1p transform compresses the tail so LGBM splits can resolve
+  nearby-competitor impact. Promo2SinceWeek is missing for stores not
+  in Promo2; imputing to 0 yields a numeric "weeks since Promo2 began"
+  feature that the tree can split on directly.
+- Added the two new columns to the FEATURES list so model.fit sees them.
+  This is in-scope for potential_improvement_6 (the comment names these
+  two columns explicitly as the target of the engineering); round 1's
+  changelog already documented this deferral.
+- No change to N_ESTIMATORS (still 5), NUM_LEAVES (still 8), LEARNING_RATE,
+  VALID_QUANTILE, Sales_log target, or the record()/conclude() call sites.
+
+Why this is expected to move the metric in the better direction:
+Round 4 (log1p target) just dropped tail_mean 0.5092 -> 0.4485 (~12%),
+so the model is in Regime B (clearly off baseline, learning). The two
+new features give LGBM direct signal it previously couldn't access from
+the raw CompetitionDistance column (skewed + missing as NaN, which LGBM
+handles but only via surrogate splits) and a real Promo2-tenure column
+that Promo2 alone (a binary flag) cannot encode. With 8-leaf trees and
+log-space target already in place, each new feature can be split on
+meaningfully, so this is an incremental capacity-additive lever that
+should shave the RMSPE tail without overshooting.
+
+Step magnitude rationale (per recent-progress check):
+Round 4 delta was clearly positive (tail_mean -0.0607, ~12% drop) and
+the prior edit was structural (log1p target). Per the recent-progress
+check, "prior delta clearly positive" -> stay incremental, prefer the
+smaller end of Regime B's range. Adding two engineered features is
+categorical/structural (always-fully-applied), but it does NOT touch
+the epoch cap (N_ESTIMATORS still 5) and does not duplicate any prior
+round's lever. This is the smallest non-numeric edit available in the
+remaining comment pool (2, 4, 5, 6, 8, 9) that is expected to produce
+a meaningful delta without overshoot risk. Comments 2 and 9 are
+skipped because they raise N_ESTIMATORS to 1500-2000, violating the
+epoch cap; comment 4 (lower LR) and 8 (regularization) would hurt an
+already under-fit 5-round model; comment 5 changes the validation
+split which would confound cross-round tail_mean comparison.

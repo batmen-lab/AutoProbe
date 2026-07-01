@@ -1,0 +1,5 @@
+Iteration 3 — potential_improvement_3
+
+Change: Raised MAX_DEPTH from 2 to 12 so RandomForest trees can model multiplicative interactions among EXT_SOURCE_1/2/3 and AMT_CREDIT-style features. Depth-2 stumps cannot capture the interaction effects that drive default risk.
+
+Why: After iterations 1 (feature cap) and 2 (n_estimators=300) lifted AUPRC from 0.1097 to 0.1791, the metric is clearly off baseline and climbing. Per the recent-progress check (positive prior delta, structural prior edit), stay incremental — depth 2 is the next degenerate knob and 12 is the comment's named target, a moderate step rather than an extreme one. Expect a modest positive delta this round.

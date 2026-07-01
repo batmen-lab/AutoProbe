@@ -1,0 +1,5 @@
+Iteration 10 — potential_improvement_10
+
+Change: Replaced RandomForestClassifier with GradientBoostingClassifier(loss="deviance", n_estimators=300, max_depth=3, learning_rate=0.05, min_samples_leaf=20, random_state=SEED), per the comment's first named option. The bagged RF is swapped out entirely for boosted trees; min_samples_leaf=20 is carried over from the prior RF config to keep the minority-class overfit dampener.
+
+Why: AUPRC has been pinned at 0.2215–0.222 for five consecutive rounds (iters 5–9). Iter 8 (one-hot encode) and iter 9 (sentinel fill) were both structural and both produced negligible deltas — per the recent-progress check, the RF lever is wrong, not the magnitude. The bagged-ensemble ceiling on this dataset is well-known to come from RF's inability to fit AMT_CREDIT × EXT_SOURCE_3-style interactions tightly; boosted trees stage-fit residuals and do so directly. Comment 10 is the only remaining untried structural lever and explicitly targets this gap. n_estimators=300 with learning_rate=0.05 and max_depth=3 is the comment's named spec, fully applied in one move. Expect a visible positive delta this round.

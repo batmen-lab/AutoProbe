@@ -495,12 +495,70 @@ def _epoch_stats(probe_result: dict) -> tuple[float | None, float | None, float 
     return (_round4(raw[-1]), _round4(max(raw)), _round4(sum(raw) / len(raw)))
 
 
+def _render_group_count_barchart(per_group_json: Path, out_path: Path) -> None:
+    """Draw a per-ethnicity ABSOLUTE-COUNT stacked bar chart (numbers, not
+    percentages) from a user_analyze per_group.json: each group's bar height is
+    its validation-sample count, split TP/FN/FP/TN. Also cross-checks the
+    ground-truth `n_positive` (read directly from the dataset labels in
+    user_analyze) against TP+FN — if they disagree the confusion computation is
+    wrong, and the group's label is flagged so the audit is self-verifying."""
+    if not per_group_json.exists():
+        return
+    try:
+        data = json.loads(per_group_json.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    if not isinstance(data, dict) or not data:
+        return
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError:
+        return
+
+    groups = list(data.keys())
+    x = np.arange(len(groups))
+    segs = [("TP", "#2ca02c"), ("FN", "#d62728"), ("FP", "#ff7f0e"), ("TN", "#c7c7c7")]
+    bottom = np.zeros(len(groups))
+    labels = []
+    for g in groups:
+        v = data[g]
+        tp, fn = int(v.get("TP", 0) or 0), int(v.get("FN", 0) or 0)
+        n_pos = v.get("n_positive")
+        # Ground-truth n_positive (from dataset) MUST equal TP+FN. Flag if not.
+        ok = (n_pos is None) or (int(n_pos) == tp + fn)
+        labels.append(g if ok else f"{g}\n(!n_pos {n_pos}!=TP+FN {tp + fn})")
+
+    fig, ax = plt.subplots(figsize=(8.5, 5))
+    for seg, col in segs:
+        vals = np.array([float(data[g].get(seg, 0) or 0) for g in groups])
+        ax.bar(x, vals, bottom=bottom, label=seg, color=col)
+        bottom += vals
+    for i, g in enumerate(groups):
+        ax.text(i, bottom[i], f"n={int(data[g].get('n', bottom[i]))}\n"
+                              f"deaths={int(data[g].get('n_positive', 0) or 0)}",
+                ha="center", va="bottom", fontsize=7)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel("count (validation samples)")
+    ax.legend(ncol=4, fontsize=8)
+    ax.set_title("Per-ethnicity prediction outcomes (absolute counts)")
+    ax.margins(y=0.12)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+
+
 def _archive_user_analysis(workspace: Path, round_idx: int) -> None:
     """Snapshot the human-owned `user_analyze()` output for this round so each
-    iteration is traceable. Copies the flat files in
-    `.agent_probe/.user_analysis/` into `.agent_probe/.user_analysis/round_<N>/`
-    (only files, so existing round_* subdirs are never re-copied; overwrites on
-    a same-round retry so the canonical run wins)."""
+    iteration is traceable. user_analyze() (protected) writes flat "latest"
+    files to `.agent_probe/.user_analysis/`; we MOVE them into
+    `.agent_probe/.user_analysis/round_<N>/` so nothing is left outside a round
+    directory (only files are moved, so existing round_* subdirs are untouched;
+    a same-round retry overwrites so the canonical run wins). We also render an
+    extra absolute-count bar chart for the round from its per_group.json."""
     src = workspace / ".agent_probe" / ".user_analysis"
     if not src.is_dir():
         return
@@ -509,7 +567,10 @@ def _archive_user_analysis(workspace: Path, round_idx: int) -> None:
         dst.mkdir(parents=True, exist_ok=True)
         for p in src.iterdir():
             if p.is_file() and p.suffix.lower() in (".json", ".png", ".pdf", ".csv", ".svg"):
-                shutil.copy2(p, dst / p.name)
+                target = dst / p.name
+                target.unlink(missing_ok=True)
+                shutil.move(str(p), str(target))  # MOVE: only round_<N>/ keeps a copy
+        _render_group_count_barchart(dst / "per_group.json", dst / "per_group_outcomes_counts.png")
     except OSError:
         pass
 

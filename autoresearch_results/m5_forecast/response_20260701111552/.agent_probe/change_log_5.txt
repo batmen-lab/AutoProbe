@@ -1,0 +1,7 @@
+Round 5 change log.
+
+- Chosen item: potential_improvement_5 (lower LEARNING_RATE from 0.1 to 0.05).
+- Change: set LEARNING_RATE = 0.05 (from 0.1), landing at the upper end of the comment's 0.03-0.05 range. N_ESTIMATORS (200), NUM_LEAVES (31), MAX_FEATURES (9), TRAIN_DAYS (120), and early-stopping (stopping_rounds=30) are untouched.
+- Why this is expected to move the metric in the better direction: round-4 trajectory bottomed at min=2.0302 then drifted upward to final=2.0327 with early stopping firing at round 77 — the overfit tail from round 3 is now truncated, but the per-round descent is still driven by LR=0.1 steps, which overshoot the optimal residual corrections on this zero-inflated target. Halving LR to 0.05 with 200 max rounds (and the same 30-round early-stop patience) gives finer-grained residual corrections and typically reaches a lower best-epoch RMSE before the overfit tail sets in. Round-4 delta was small and positive (+0.7%), so staying incremental (2x step on LR, midpoint of the comment's range) per the smooth-progress guidance. No epoch cap change, no other code touched.
+
+Integration integrity verified: record(epoch, rmse) and conclude() call sites are present and unmodified; record still receives (int, float) from the existing history loop (history = list(model.evals_result_["valid_0"]["rmse"])); conclude() still takes no arguments.

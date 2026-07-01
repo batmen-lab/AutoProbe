@@ -1,0 +1,42 @@
+{
+  "metric_name": "val_auprc",
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.3725
+    },
+    {
+      "epoch": 1,
+      "value": 0.3712
+    },
+    {
+      "epoch": 2,
+      "value": 0.3748
+    },
+    {
+      "epoch": 3,
+      "value": 0.3993
+    },
+    {
+      "epoch": 4,
+      "value": 0.4071
+    },
+    {
+      "epoch": 5,
+      "value": 0.4011
+    }
+  ],
+  "min": 0.3712,
+  "max": 0.4071,
+  "mean": 0.3877,
+  "std": 0.0151,
+  "first_value": 0.3725,
+  "final_value": 0.4011,
+  "delta": 0.0287,
+  "tail_mean": 0.3907,
+  "conclusion": "Validation AUPRC moved from 0.3725 to 0.4011 across 6 recorded step(s).",
+  "previous_best_last_epoch": 0.4663,
+  "previous_best_max": 0.4682,
+  "previous_best_mean": 0.4465
+}

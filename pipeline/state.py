@@ -79,15 +79,17 @@ class IterationRecord:
     # for backward-compat with older runs. New fields below carry the rest.
     threshold: str | None = None
     acceptable_threshold: str | None = None
-    # tail_mean is the mean of the last 5 recorded epoch values — the stable
-    # end-of-training number we use for PASS/FAIL and TRD computation.
-    tail_mean: float | None = None
+    # last_epoch is the final recorded epoch's metric value — the actual
+    # end-of-training number (the model you'd deploy). It drives PASS/FAIL,
+    # keep/revert, best-tracking and TRD. Replaces the old `tail_mean`
+    # (mean of last 5 epochs), which understated still-rising short runs.
+    last_epoch: float | None = None
     # Direction of improvement for this iteration's metric. Needed at the
     # iteration-record level so TRD/AT logic on the frontend doesn't have to
     # re-read the JSON file.
     direction: str | None = None
     status: str | None = None  # "PASS"/"FAIL"
-    # True iff tail_mean satisfies the acceptable_threshold condition.
+    # True iff last_epoch satisfies the acceptable_threshold condition.
     acceptable_met: bool | None = None
     note: str | None = None
     # When this iteration came from the fix-plan flow, the 1-based index of
@@ -132,6 +134,12 @@ class StageRecord:
     auto_research_runs_completed: int = 0
     auto_research_best_value: float | None = None
     auto_research_best_direction: str | None = None
+    # Full characterisation of the running-best iteration (the one we compare
+    # against). best_value is its last_epoch (the decision driver); _max / _mean
+    # are that same iteration's max-over-epochs and mean, surfaced into each
+    # round's metric artifact as previous_best_{last_epoch,max,mean}.
+    auto_research_best_max: float | None = None
+    auto_research_best_mean: float | None = None
     # Fix-plan flow (stage 4). When the user clicks "Continue fixing" after a
     # FAIL round, an agent produces 3 candidate fix plans tied to the NEXT
     # iteration index (== highest probe_result index + 1). We track:
@@ -266,30 +274,13 @@ class RunState:
         reason: str,             # "improved" | "no improvement" | "no metric" | etc.
         **extra: Any,
     ) -> None:
-        """Append a single stage-4 round outcome to
-        <run_dir>/version_control.json. Only kept/reverted decisions made
-        during stage-4 iterations are recorded here — init, baseline
-        commits, and sidebar reverts are not. Existing file is preserved.
+        """DEPRECATED / no-op. version_control.json was a write-only audit log
+        redundant with stage.json's iteration records (status + note) and the
+        per-round metric artifact (which now carries previous_best/previous_mean).
+        Nothing reads it (not the frontend, not revert_to/resume), so we no longer
+        write it. Kept as a no-op so existing call sites stay harmless.
         """
-        path = self.run_dir / VERSION_LOG_FILE
-        if path.exists():
-            try:
-                doc = _read_json(path)
-                if not isinstance(doc, dict) or "events" not in doc:
-                    doc = {"events": []}
-            except Exception:
-                doc = {"events": []}
-        else:
-            doc = {"run_id": self._record.run_id, "events": []}
-        entry = {
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-            "round": round_idx,
-            "outcome": outcome,
-            "reason": reason,
-            **{k: v for k, v in extra.items() if v is not None},
-        }
-        doc["events"].append(entry)
-        path.write_text(json.dumps(doc, indent=2))
+        return
 
     # ── backward navigation ──────────────────────────────────────────────────
     def revert_to(self, target_stage: Stage | int, keep_workspace: bool = False) -> dict:
@@ -362,6 +353,8 @@ class RunState:
             self._record.auto_research_runs_completed = 0
             self._record.auto_research_best_value = None
             self._record.auto_research_best_direction = None
+            self._record.auto_research_best_max = None
+            self._record.auto_research_best_mean = None
             self._record.fix_plan_round = None
             self._record.fix_plan_index = None
             self._record.stage = 1
@@ -476,6 +469,8 @@ class RunState:
             self._record.auto_research_runs_completed = 0
             self._record.auto_research_best_value = None
             self._record.auto_research_best_direction = None
+            self._record.auto_research_best_max = None
+            self._record.auto_research_best_mean = None
         self._record.current_action = None
         self.save()
         return {"deleted": deleted, "stage": target, "phase": self._record.phase}

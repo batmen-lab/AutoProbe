@@ -1,0 +1,9 @@
+Iteration 3 change log
+
+Chosen item: potential_improvement_8
+
+Change applied:
+- Replaced the chronological row-order split in train.py with sklearn.model_selection.train_test_split(..., test_size=VALID_FRACTION, stratify=y, random_state=SEED). The validation set is now drawn via stratified sampling on TARGET instead of an unstratified tail slice. Left VALID_FRACTION, N_ESTIMATORS, MAX_DEPTH, LEARNING_RATE, and MAX_FEATURE_COLUMNS untouched.
+
+Why this should move val_auprc up:
+- Prior round (MAX_DEPTH 2 -> 5) produced a clearly positive delta (tail_mean 0.1643 -> 0.1886), so the model is in Regime B and an incremental, fully-applied discrete change is appropriate. Home Credit TARGET has ~8% positives and application_train is not time-ordered by row index, so an unstratified tail slice yields a noisy validation positive rate that depresses and destabilizes val_auprc; stratifying keeps validation prevalence at ~8% and aligned with training prevalence, which is what the probe measures. As a discrete change the comment names a specific target pattern (stratify=y), so it is applied in full rather than partially.

@@ -1,0 +1,218 @@
+{
+  "metric_name": "val_auprc",
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.1641
+    },
+    {
+      "epoch": 2,
+      "value": 0.1756
+    },
+    {
+      "epoch": 3,
+      "value": 0.2003
+    },
+    {
+      "epoch": 4,
+      "value": 0.2097
+    },
+    {
+      "epoch": 5,
+      "value": 0.2129
+    },
+    {
+      "epoch": 6,
+      "value": 0.2134
+    },
+    {
+      "epoch": 7,
+      "value": 0.2132
+    },
+    {
+      "epoch": 8,
+      "value": 0.2155
+    },
+    {
+      "epoch": 9,
+      "value": 0.2165
+    },
+    {
+      "epoch": 10,
+      "value": 0.2171
+    },
+    {
+      "epoch": 11,
+      "value": 0.2175
+    },
+    {
+      "epoch": 12,
+      "value": 0.217
+    },
+    {
+      "epoch": 13,
+      "value": 0.217
+    },
+    {
+      "epoch": 14,
+      "value": 0.2167
+    },
+    {
+      "epoch": 15,
+      "value": 0.2179
+    },
+    {
+      "epoch": 16,
+      "value": 0.2184
+    },
+    {
+      "epoch": 17,
+      "value": 0.2182
+    },
+    {
+      "epoch": 18,
+      "value": 0.218
+    },
+    {
+      "epoch": 19,
+      "value": 0.2181
+    },
+    {
+      "epoch": 20,
+      "value": 0.2178
+    },
+    {
+      "epoch": 21,
+      "value": 0.2179
+    },
+    {
+      "epoch": 22,
+      "value": 0.2179
+    },
+    {
+      "epoch": 23,
+      "value": 0.2184
+    },
+    {
+      "epoch": 24,
+      "value": 0.2183
+    },
+    {
+      "epoch": 25,
+      "value": 0.2184
+    },
+    {
+      "epoch": 26,
+      "value": 0.2185
+    },
+    {
+      "epoch": 27,
+      "value": 0.2186
+    },
+    {
+      "epoch": 28,
+      "value": 0.2187
+    },
+    {
+      "epoch": 29,
+      "value": 0.2192
+    },
+    {
+      "epoch": 30,
+      "value": 0.2191
+    },
+    {
+      "epoch": 31,
+      "value": 0.219
+    },
+    {
+      "epoch": 32,
+      "value": 0.2189
+    },
+    {
+      "epoch": 33,
+      "value": 0.2193
+    },
+    {
+      "epoch": 34,
+      "value": 0.219
+    },
+    {
+      "epoch": 35,
+      "value": 0.2189
+    },
+    {
+      "epoch": 36,
+      "value": 0.2192
+    },
+    {
+      "epoch": 37,
+      "value": 0.219
+    },
+    {
+      "epoch": 38,
+      "value": 0.2191
+    },
+    {
+      "epoch": 39,
+      "value": 0.2199
+    },
+    {
+      "epoch": 40,
+      "value": 0.22
+    },
+    {
+      "epoch": 41,
+      "value": 0.2199
+    },
+    {
+      "epoch": 42,
+      "value": 0.2201
+    },
+    {
+      "epoch": 43,
+      "value": 0.2203
+    },
+    {
+      "epoch": 44,
+      "value": 0.2205
+    },
+    {
+      "epoch": 45,
+      "value": 0.2206
+    },
+    {
+      "epoch": 46,
+      "value": 0.2207
+    },
+    {
+      "epoch": 47,
+      "value": 0.2207
+    },
+    {
+      "epoch": 48,
+      "value": 0.2207
+    },
+    {
+      "epoch": 49,
+      "value": 0.2212
+    },
+    {
+      "epoch": 50,
+      "value": 0.2213
+    }
+  ],
+  "min": 0.1641,
+  "max": 0.2213,
+  "mean": 0.216,
+  "std": 0.01,
+  "first_value": 0.1641,
+  "final_value": 0.2213,
+  "delta": 0.0572,
+  "tail_mean": 0.2209,
+  "conclusion": "Validation AUPRC moved from 0.1641 to 0.2213 across 50 boosting rounds (min=0.1641, max=0.2213, mean=0.2160).",
+  "previous_best_last_epoch": 0.2161,
+  "previous_best_max": 0.2161,
+  "previous_best_mean": 0.1956
+}

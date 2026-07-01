@@ -1,0 +1,5 @@
+Iteration 6 — potential_improvement_6
+
+Change: Set max_features="sqrt" on the RandomForestClassifier so each tree only considers sqrt(n_features) candidate features per split, decorrelating trees from the dominant EXT_SOURCE_* block.
+
+Why: Prior round (stratified split) lifted tail_mean 0.2036 -> 0.2215, a clearly positive delta, so per the recent-progress check stay incremental. max_features="sqrt" is a categorical toggle fully applied in one move (Regime B, smallest meaningful edit). With 120 numeric features dominated by EXT_SOURCE_1/2/3, the default "auto"=all features makes every tree split on the same dominant columns, capping ensemble diversity and AUPRC. "sqrt" forces per-split feature subsampling so minority columns get a chance to contribute, lifting AUPRC without overshooting.

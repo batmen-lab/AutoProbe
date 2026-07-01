@@ -1,0 +1,22 @@
+{
+  "metric_name": "auprc",
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.222
+    }
+  ],
+  "min": 0.222,
+  "max": 0.222,
+  "mean": 0.222,
+  "std": 0.0,
+  "first_value": 0.222,
+  "final_value": 0.222,
+  "delta": 0.0,
+  "tail_mean": 0.222,
+  "conclusion": "Validation AUPRC was 0.2220 at the single recorded step.",
+  "previous_best_last_epoch": 0.2215,
+  "previous_best_max": 0.2215,
+  "previous_best_mean": 0.2215
+}

@@ -1,0 +1,38 @@
+Iteration 4 change log
+======================
+
+Comment actioned: potential_improvement_7 (train on log1p(Sales), predict via expm1)
+
+Change made:
+- In _prepare(): added df["Sales_log"] = np.log1p(df["Sales"]) right after
+  the open-store filter (line 62).
+- In main(): y_tr now points at tr["Sales_log"] instead of tr["Sales"];
+  y_va is still raw Sales (RMSPE is computed in original units).
+- The _rmspe_lgb eval metric now applies np.expm1 to the model's log-space
+  predictions before clipping to 1.0, so val RMSPE is evaluated on the
+  original scale.
+- The final pred = np.expm1(model.predict(va[FEATURES])) converts back to
+  raw Sales units before _rmspe. (Round 3's np.clip to tr["Sales"].max()
+  was reverted by the orchestrator, so it is no longer applied.)
+- No change to N_ESTIMATORS (still 5), NUM_LEAVES (still 8), LEARNING_RATE,
+  FEATURES, VALID_QUANTILE, or the record()/conclude() call sites.
+
+Why this is expected to move the metric in the better direction:
+RMSPE weights relative errors symmetrically and rewards getting small-sales
+rows right; training LGBM in log-space matches the metric's symmetric-
+relative structure, so each boosting round optimizes a loss whose local
+gradient lines up with how RMSPE is scored. With only 5 boosting rounds
+and 8 leaves the model is still under-fit, but the loss/scale alignment
+typically shaves 0.01-0.03 off val RMSPE independent of capacity. This
+is a categorical/structural switch rather than a numeric knob, so it is
+applied in full per the always-fully-applied rule.
+
+Step magnitude rationale (per recent-progress check):
+Round 3 (potential_improvement_10, prediction clipping) was reverted by
+the orchestrator — tail_mean stayed at 0.5092 (delta 0.0000), so the
+prior edit produced negligible movement. Per the recent-progress check,
+"prior delta negligible AND prior edit was already small" -> switch to
+a different lever rather than doubling down. potential_improvement_7 is
+a structural change to the training target and loss space, distinct from
+the clipping post-processing that round 3 tried, and is the most likely
+single-edit lever to break the plateau at 0.491 final / 0.5092 tail.

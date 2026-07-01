@@ -1,0 +1,5 @@
+Iteration 7 — potential_improvement_9
+
+Change: Replaced the chained .fillna(0.0) fallback with .fillna(-9999.0) sentinel in both X and X_test construction, so residual missing values (after median fill) become a distinct out-of-range split signal for the RandomForest instead of being indistinguishable from genuine zeros (e.g. AMT_REQ_CREDIT_BUREAU_QRT).
+
+Why: Prior round (max_features="sqrt") produced tail_mean 0.2215 -> 0.2215, a negligible delta on a categorical toggle — per the recent-progress check the lever was wrong, not the magnitude, so switch to a different comment. The current numeric-only pipeline chains median fill with a 0.0 fallback, which collides missingness with genuine zeros on columns that have real 0 values, erasing separability. A -9999 sentinel is a fully-applied categorical-style fix (one move) that lets the tree split on "missing vs present" cleanly, which on Home Credit data lifts AUPRC. Expect a modest positive delta this round.
