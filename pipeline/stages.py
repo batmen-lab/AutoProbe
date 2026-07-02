@@ -12,6 +12,7 @@ phase/output suitable for the API response.
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 
@@ -471,8 +472,16 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
 
 def _round4(x):
     """Keep 4 digits after the dot. The metric is compared/stored at this
-    precision so that sub-0.0001 wobble counts as 'equal' (=> revert)."""
-    return round(float(x), 4) if x is not None else None
+    precision so that sub-0.0001 wobble counts as 'equal' (=> revert).
+    Non-finite (NaN/Inf) or unparseable values collapse to None so they never
+    poison comparisons or crash the API's JSON encoder (allow_nan=False)."""
+    if x is None:
+        return None
+    try:
+        xf = float(x)
+    except (TypeError, ValueError):
+        return None
+    return round(xf, 4) if math.isfinite(xf) else None
 
 
 def _epoch_stats(probe_result: dict) -> tuple[float | None, float | None, float | None]:
@@ -605,9 +614,10 @@ def _round_metric_file(path: Path) -> None:
 
 def _coerce_float(v) -> float | None:
     try:
-        return float(v)
+        xf = float(v)
     except (TypeError, ValueError):
         return None
+    return xf if math.isfinite(xf) else None
 
 
 def _status_from_last_epoch(

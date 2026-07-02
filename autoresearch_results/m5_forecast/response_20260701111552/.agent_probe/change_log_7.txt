@@ -1,7 +1,0 @@
-Round 7 change log.
-
-- Chosen item: potential_improvement_1 (raise TRAIN_DAYS from 120 to 365).
-- Change: set TRAIN_DAYS = 365 (from 120), landing at the lower end of the comment's 365-500 range. N_ESTIMATORS (200), NUM_LEAVES (31), LEARNING_RATE (0.05), MAX_FEATURES (9), early-stopping (stopping_rounds=30), and the model definition are untouched.
-- Why this is expected to move the metric in the better direction: round-5 plateaued at tail_mean=2.0315 (min=2.0298); round-6's structural log1p lever regressed to 2.2037 and was reverted by the orchestrator, so train.py is back at the round-5 best. Prior delta is now negligible with a prior edit that was structural-and-failed, so per the smooth-progress guidance this round switches to a different lever rather than doubling down. TRAIN_DAYS=120 covers only ~4 months — M5 has strong yearly seasonality (Christmas / seasonal promo cycles) that the booster cannot see with a 120-day window, so the rolling-mean and lag features miss the dominant low-frequency signal. Raising to 365 gives the booster a full annual cycle of training rows without touching the epoch cap or any model hyperparameter. Moderate Regime-B step (~3x the current value, lower end of the comment's range). No epoch cap change, no other code touched.
-
-Integration integrity verified: record(epoch, rmse) and conclude() call sites are present and unmodified; record still receives (int, float) from the existing history loop (history = list(model.evals_result_["valid_0"]["rmse"])); conclude() still takes no arguments.

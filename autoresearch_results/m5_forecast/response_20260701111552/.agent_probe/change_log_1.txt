@@ -1,7 +1,0 @@
-Round 1 change log.
-
-- Chosen item: potential_improvement_2 (raise MAX_FEATURES from 2 to 9).
-- Change: set MAX_FEATURES = 9 so feats(t)'s column stack is no longer truncated to the two lags; the booster now sees lag28, lag35, rmean28, rmean_prev28, wday, dept, store, cat, state.
-- Why this is expected to move the metric in the better direction: with MAX_FEATURES=2 the rolling-mean, weekday, and series-id columns were sliced off by [:MAX_FEATURES], leaving the booster with only two raw lags. Feeding the full FEATURE_NAMES list gives the trees access to per-series identity and short-term trend, which is the dominant source of variance in M5 sales and is necessary for any RMSE below a naive lag predictor. No epoch change; N_ESTIMATORS, NUM_LEAVES, LEARNING_RATE, TRAIN_DAYS, and the model definition are untouched.
-
-Integration integrity verified: record(epoch, rmse) and conclude() call sites are present and unmodified; record still receives (int, float) from the existing history loop; conclude() still takes no arguments.

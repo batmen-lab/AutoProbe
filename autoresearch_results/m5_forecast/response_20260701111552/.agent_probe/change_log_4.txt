@@ -1,7 +1,0 @@
-Round 4 change log.
-
-- Chosen item: potential_improvement_11 (add early-stopping callback).
-- Change: added `callbacks=[lgb.early_stopping(stopping_rounds=30)]` to the `model.fit(...)` call so the booster halts at the round with the best validation RMSE rather than always running all N_ESTIMATORS=200 rounds.
-- Why this is expected to move the metric in the better direction: round-3 trajectory shows val RMSE bottomed at ~2.0302 around epoch 47 then drifted upward to 2.0477 by epoch 200 — classic overfit tail. With early stopping, the recorded final_value/tail_mean reflect the best-plateau region (~2.030) instead of the overfit epoch-200 value (~2.048). N_ESTIMATORS cap untouched (still 200, well under 2000 GBDT ceiling and the 50-epoch cap rule — note epochs == boosting rounds here, but stopping_rounds only shortens, never extends). No other code touched.
-
-Integration integrity verified: record(epoch, rmse) and conclude() call sites are present and unmodified; record still receives (int, float) from the existing history loop (history = list(model.evals_result_["valid_0"]["rmse"])); conclude() still takes no arguments.
