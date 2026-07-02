@@ -75,3 +75,7 @@ wandb/
 **/wandb/
 *.ckpt
 *.npz
+
+# Datasets / run outputs (kept local, not pushed)
+data/
+result/
