@@ -1,0 +1,5 @@
+Chose potential_improvement_4.
+
+Change: Reduced LEARNING_RATE in train.py (line 57) from 1e-3 to 5e-4.
+
+Rationale: Round 8 (StratifiedShuffleSplit) lifted tail_mean from ~0.2073 to ~0.2179 — a clearly positive delta (~5% of current best), so per policy stay incremental in Regime B refinement mode and prefer the smaller end of the step range. The two other untried levers (7: deep MLP, 10: AdamW) were both attempted and reverted in prior rounds so are excluded by the "no duplicate unsuccessful attempts" rule; improvement 3 (raise epochs) is excluded by the strict epoch budget rule. That leaves LEARNING_RATE as the fresh, on-scope lever. Halving to 5e-4 is roughly the log-midpoint between the current 1e-3 and the comment's named target 3e-4 — a smooth, traceable step that reduces the chance of the AdamW-free Adam optimizer overshooting on the widened 128-unit hidden layer with newly added isnull-indicator features, giving the training trajectory a more stable climb toward the val AUPRC ceiling within the 3-epoch budget.

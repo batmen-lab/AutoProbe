@@ -1,0 +1,5 @@
+Chose potential_improvement_6.
+
+Change: replaced the sequential head/tail split (X[:split] / X[split:]) with sklearn.model_selection.train_test_split(X, y, test_size=VALID_FRACTION, stratify=y, random_state=SEED), and added the corresponding import from sklearn.model_selection.
+
+Rationale: the sequential tail-15% split leaves a validation slice whose fraud-rate and temporal distribution differ from the training rows, which deflates measured AUPRC (comment estimates ~0.02-0.05). Stratifying preserves the ~1:28 positive rate on both sides so the boosting-round AUPRC trajectory reflects true model quality. Applied fully as a categorical/structural switch; expected modest, traceable lift consistent with the "stay incremental" guidance after two strongly positive prior rounds (tail_mean 0.211 -> 0.4071).

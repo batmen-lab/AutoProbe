@@ -1,0 +1,5 @@
+Chose potential_improvement_7.
+
+Change: added scale_pos_weight=28.0 to the xgb.XGBClassifier constructor (the value the comment names, matching the ~1:28 non-fraud:fraud class ratio in this dataset).
+
+Rationale: round 3 (stratified split) produced a negligible/slightly negative delta (tail_mean 0.4071 -> 0.4039) after an already-large structural edit, so per Regime B guidance we switch levers rather than double down. In a heavily imbalanced binary task, up-weighting positives via scale_pos_weight directly biases splits and leaf values toward correctly ranking the rare fraud class, which is exactly what AUPRC measures. This is a categorical "add parameter" change so it is applied at the comment's full named value; #3/#5/#10 were skipped because they are effectively tied to raising the boosting-round count past the epoch cap.

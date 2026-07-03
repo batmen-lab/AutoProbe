@@ -1,0 +1,5 @@
+Chosen: potential_improvement_4
+
+Change: Set NUM_LEAVES from 2 to 63, moving off the degenerate single-split stump regime into the low end of the comment's recommended 63-127 range.
+
+Why: With NUM_LEAVES=2 each boosting tree was a stump and could not model any interaction between the newly-enabled features (lag28/lag35, rmean28, wday, dept/store/cat/state codes, snap). Allowing 63 leaves lets each tree capture cross-feature effects (e.g. lag × wday, store × snap), which is the standard follow-on to opening up MAX_FEATURES and should further lower validation RMSE (direction: lower_is_better).

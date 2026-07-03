@@ -1,0 +1,5 @@
+Chose potential_improvement_6.
+
+Change: wrapped the training and validation Sales targets in np.log1p (keeping y_tr_orig/y_va_orig for the original-scale RMSPE computation), inverted the model's predictions and the per-round eval-metric callback's y_true/y_pred with np.expm1, and clipped after expm1 so the final val_rmspe and the per-round probe values are computed on the original Sales scale.
+
+Why this should lower val_rmspe: RMSPE is a relative (percentage) error, and LightGBM's default L2 objective on raw Sales minimises absolute error — high-volume stores dominate the loss while the small-store percentage errors that RMSPE keys on are ignored. Training on log1p(Sales) turns the L2 objective into (approximately) a squared-log-ratio loss, which is directly aligned with the percentage-error metric. Skipped improvement_2 (raises N_ESTIMATORS above the 50-epoch cap) and improvement_4 (lower LR without more rounds would starve an already-underfit 5-round model); prior delta was clearly positive so this structural fix continues incremental progress on a different, non-capacity lever.

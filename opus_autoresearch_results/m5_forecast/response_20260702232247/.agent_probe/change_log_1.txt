@@ -1,0 +1,5 @@
+Chosen: potential_improvement_2
+
+Change: Set MAX_FEATURES from 2 to 10, so `feats(t)` returns the full engineered feature block (lag28, lag35, rmean28, rmean_prev28, wday, dept/store/cat/state codes, snap) instead of only the two raw lags.
+
+Why: The training script was deliberately crippled to a two-feature input. The model has no access to calendar effects (wday, snap), hierarchical identity (dept/store/cat/state), or rolling means, all of which are strongly predictive of M5 daily unit sales. Comment 2 explicitly identifies this as "the single biggest RMSE drop available" — restoring the informative predictors should meaningfully lower validation RMSE (metric direction: lower_is_better).

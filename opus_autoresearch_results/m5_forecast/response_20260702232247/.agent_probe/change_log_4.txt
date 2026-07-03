@@ -1,0 +1,5 @@
+Chosen: potential_improvement_8
+
+Change: Added objective="tweedie", tweedie_variance_power=1.1 to the LGBMRegressor constructor, switching the loss from the default L2 regression to a Tweedie loss.
+
+Why: The prior round (TRAIN_DAYS 120→365) produced only a negligible delta (tail_mean 3.1598 → 3.1579), so the guidance is to switch levers rather than double down. N_ESTIMATORS-related improvements (comments 3, 5, 10-early-stopping) are blocked or moot with only 3 boosting rounds. M5 daily unit sales are zero-inflated counts — a Tweedie loss with power ≈1.1 matches that distribution far better than default L2 regression and is a proven M5 winner, so it should meaningfully lower validation RMSE (direction: lower_is_better) even at the current small ensemble size. This is a categorical/structural change, applied in full per the always-fully-applied rule.

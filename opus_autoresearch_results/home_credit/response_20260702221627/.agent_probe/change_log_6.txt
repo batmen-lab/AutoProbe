@@ -1,0 +1,5 @@
+Chose potential_improvement_8.
+
+Change: In the median-fill block (train.py ~line 110), added `train_features/test_features.replace([+inf,-inf], np.nan)` before computing medians, then computed per-column isnull() masks and np.hstack'd them onto X and X_test as float32 indicator columns; extended `feature_columns` with `__isnull` suffix names so `len(feature_columns)` still reflects the true input dimension for the MLP init.
+
+Rationale: Round 5's deep-MLP structural edit produced a slight negative delta (0.1988 vs 0.1998) and was likely reverted, so per policy I switched levers rather than re-tuning depth. Missingness in Home Credit carries strong known signal — DAYS_EMPLOYED's 365243 sentinel and the frequent NaNs in EXT_SOURCE_1/3 are themselves predictive of default risk — so appending explicit isnull() indicator columns injects a new information source the median-filled values throw away, and is a well-known tabular AUPRC lift. This is a signal-adding lever (not another regularization tweak), which is the most promising path once scaling, features, capacity, and batch size are already tuned.

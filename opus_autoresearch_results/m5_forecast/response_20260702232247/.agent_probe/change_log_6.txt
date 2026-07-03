@@ -1,0 +1,5 @@
+Chosen: potential_improvement_7
+
+Change: Added a 7-day rolling mean feature `V[:, t - 28:t - 21].mean(1)` as an additional column in `feats(t)`, inserted before the existing 28-day and prev-28-day rmeans. Total columns rise from 10 to 11; the `[:, :MAX_FEATURES]` slice (MAX_FEATURES=10) therefore drops the last column (`snap`).
+
+Why: Rounds 4 (Tweedie) and 5 (categorical_feature + early_stopping) were both structural switches that regressed and were reverted, so per the recent-progress rule the lever is wrong — switch to a new comment. Epoch-tied comments (3, 5) are blocked by the epoch cap, and comment 9 regularization would work against the model at only N_ESTIMATORS=3 boosting rounds. Feature engineering is the untried lever. A short-horizon (7-day) rmean captures recent trend shifts that neither the 28-day nor prev-28 rmeans can express, and is a well-known high-signal M5 feature. It should lower validation RMSE (direction: lower_is_better) even at the current small ensemble size. Losing `snap` is an accepted cost of the MAX_FEATURES=10 slice (touching MAX_FEATURES would be comment 2's territory and violate the one-comment rule).

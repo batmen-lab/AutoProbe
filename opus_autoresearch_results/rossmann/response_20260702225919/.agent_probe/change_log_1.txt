@@ -1,0 +1,5 @@
+Chose potential_improvement_1.
+
+Change: expanded FEATURES from ["DayOfWeek"] to the full list named in the comment: ["Store", "DayOfWeek", "Promo", "StateHoliday", "SchoolHoliday", "StoreType", "Assortment", "CompetitionDistance", "Promo2", "year", "month", "day", "woy"].
+
+Why this should lower val_rmspe: with only DayOfWeek the model cannot distinguish stores, promotions, seasonality, or store metadata, so predictions are near-constant across the 7 weekday buckets and RMSPE is stuck at a degenerate high. Adding Store/Promo/date/store-metadata columns gives LightGBM the highest-signal splits (Promo alone drives a large sales delta; Store separates per-store baselines), which is the prerequisite for any of the other 9 improvements to matter. This is the foundational Regime-A escape lever, applied fully.

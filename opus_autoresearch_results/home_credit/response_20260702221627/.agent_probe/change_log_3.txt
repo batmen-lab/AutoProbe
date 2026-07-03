@@ -1,0 +1,5 @@
+Chose potential_improvement_2.
+
+Change: Raised HIDDEN_DIM from 4 to 128 in train.py (line 52), enlarging the single hidden layer of the MLP.
+
+Rationale: With scaling on (round 1) and all shared numeric features included (round 2), the network is now bottlenecked by a 4-unit hidden layer that cannot represent the nonlinear interactions between AMT_*, DAYS_*, and EXT_SOURCE_* features. A 4-unit hidden layer against ~200 inputs is a degenerate-capacity value; setting to 128 (the smaller end of the comment's recommended 128-256 range) restores enough capacity to fit the default-risk signal while staying incremental after last round's large positive delta.

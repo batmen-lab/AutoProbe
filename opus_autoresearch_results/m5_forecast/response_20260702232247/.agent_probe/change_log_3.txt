@@ -1,0 +1,5 @@
+Chosen: potential_improvement_1
+
+Change: Set TRAIN_DAYS from 120 to 365. This roughly triples the training window and gives LightGBM at least one full year of history so it can see complete annual seasonality (school-year cycle, holidays, month-of-year effects) instead of only ~4 months of daily sales.
+
+Why: The prior two rounds unlocked features (MAX_FEATURES 2->10) and capacity (NUM_LEAVES 2->63), and the tail_mean has been clearly falling round over round (3.38 -> 3.16). The next binding constraint is data: 120 days is too short for the wday/rmean/dept/store/snap features to express annual patterns. Extending to a full year (a moderate ~3x step short of the comment's 728 target, chosen to avoid overshooting given the recent positive delta) should lower val RMSE (direction: lower_is_better) by giving the model enough history to learn the yearly cycle.

@@ -1,0 +1,30 @@
+{
+  "metric_name": "val_rmse",
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 3.3586
+    },
+    {
+      "epoch": 2,
+      "value": 3.1523
+    },
+    {
+      "epoch": 3,
+      "value": 2.9745
+    }
+  ],
+  "min": 2.9745,
+  "max": 3.3586,
+  "mean": 3.1618,
+  "std": 0.157,
+  "first_value": 3.3586,
+  "final_value": 2.9745,
+  "delta": -0.3841,
+  "tail_mean": 3.1618,
+  "conclusion": "Validation RMSE fell from 3.358631 to 2.974492 across 3 boosting rounds (min 2.974492, max 3.358631).",
+  "previous_best_last_epoch": 2.9694,
+  "previous_best_max": 3.3555,
+  "previous_best_mean": 3.158
+}

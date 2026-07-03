@@ -1,0 +1,5 @@
+Chose potential_improvement_4.
+
+Change: raised MAX_DEPTH from 5 to 7 (the comment's named target inside its 6-8 range), completing the depth push started in round 2.
+
+Rationale: rounds 4 and 5 both regressed off the running best (tail_mean 0.4406 -> 0.4039 -> 0.4046, essentially flat), and the last two attempted levers (scale_pos_weight, VALID_FRACTION) were reverted, so we need a meaningful capacity move rather than another small tweak. Because the epoch budget forbids raising N_ESTIMATORS=5, each of the 5 boosting rounds must be maximally expressive; MAX_DEPTH is the single lever that directly enlarges per-round tree capacity so the card-id x TransactionAmt x C-counter interactions that drive fraud AUPRC can be captured within a small ensemble. Pushed to the comment's full named value (7) rather than an incremental 6 because Regime B recent-progress guidance calls for trying harder when the prior delta was negligible and the prior edit was small.

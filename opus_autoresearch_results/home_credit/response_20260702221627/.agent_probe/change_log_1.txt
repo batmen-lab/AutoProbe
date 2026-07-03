@@ -1,0 +1,5 @@
+Chose potential_improvement_6.
+
+Change: Flipped USE_FEATURE_SCALING from False to True in train.py (line 60), enabling standardization (train-fit mu/sd) of X_train, X_valid, X_test.
+
+Rationale: Raw features mix magnitudes across ~6 orders (AMT_CREDIT ~1e6 vs binary flags ~0/1). An MLP with ReLU cannot meaningfully learn from unscaled inputs — gradients are dominated by the largest-magnitude columns and the network collapses to near-random val AUPRC. Standardizing to zero-mean/unit-variance is the single largest expected lift on val AUPRC and, being a boolean toggle in a degenerate regime, is applied fully in one move per policy.

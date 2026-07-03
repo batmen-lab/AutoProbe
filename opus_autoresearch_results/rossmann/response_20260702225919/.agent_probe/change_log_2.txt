@@ -1,0 +1,5 @@
+Chose potential_improvement_3.
+
+Change: raised NUM_LEAVES from 2 (stumps — a single split per tree) to 127, the lower end of the comment's recommended 127-255 range.
+
+Why this should lower val_rmspe: with NUM_LEAVES=2 each tree can only make one split, so even after expanding FEATURES in round 1 the model cannot combine Store x Promo x seasonality — it can pick at most one axis per tree. That is a comically-degenerate capacity setting and is the current bottleneck now that the feature set is sane. Bumping to 127 lets each tree model the multiplicative Sales interactions that RMSPE keys on. I chose the lower end of the range (127, LightGBM's common tuned value) rather than 255 to keep the round-to-round movement smooth after round 1's already-positive delta, while still fully escaping the stump-regime degeneracy in one step.

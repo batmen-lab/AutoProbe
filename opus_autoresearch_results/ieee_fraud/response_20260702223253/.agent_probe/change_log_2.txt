@@ -1,0 +1,5 @@
+Chose potential_improvement_4.
+
+Change: raised MAX_DEPTH from 2 to 5 (a ~2.5x jump, roughly half the distance toward the comment's named target of 7 which sits inside the 6-8 range).
+
+Rationale: MAX_DEPTH=2 caps each tree at 3 splits and forbids meaningful multi-feature interactions, which is the key mechanism XGBoost needs to combine card-id x TransactionAmt x C-counter signals that drive fraud AUPRC. Round 1 already produced a strongly positive delta (tail_mean 0.116 -> 0.211) so we are in Regime B with clear progress; taking the conservative end of the 2x-5x range keeps the movement traceable and avoids overshoot while still unlocking interaction learning.

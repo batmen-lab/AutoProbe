@@ -1,0 +1,5 @@
+Chose potential_improvement_1.
+
+Change: Set MAX_FEATURE_COLUMNS from 10 to None in train.py (line 50), so shared[:MAX_FEATURE_COLUMNS] returns the full list of shared numeric columns instead of only the first 10.
+
+Rationale: With scaling now on (round 1) but only the first 10 columns used, the model still cannot see EXT_SOURCE_1/2/3 and other strong predictors further right in the frame. The tail_mean (~0.088) is barely above the ~8% positive-class prior — a degenerate regime — so the comment's target ("200 or None") is applied fully to unblock feature access. Including the strongest predictors is the largest remaining single-lever AUPRC lift.

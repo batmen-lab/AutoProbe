@@ -1,0 +1,5 @@
+Chosen: potential_improvement_10
+
+Change: Passed categorical_feature=[4, 5, 6, 7, 8] (wday, dept_id, store_id, cat_id, state_id column indices) and callbacks=[lgb.early_stopping(50)] to model.fit.
+
+Why: Round 4 (Tweedie loss) regressed to tail_mean 3.3144 vs round 3's 3.1579 and was reverted by the orchestrator, so the guidance is to pick a different lever. N_ESTIMATORS-based comments (3, 5) are blocked by the epoch cap. Currently LightGBM treats the integer-coded categorical columns as ordinal, which is fundamentally wrong for wday, dept, store, cat, state — proper categorical treatment lets LightGBM find optimal group-vs-group splits rather than arbitrary threshold splits on codes. This is a structural, categorical change that should genuinely lower val RMSE (direction: lower_is_better) even at the current small ensemble size. The early_stopping(50) callback is a harmless no-op with N_ESTIMATORS=3 but was included as part of the same comment's single suggestion.
