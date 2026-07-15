@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Drop ethnicity one-hot dummies from feature input",
+      "content": "Edit `MIMICMortalityDataset.__getitem__` in `dataset.py` so that the returned `features` tensor is exactly `tfidf_vec` (no longer `torch.cat([tfidf_vec, self.eth[idx]])`). Leave the `self.eth` tensor on the dataset unchanged \u2014 the probe still needs `loader.dataset.eth` to bucket per-group TPR \u2014 but sever the one-hot from the model's forward path. This shrinks `input_dim` from `n_tfidf + 5` back to `n_tfidf`; since `train.py` derives `input_dim` from `train_ds[0]['features'].shape[0]` at runtime, no other file changes. Rationale: the current LogisticRegression sees the group indicator directly as 5 of its input dimensions, giving it a trivial degree of freedom (`w_linear @ eth_onehot`) to learn per-ethnicity logit offsets \u2014 exactly the lever that widens the recall gap from 0.245 at epoch 1 to 0.356 at epoch 20. With that channel removed the model must predict mortality from clinical text tokens alone, which is the only way it can satisfy a gap-based fairness objective.",
+      "target_files": [
+        "dataset.py"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "title": "Replace linear classifier with small MLP + dropout",
+      "content": "In `train.py`, replace the `LogisticRegression` class (single `nn.Linear(input_dim, 1)`) with a two-layer MLP: `nn.Sequential(nn.Linear(input_dim, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1))`, with `forward` returning `self.net(x).squeeze(-1)`. Keep `input_dim`, AdamW(lr=1e-3, weight_decay=1e-4), BCEWithLogitsLoss with global pos_weight, NUM_EPOCHS=20, seed=42, and checkpoint logic all unchanged. The 10k-dim TF-IDF input is already fully linearly separable for this task (val AUPRC 0.395) so the bottleneck isn't capacity but the fact that a single linear layer leans on per-ethnicity offsets to improve marginal AUROC. A hidden layer with ReLU and 0.3 dropout forces the model to learn token-interaction features rather than group-index shortcuts, while dropout stabilizes the TPR estimate on the smallest groups (`asian`, `hispanic` with only a few hundred val rows), reducing the epoch-to-epoch gap variance visible in the trajectory (std ~0.052). Because `input_dim` is still read from `train_ds[0]['features'].shape[0]`, no edits to dataset.py or prober.py are needed.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.55
+    },
+    {
+      "title": "Cosine LR schedule + checkpoint on minimum gap",
+      "content": "In `train.py`, make two coordinated changes to the training schedule. (1) After constructing the AdamW optimizer, build `scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-5)` and call `scheduler.step()` at the end of each epoch (after `probe_record`). (2) Replace the AUPRC-based checkpoint selection with gap-based selection: initialize `best_gap = float('inf')` and `best_ckpt_state = None`; after each `probe_record(epoch, model, val_loader, device)` call, read the returned gap and if `gap < best_gap`, set `best_gap = gap` and `best_ckpt_state = {k: v.clone() for k, v in model.state_dict().items()}`. After the training loop, load `best_ckpt_state` into `model` (instead of `torch.load(ckpt_path)`) before running `user_analyze` and `probe_conclude`. This removes the conflict where maximizing val AUPRC (which the current code does) has been empirically widening the recall gap across the 20-epoch run \u2014 the gap trajectory in probe_result_1.json goes from 0.245 to 0.356 precisely because AUPRC-optimal checkpoints drift toward larger group imbalance. Cosine decay slows the drift in late epochs (lr drops from 1e-3 to 1e-5), and selecting the minimum-gap epoch aligns the checkpointed model with the probe objective directly. No changes to `dataset.py`, `preprocess.py`, or `prober.py` are required; `probe_record` already returns the gap as a float per its existing API.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.75
+    }
+  ],
+  "chosen_index": 1,
+  "round": 2
+}

@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Add differentiable equal-opportunity regularizer to training loss",
+      "content": "In train.py, change the training loop to use a composite loss that adds a per-epoch, differentiable equal-opportunity penalty on top of BCEWithLogitsLoss. Concretely: after the forward pass per batch, compute per-sample soft positives y * sigmoid(logits) (no rounding) and, using loader.dataset.eth (already exposed for the probe), compute per-ethnicity group TPR surrogates as soft_pos_g.sum() / max(pos_g.sum(), eps) for g in {white, black, hispanic, asian, other}. Aggregate the fairness penalty as the variance of these 5 group TPRs (not the max-min \u2014 variance is smoother and differentiable). Add the penalty with coefficient alpha=0.5 to the existing BCE loss: loss = bce_loss + 0.5 * var(per_group_soft_tpr). This gives the optimizer a direct gradient toward equal per-group recall at the 0.5 threshold rather than only an indirect effect through the global pos_weight. The anchor (val AUPRC) is preserved because BCE still dominates the loss \u2014 the equal-opportunity term is additive and small. Why this helps: the current plateau at 0.202 after round 2 is driven by the linear head being allowed any per-ethnicity imbalance as long as global AUPRC improves; a direct fairness gradient nudges the logits so each group's positives are pulled above 0.5 at similar rates.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.7
+    },
+    {
+      "title": "Standardize TF-IDF features and increase pos-weight exponent to 2.0",
+      "content": "In train.py main(), before constructing the DataLoader, load train_tfidf.npz once and fit a sklearn.preprocessing.StandardScaler (with_mean=True, with_std=True) on the train split; then transform train/val/test tfidf matrices identically and write them into the dataset in place of the raw sparse matrices. Concretely: instantiate the datasets, call scaler.fit(train_ds.tfidf), then train_ds.tfidf = scaler.transform(train_ds.tfidf).tocsr(); val_ds.tfidf = scaler.transform(val_ds.tfidf).tocsr(); test_ds.tfidf = scaler.transform(test_ds.tfidf).tocsr(). Then raise the pos_weight exponent from 1x to 2x by changing line 311 in train.py from pos_weight = torch.tensor(n_neg / n_pos, ...) to pos_weight = torch.tensor((n_neg / n_pos) ** 2.0, ...). The StandardScaler removes ethnically-correlated mean shifts in the TF-IDF vocabulary (different communities' clinical notes use different terminology at different base rates), which is what a linear head can exploit to produce group-differentiated logits. Squared pos_weight compensates by overweighting the rare death positives by ~2x extra so each group's positives are pushed farther above the 0.5 threshold. Keep WEIGHT_DECAY = 5e-3 as-is. Why this helps: the round-2 plateau at 0.202 is exactly the scale at which feature-distribution differences between ethnicities leak into per-group TPR; centering the features closes that leak and the squared pos_weight pushes positives (disproportionately minority) harder past the 0.5 cutoff.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.55
+    },
+    {
+      "title": "Learn a global logit temperature to calibrate per-group recall at 0.5",
+      "content": "In train.py, add a nn.Parameter temperature scalar to LogisticRegression (init to 1.0, shape []) and multiply logits by it in forward: return self.linear(x).squeeze(-1) * self.temperature. During training, after each epoch's val_metrics is computed, also compute the per-ethnicity TPR at 0.5 using the same logic as prober._per_group_recall (read loader.dataset.eth, argmax for group, binarize sigmoid(logits) >= 0.5). Define temperature-update gradient: if max_group_tpr - min_group_tpr > prev_gap, nudge temperature toward the value that previously minimized the gap. Specifically, every 2 epochs, do a line-search over temperature in [0.5, 2.0] using the val set to pick the value minimizing max-TPR minus min-TPR at 0.5, and assign self.temperature.data = torch.tensor(best_t); this is a post-hoc calibration on the val set (no backprop through temperature, so the anchor AUPRC is preserved \u2014 AUPRC is threshold-independent). Exclude the probe_record and probe_conclude calls. Why this helps: with frozen threshold 0.5 and a round-2 tail_mean of 0.202, the current logit magnitudes are such that some groups' positives cluster below 0.5 while others cluster above it; a scalar temperature compression can pull extreme logits toward the threshold symmetrically, equalizing the on-threshold recall across groups without changing the ranking that underpins AUPRC.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.35
+    }
+  ],
+  "chosen_index": 1,
+  "round": 3
+}

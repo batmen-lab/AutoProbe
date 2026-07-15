@@ -566,8 +566,10 @@ def _archive_user_analysis(workspace: Path, round_idx: int) -> None:
     files to `.agent_probe/.user_analysis/`; we MOVE them into
     `.agent_probe/.user_analysis/round_<N>/` so nothing is left outside a round
     directory (only files are moved, so existing round_* subdirs are untouched;
-    a same-round retry overwrites so the canonical run wins). We also render an
-    extra absolute-count bar chart for the round from its per_group.json."""
+    a same-round retry overwrites so the canonical run wins). The audit content
+    itself (incl. the absolute-count bar chart) is produced by the protected
+    user_analyze() in train.py; this function only moves the flat files into the
+    round directory."""
     src = workspace / ".agent_probe" / ".user_analysis"
     if not src.is_dir():
         return
@@ -579,7 +581,6 @@ def _archive_user_analysis(workspace: Path, round_idx: int) -> None:
                 target = dst / p.name
                 target.unlink(missing_ok=True)
                 shutil.move(str(p), str(target))  # MOVE: only round_<N>/ keeps a copy
-        _render_group_count_barchart(dst / "per_group.json", dst / "per_group_outcomes_counts.png")
     except OSError:
         pass
 

@@ -1,0 +1,115 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "equal_opportunity_recall_gap",
+      "content": "Primary fairness probe: compute the equal-opportunity recall/TPR gap for the DEATH class across the 5 ethnicity groups (white, black, hispanic, asian, other) at the HARD-FROZEN threshold 0.5 (constant inside prober.py). Measure = max_g(TPR_g) - min_g(TPR_g). Healthy signal: gap < 0.05 (parity within sampling noise). Unhealthy signal: gap >= 0.10, indicating the model systematically under-detects deaths for at least one ethnicity. Must NOT use AUROC. Must NOT allow threshold tuning or per-group offset shifting to mask the disparity.",
+      "possible_sources": [
+        "Hardt et al., 'Equality of Opportunity in Supervised Learning' (NeurIPS 2016)",
+        "Fairlearn: Assessment module for equalized odds and equal opportunity",
+        "MIMIC-III benchmarking papers on fairness in ICU outcome prediction"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "per_group_auroc_disparity",
+      "content": "Even though AUROC is misleadingly optimistic for the overall imbalanced task, per-ethnicity AUROC still reveals whether the model discriminates equally well across groups before thresholding. Compute per-group AUROC for positive (death) class. Healthy: std across groups < 0.03 and min group AUROC within 0.05 of mean. Unhealthy: std >= 0.05 or any group AUROC drops below 0.70, indicating representation/feature learning harms specific populations before any decision threshold.",
+      "possible_sources": [
+        "Harutyunyan et al., 'Multitask Learning and Benchmarking with Clinical Time Series Data' (MIMIC benchmarks)",
+        "Chen et al., 'The Gap of AI Predictive Medicine on Ethnicity' (JAMIA)",
+        "scikit-learn metrics: roc_auc_score with per-group masking"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "per_group_brier_calibration",
+      "content": "Inspect calibration per-ethnicity via reliability diagrams and Brier score per group. For each ethnicity, bin predicted probabilities (e.g., quintiles) and compare predicted mean probability vs observed prevalence in the death class. Healthy: per-group ECE (Expected Calibration Error) < 0.05 and Brier scores within 20% of each other. Unhealthy: severe miscalibration (>0.10 ECE) or systematic over-prediction for one group and under-prediction for another, even if recall gap looks OK at threshold 0.5.",
+      "possible_sources": [
+        "Guo et al., 'On Calibration of Modern Neural Networks' (ICML 2017)",
+        "Niculescu-Mizil & Caruana, 'Predicting Good Probabilities with Supervised Learning' (ICML 2005)",
+        "Platt scaling and isotonic regression literature",
+        "reliability-diagram tooling in sklearn/calibration.py or MLCalibration package"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "absolute_recall_floor",
+      "content": "Equal-opportunity gap alone can be gamed by collapsing all groups to near-zero recall. Complement the gap probe by enforcing an ABSOLUTE recall floor: every ethnicity group must achieve recall at threshold 0.5 >= some minimum (e.g., >= 0.30, or within 2x of best group). Healthy: all 5 groups have meaningful recall levels AND small gap. Unhealthy: small gap but near-zero recall across all groups, OR a healthy global recall achieved by collapsing minority groups to trivial recall (< 0.10).",
+      "possible_sources": [
+        "Dwork et al., 'Fairness Through Awareness'",
+        "Selbst et al., 'Fairness and Abstraction in Sociotechnical Systems' (FAT* 2019)",
+        "Fairness literature on 'level-down' gaming of equal-opportunity constraints"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "utility_anchor",
+      "probe_name": "auprc_anchor_hold",
+      "content": "The ANCHOR guards train.py's own utility: weighted-BCE loss on train + AUPRC on validation. The fairness fix must not sacrifice these. Record the baseline AUPRC (from unmodified train.py) and verify post-fix AUPRC degrades by <= 20%. Healthy: AUPRC within 5% of baseline or improved. Unhealthy: AUPRC drops > 20% (auto-revert triggered by anchor guard), indicating the 'fairness fix' achieved parity by destroying the model's utility.",
+      "possible_sources": [
+        "Anchor guard design in AutoProbe codebase (see anchor-guard-utility-floor memory)",
+        "Davis & Goadrich, 'The Relationship Between Precision-Recall and ROC Curves' (ICML 2006)",
+        "Saito & Rehmsmeier, 'The Precision-Recall Plot Is More Informative than the ROC Plot' (PLOS ONE 2015)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "minority_group_sampling_stability",
+      "content": "Asian and Other ethnicity groups in MIMIC-III are typically very small (often < 5% of total cohort). Bootstrap the per-group recall at threshold 0.5 across 200 resamples of the validation set and compute 95% CI for each group. Healthy: CI width for every group < 0.05, meaning the gap measurement is stable. Unhealthy: CI width for Asian/Other >= 0.10, meaning reported gap is dominated by sampling noise and cannot reliably distinguish genuine fairness from statistical fluctuation \u2014 the prober may pass spuriously or fail spuriously.",
+      "possible_sources": [
+        "Efron, 'The Jackknife, the Bootstrap and other Resampling Plans' (SIAM 1982)",
+        "MIMIC-III cohort description papers (Johnson et al., Sci Data 2016) \u2014 demographic breakdowns",
+        "Bootstrap CI methodology for small-subgroup evaluation in clinical ML"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "score_distribution_shift",
+      "content": "For the TRUE-deaths subset only, compare the distribution of predicted P(death) across the 5 ethnicities using statistical tests (Kolmogorov-SmirNV between all pairs, or Kruskal-Wallis + follow-up). Healthy: distributions statistically indistinguishable (p > 0.05 with multiple-testing correction) \u2192 model scores true deaths similarly across groups. Unhealthy: systematic shift, e.g., Black/Hispanic true deaths scored lower than White true deaths at the 0.5 threshold, revealing the source of recall disparity even before hard thresholding.",
+      "possible_sources": [
+        "Larson et al., 'The Accuracy, Fairness, and Limits of Predicting Recidivism' (FAT* 2018) \u2014 score distribution analysis",
+        "Buolamwini & Gebru, 'Gender Shades' project \u2014 per-group score auditing",
+        "scipy.stats ks_2samp / kruskal for distribution-shift testing"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "fn_pattern_ethnicity",
+      "content": "In the death class (positives), analyze WHICH patients are FN'd (missed at threshold 0.5) vs TP'd by ethnicity. Compute the FN rate per ethnicity among the ground-truth deaths. Cross-tab with confounders (age, gender, admission type, severity scores like SOFA/APACHE II if available) to see if an ethnicity's excess FNs are explained by genuine confounders (acceptable) or by raw ethnicity (unacceptable \u2014 the model's errors are ethnicity-discriminatory conditional on clinical severity). Healthy: FN rate differences explained by severity distribution differences. Unhealthy: FN disparity persists after controlling for severity.",
+      "possible_sources": [
+        "Obermeyer et al., 'Dissecting Racial Bias in an Algorithm Used to Manage the Health of Populations' (Science 2019)",
+        "Vyas et al., 'Hidden in Plain Sight: Race and Algorithmic Bias in Health Care' (NEJM 2020)",
+        "MIMIC-III severity scores: SOFA/APACHE II for confounder adjustment"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "local_threshold_sensitivity_around_0_5",
+      "content": "Even though threshold 0.5 is frozen for the GAP measurement, inspect the LOCAL smoothness of each group's TPR curve around 0.5 (e.g., sweep 0.40 \u2192 0.60 in steps of 0.02). Healthy: per-group TPR curves are monotone-smooth and groups' curves are close in shape. Unhealthy: sharp jumps, crossings, or erratic behavior near 0.5 for some groups \u2192 the 'parity' at exactly 0.5 is a fragile, threshold-cherry-picked artifact that breaks under tiny threshold shifts (suggesting score clipping, degenerate features, or overfit to the specific 0.5 point).",
+      "possible_sources": [
+        "Threshold sensitivity analysis in clinical decision-curve analysis (Vickers & Elkin, Medical Decision Making 2006)",
+        "scikit-learn precision_recall_curve for threshold sweep",
+        "Robustness auditing practices in ML fairness literature"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "representation_ethnicity_linear_probe",
+      "content": "Treat the pre-final-layer embeddings of train.py as learned features. Train a LINEAR probe to predict ethnicity one-hot (5-class softmax) from these embeddings on a held-out split. If the probe achieves high accuracy (> ~0.50-0.60, far above the ~0.20 base rate), the representations encode ethnicity as a strong signal \u2014 a potential shortcut that allows the model to satisfy the fairness probe via superficial re-weighting rather than genuinely reducing recall disparity. Healthy: linear probe accuracy close to base rate. Unhealthy: linear probe accuracy far exceeds base rate, revealing ethnicity-encoded representations that the model could exploit for fairness-gaming.",
+      "possible_sources": [
+        "Alain & Bengio, 'Understanding Intermediate Layers Using Linear Classifier Probes' (ICLR 2017)",
+        "Representation-learning auditing in fairness literature",
+        "Adebayo et al., 'Sanity Checks for Saliency Maps' (NeurIPS 2018) \u2014 similar audit philosophy"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

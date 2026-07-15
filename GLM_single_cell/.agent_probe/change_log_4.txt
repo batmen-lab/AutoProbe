@@ -1,0 +1,67 @@
+Change log for round 4
+======================
+
+Plan title: Switch to AdversarialTrainingPlan with batch classifier
+
+Applied edits (train.py, main()):
+
+1. Added a monkey-patch on the SCVI class attribute BEFORE vae.train():
+     scvi.model.SCVI._training_plan_cls = scvi.train.AdversarialTrainingPlan
+   This is the documented extension point used by SCVI.train(), which does
+   `training_plan = self._training_plan_cls(self.module, **plan_kwargs)`.
+   Overriding the class attribute is the supported way to swap plans
+   without rewriting the train() call.
+
+2. Replaced the existing plan_kwargs argument in vae.train(...):
+     BEFORE:
+       plan_kwargs={"lr": args.lr, "n_epochs_kl_warmup": 5}
+     AFTER:
+       plan_kwargs={
+           "lr": args.lr,
+           "n_epochs_kl_warmup": 5,
+           "adversarial_classifier": True,
+           "scale_adversarial_loss": "auto",
+       }
+
+Untouched (per plan's explicit "Do NOT" list):
+- max_epochs (still args.train_epochs == 50)
+- batch_size, n_latent, n_hidden, dropout_rate
+- record() / conclude() call lines (prober_conclude(0.80, 0.55, anchors=_anchors))
+- _ProbeCallback (still registered via callbacks=[_ProbeCallback(vae, adata)])
+- prober.py
+- user_analysis() (still empty pass-through)
+- ANCHOR markers and original_train_metric recording
+- No new argparse arg added
+
+Rationale (per plan): Round 3 reached mean kBET 0.509 but per-batch
+acceptance stayed 0.0/0.0 at every epoch — the encoder is still perfectly
+separating batches in latent space; the global null is met ~50% of the
+time only because the subsample is ~51/49 batch-mixed. Capacity tweaks
+(round 2) regressed to 0.271; extending to 50 epochs (round 3) climbed to
+0.509 but plateaued below the 0.55 acceptable floor, and the metric was
+still rising at epoch 49. AdversarialTrainingPlan adds a small classifier
+head on the latent that tries to predict batch identity from z, and the
+VAE loss is augmented with (1 - kl_weight) * fool_loss — the encoder is
+penalized whenever the classifier succeeds, so it learns to make z
+batch-invariant. scale_adversarial_loss='auto' scales the adversarial
+loss from 1 down to 0 over the KL warmup, pushing the encoder to mix
+batches early when KL weight is low and reconstruction is dominant.
+
+Expected outcome: per-batch kBET rises from 0.0/0.0 to >0.3 within ~20
+epochs; mean kBET should cross 0.55 (acceptable) by epoch ~30 and
+approach 0.7-0.85 by epoch 50. ELBO anchor will be a few percent higher
+than round 3's 4785/4883 (adversarial loss slightly slows
+reconstruction convergence) but still decreases monotonically, satisfying
+the utility floor.
+
+Discrepancies with the plan: none. The plan named exactly two edits
+(monkey-patch _training_plan_cls; update plan_kwargs with
+adversarial_classifier=True, scale_adversarial_loss='auto', lr and
+n_epochs_kl_warmup=5). Both applied verbatim.
+
+record()/conclude() call lines: untouched.
+- _ProbeCallback.on_train_epoch_end still calls
+  prober_record(int(trainer.current_epoch), self.vae, self.adata).
+- prober_conclude(0.80, 0.55, anchors=_anchors) still passes BOTH
+  threshold values (standard=0.80, acceptable=0.55) and the elbo
+  anchors.

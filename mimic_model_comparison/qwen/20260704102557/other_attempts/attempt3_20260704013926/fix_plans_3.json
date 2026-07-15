@@ -1,0 +1,31 @@
+{
+  "fix_plans": [
+    {
+      "title": "Early-stop on probe gap and load best-fairness checkpoint",
+      "content": "Current train.py runs NUM_EPOCHS=20 (line 60) and saves the checkpoint that maximises val AUPRC (lines 346-349). probe_result_2 shows that with use_eth=False the recall gap hits 0.022 at epoch 4 (actually crosses the 0.05 standard threshold!) but then degrades to 0.202 by epoch 7 as the model overfits group-correlated TF-IDF signal. The fix is to (a) reduce NUM_EPOCHS from 20 to 8, (b) keep use_eth=False on the three dataset constructors (lines 300, 301, 383), and (c) change checkpoint selection so that after every epoch the loop reads the just-written `.agent_probe/live/probe_live.json` (atomic overwrite done by prober._write_live at the end of prober_record), extracts that epoch's `value`, and replaces `best_model.pt` if THIS epoch's gap is strictly smaller than the running best (initialise best_gap = +inf). Specifically insert after line 344 (`prober_record(epoch, model, val_loader, device)`) a `json.loads((LIVE_DIR / 'probe_live.json').read_text())` call, take the last entry in `values`, and drive the save. Set the cap NUM_EPOCHS=8 so we stop shortly after the sweet spot observed in round 2, preventing the late-epoch climb back to ~0.20. Keep the AUPRC printout for diagnostics but do NOT select on it. Why this helps: it directly picks the model state at the fairness optimum observed during training rather than the AUPRC optimum, which the probe_result_2 trajectory shows is far past the fairness sweet spot.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.7
+    },
+    {
+      "title": "Strengthen L2 weight decay to regularise group-correlated logits",
+      "content": "probe_result_2 shows that with use_eth=False the recall gap initially collapses (0.0216 at epoch 4) but then climbs monotonically to 0.202 and plateaus there for 14 epochs. That late-epoch rise is classic overfitting of the linear head's weights onto subtle TF-IDF dimensions that happen to be correlated with ethnicity \u2014 with weak regularisation (current WEIGHT_DECAY=1e-4 at line 59) the optimiser freely grows large coefficients that induce group-specific logit offsets. Change the constant WEIGHT_DECAY at line 59 from 1e-4 to 5e-2. This single edit is consumed by the AdamW constructor at line 320 (`torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)`), which will then shrink every learned weight toward zero by a factor 500x stronger than before. The linear head `self.linear = nn.Linear(input_dim, 1)` (line 94) is the only trainable block, so the entire parameter budget is strongly regularised. Keep NUM_EPOCHS=20, LEARNING_RATE=1e-3, and the AUPRC-based checkpoint selection (line 346) unchanged \u2014 the anchor train metric is preserved. Why this helps: aggressive L2 prevents the model from fitting the long-tail TF-IDF features whose variance is aligned with ethnicity, so per-group calibrated probabilities at the prober's frozen THRESH=0.5 stay closer together across the full 20-epoch run, and the max-min TPR gap recorded by the prober decreases. Combined with use_eth=False already in place, this targets the residual group signal without touching the loss.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.6
+    },
+    {
+      "title": "Equalise gradient contribution via per-(ethnicity, label) sample weights",
+      "content": "Current train.py uses a single scalar pos_weight = n_neg / n_pos (lines 311-313) passed to BCEWithLogitsLoss, which corrects overall prevalence but ignores that small ethnicity groups (asian/hispanic/other) contribute very few positives, so the white-majority dominates gradient updates and pushes per-group TPR@0.5 apart \u2014 exactly the gap measured by the prober between epochs 7 and 20 in probe_result_2. Replace the scalar pos_weight with a 2-D balanced weighting across the 5x2 (ethnicity x label) cells. Concretely: (1) in main(), after constructing train_ds, read `eth_group = train_ds.eth.argmax(dim=1).long()` and `labels = train_ds.labels.long()`; build a tensor `cell_counts[g, y]` of shape (5, 2) with the count of samples in each cell; then per-sample weight `w[i] = len(train_ds) / (5 * cell_counts[eth_group[i], labels[i]])`. Clamp weights to a max of 20.0 for numerical stability. (2) In train_one_epoch (lines 111-132) replace `criterion(logits, labels)` with per-sample weighting: construct `criterion = nn.BCEWithLogitsLoss(reduction='none')` at line 319 (drop the pos_weight kwarg), then in the loop compute `per_sample_loss = criterion(logits, labels) * batch_w` where `batch_w` is the precomputed per-batch weight tensor gathered from the global weight vector by batch indices (use `torch.arange(start, start+len(labels))` with a persistent offset, or simpler: have the dataset return an extra `weight` field by adding `__getitem__` to include `self.per_sample_weights[idx]`). (3) Keep use_eth=False on the three dataset constructors so the feature-side fairness fix from round 1 is preserved. (4) Leave LEARNING_RATE=1e-3, WEIGHT_DECAY=1e-4, NUM_EPOCHS=20 and AUPRC-based checkpoint selection (line 346) unchanged. Why this helps: equalising the effective gradient contribution across all 10 (ethnicity x label) cells forces the shared linear head to fit each group's positives with comparable intensity, directly shrinking the max-min TPR divergence recorded by the prober at THRESH=0.5. The class-level positive prevalence is implicitly covered by the 2-D balancing.",
+      "target_files": [
+        "train.py",
+        "dataset.py"
+      ],
+      "confidence": 0.55
+    }
+  ],
+  "chosen_index": 1,
+  "round": 3
+}

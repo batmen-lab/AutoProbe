@@ -1,0 +1,22 @@
+{
+    "fix_plans": [
+        {
+            "title": "Replace linear model with 2-layer MLP + Dropout",
+            "content": "In train.py, replace the LogisticRegression class (lines 90-98) with a 2-layer MLP: `nn.Linear(input_dim, 64)` → `nn.ReLU()` → `nn.Dropout(0.3)` → `nn.Linear(64, 1)`. The forward method stays as `return self.net(x).squeeze(-1)` so BCEWithLogitsLoss, evaluate(), and prober all work unchanged. Keep `use_eth=False` on the dataset (already applied from round 3). The ReLU nonlinearity lets the model learn feature interactions (e.g. a TF-IDF term that signals risk only when combined with another term) rather than treating each feature as an independent linear vote. Dropout(0.3) adds stochastic regularization during training, preventing individual feature dimensions from dominating. The extra capacity (64-dim hidden layer) gives the optimizer headroom to find a decision boundary that simultaneously achieves high AUPRC and low per-group recall gap, whereas the current linear model can only trade off one global direction — it drifts toward the AUPRC gradient and sacrifices minority recall as a side effect. No other hyperparameters change (LR=1e-3, weight_decay=1e-4, 20 epochs, class-weighted BCE, batch_size=256).",
+            "target_files": ["train.py"],
+            "confidence": 0.65
+        },
+        {
+            "title": "Add ReduceLROnPlateau and reduce epochs to 12",
+            "content": "In train.py, change three constants: set `NUM_EPOCHS = 12` (from 20) and `LEARNING_RATE = 5e-4` (from 1e-3). After the optimizer definition (line 319-321), add `scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, min_lr=1e-5)`. Inside the training loop, after `val_metrics = evaluate(...)`, add `scheduler.step(val_metrics['loss'])`. The evidence from round 3 is clear: the TPR gap starts at 0.011–0.044 in epochs 1-6, crosses the standard threshold, and then steadily rises to 0.077–0.091 in epochs 14-20 as the optimizer drifts toward AUPRC-maximization at the expense of fairness. Cutting training to 12 epochs avoids the worst of the late-epoch drift. The lower initial LR (5e-4 = half of original) makes each step smaller so the model spends more epochs near its fairer early parameter region. ReduceLROnPlateau with patience=2 on val_loss: once validation loss plateaus (indicating the model has extracted most of the predictive signal), the LR halves, further slowing parameter movement so the model locks in near its current decision boundary rather than continuing to drift. The combined effect is to end training before the fairness degradation zone, with a gentler optimization trajectory throughout.",
+            "target_files": ["train.py"],
+            "confidence": 0.72
+        },
+        {
+            "title": "Increase weight_decay to 1e-2 for stronger L2 regularization",
+            "content": "In train.py, change `WEIGHT_DECAY = 1e-4` to `WEIGHT_DECAY = 1e-2` (line 60). Keep everything else identical to round 3's successful state (use_eth=False, LR=1e-3, 20 epochs). The linear model has one weight vector w and one bias b. The TPR gap grows because certain TF-IDF feature dimensions are correlated with ethnicity — as training continues, the optimizer pushes weights on those dimensions to extreme values to maximize overall AUPRC, which systematically advantages groups with more training samples. With weight_decay=1e-4, the L2 penalty on ||w||² is negligible (1e-4 × ||w||²), so the optimizer freely overfits to majority-group-correlated features. With weight_decay=1e-2 (100× stronger), the L2 penalty becomes a meaningful constraint: the optimizer must justify each weight's magnitude by improving the BCE loss by more than the L2 cost. Features that help one group at the expense of another provide less net BCE improvement per unit of ||w||² and get suppressed. This directly counteracts the late-epoch drift because the regularization budget is exhausted earlier — the model settles into a compact weight vector that captures broadly predictive (rather than group-specific) signal. The class-weighted BCE still amplifies the minority-class gradient, so the minority group is not starved for signal. Expected effect: the TPR gap stays in the 0.02-0.05 range through epoch 20 instead of drifting to 0.08.",
+            "target_files": ["train.py"],
+            "confidence": 0.55
+        }
+    ]
+}

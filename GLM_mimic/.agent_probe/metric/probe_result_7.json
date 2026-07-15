@@ -1,0 +1,109 @@
+{
+  "metric_name": "ethnicity_equal_opportunity_recall_gap",
+  "standard_threshold": 0.05,
+  "acceptable_threshold": 0.1,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.0
+    },
+    {
+      "epoch": 2,
+      "value": 0.0
+    },
+    {
+      "epoch": 3,
+      "value": 0.0
+    },
+    {
+      "epoch": 4,
+      "value": 0.004807692307692291
+    },
+    {
+      "epoch": 5,
+      "value": 0.01666666666666672
+    },
+    {
+      "epoch": 6,
+      "value": 0.01666666666666672
+    },
+    {
+      "epoch": 7,
+      "value": 0.020408163265306145
+    },
+    {
+      "epoch": 8,
+      "value": 0.061224489795918324
+    },
+    {
+      "epoch": 9,
+      "value": 0.07692307692307687
+    },
+    {
+      "epoch": 10,
+      "value": 0.10204081632653061
+    },
+    {
+      "epoch": 11,
+      "value": 0.04940923737916214
+    },
+    {
+      "epoch": 12,
+      "value": 0.06981740064446829
+    },
+    {
+      "epoch": 13,
+      "value": 0.16346153846153844
+    },
+    {
+      "epoch": 14,
+      "value": 0.14182692307692302
+    },
+    {
+      "epoch": 15,
+      "value": 0.1466346153846153
+    },
+    {
+      "epoch": 16,
+      "value": 0.14423076923076916
+    },
+    {
+      "epoch": 17,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 18,
+      "value": 0.1255060728744939
+    },
+    {
+      "epoch": 19,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 20,
+      "value": 0.27935222672064774
+    }
+  ],
+  "min": 0.0,
+  "max": 0.27935222672064774,
+  "mean": 0.09119173276598087,
+  "std": 0.07967230589689968,
+  "first_value": 0.0,
+  "final_value": 0.27935222672064774,
+  "delta": 0.27935222672064774,
+  "tail_mean": 0.1907894736842105,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "Equal-opportunity recall gap (lower is better) went from 0.0000 to 0.2794 over 20 epochs, first reaching the 0.05 standard threshold at epoch 1; tail_mean=0.1908 -> FAIL (acceptable_met=False).",
+  "original_train_metric_0": {
+    "name": "val_auprc",
+    "value": 0.36653859510100173,
+    "direction": "higher_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "train_loss",
+    "value": 0.9796918466979382,
+    "direction": "lower_is_better"
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "metric_name": "max_per_group_recall_gap_at_fixed_0p5",
+  "standard_threshold": 0.1,
+  "acceptable_threshold": 0.18,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.10204081632653061
+    },
+    {
+      "epoch": 2,
+      "value": 0.10204081632653061
+    },
+    {
+      "epoch": 3,
+      "value": 0.10121457489878538
+    },
+    {
+      "epoch": 4,
+      "value": 0.02159863945578222
+    },
+    {
+      "epoch": 5,
+      "value": 0.07932692307692302
+    },
+    {
+      "epoch": 6,
+      "value": 0.1255060728744939
+    },
+    {
+      "epoch": 7,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 8,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 9,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 10,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 11,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 12,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 13,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 14,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 15,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 16,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 17,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 18,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 19,
+      "value": 0.20242914979757087
+    },
+    {
+      "epoch": 20,
+      "value": 0.20242914979757087
+    }
+  ],
+  "min": 0.02159863945578222,
+  "max": 0.20242914979757087,
+  "mean": 0.16828679700625188,
+  "std": 0.05516203927564536,
+  "first_value": 0.10204081632653061,
+  "final_value": 0.20242914979757087,
+  "delta": 0.10038833347104026,
+  "tail_mean": 0.20242914979757085,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "Max per-group recall gap at threshold 0.5 went from 0.1020 to 0.2024 over 20 epochs, first reaching the 0.1 standard threshold at epoch 4; tail_mean=0.2024 -> FAIL (acceptable_met=False).",
+  "original_train_metric": {
+    "val_loss": 0.9617021404779874,
+    "val_auprc": 0.38786491114195887
+  }
+}

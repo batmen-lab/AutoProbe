@@ -1,0 +1,833 @@
+{
+  "metric_name": "kBET mean acceptance",
+  "standard_threshold": 0.8,
+  "acceptable_threshold": 0.55,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.367
+    },
+    {
+      "epoch": 1,
+      "value": 0.3435
+    },
+    {
+      "epoch": 2,
+      "value": 0.3695
+    },
+    {
+      "epoch": 3,
+      "value": 0.3895
+    },
+    {
+      "epoch": 4,
+      "value": 0.421
+    },
+    {
+      "epoch": 5,
+      "value": 0.447
+    },
+    {
+      "epoch": 6,
+      "value": 0.5
+    },
+    {
+      "epoch": 7,
+      "value": 0.55
+    },
+    {
+      "epoch": 8,
+      "value": 0.5425
+    },
+    {
+      "epoch": 9,
+      "value": 0.548
+    },
+    {
+      "epoch": 10,
+      "value": 0.56
+    },
+    {
+      "epoch": 11,
+      "value": 0.614
+    },
+    {
+      "epoch": 12,
+      "value": 0.5795
+    },
+    {
+      "epoch": 13,
+      "value": 0.6265
+    },
+    {
+      "epoch": 14,
+      "value": 0.599
+    },
+    {
+      "epoch": 15,
+      "value": 0.643
+    },
+    {
+      "epoch": 16,
+      "value": 0.6215
+    },
+    {
+      "epoch": 17,
+      "value": 0.658
+    },
+    {
+      "epoch": 18,
+      "value": 0.6475
+    },
+    {
+      "epoch": 19,
+      "value": 0.652
+    },
+    {
+      "epoch": 20,
+      "value": 0.6745
+    },
+    {
+      "epoch": 21,
+      "value": 0.6725
+    },
+    {
+      "epoch": 22,
+      "value": 0.6925
+    },
+    {
+      "epoch": 23,
+      "value": 0.6965
+    },
+    {
+      "epoch": 24,
+      "value": 0.6875
+    },
+    {
+      "epoch": 25,
+      "value": 0.7005
+    },
+    {
+      "epoch": 26,
+      "value": 0.6895
+    },
+    {
+      "epoch": 27,
+      "value": 0.717
+    },
+    {
+      "epoch": 28,
+      "value": 0.709
+    },
+    {
+      "epoch": 29,
+      "value": 0.711
+    },
+    {
+      "epoch": 30,
+      "value": 0.725
+    },
+    {
+      "epoch": 31,
+      "value": 0.712
+    },
+    {
+      "epoch": 32,
+      "value": 0.708
+    },
+    {
+      "epoch": 33,
+      "value": 0.717
+    },
+    {
+      "epoch": 34,
+      "value": 0.7295
+    },
+    {
+      "epoch": 35,
+      "value": 0.747
+    },
+    {
+      "epoch": 36,
+      "value": 0.7205
+    },
+    {
+      "epoch": 37,
+      "value": 0.7405
+    },
+    {
+      "epoch": 38,
+      "value": 0.7725
+    },
+    {
+      "epoch": 39,
+      "value": 0.775
+    },
+    {
+      "epoch": 40,
+      "value": 0.77
+    },
+    {
+      "epoch": 41,
+      "value": 0.76
+    },
+    {
+      "epoch": 42,
+      "value": 0.7345
+    },
+    {
+      "epoch": 43,
+      "value": 0.769
+    },
+    {
+      "epoch": 44,
+      "value": 0.76
+    },
+    {
+      "epoch": 45,
+      "value": 0.7865
+    },
+    {
+      "epoch": 46,
+      "value": 0.7615
+    },
+    {
+      "epoch": 47,
+      "value": 0.7765
+    },
+    {
+      "epoch": 48,
+      "value": 0.778
+    },
+    {
+      "epoch": 49,
+      "value": 0.7715
+    },
+    {
+      "epoch": 50,
+      "value": 0.7855
+    },
+    {
+      "epoch": 51,
+      "value": 0.8095
+    },
+    {
+      "epoch": 52,
+      "value": 0.798
+    },
+    {
+      "epoch": 53,
+      "value": 0.7755
+    },
+    {
+      "epoch": 54,
+      "value": 0.7625
+    },
+    {
+      "epoch": 55,
+      "value": 0.7855
+    },
+    {
+      "epoch": 56,
+      "value": 0.814
+    },
+    {
+      "epoch": 57,
+      "value": 0.794
+    },
+    {
+      "epoch": 58,
+      "value": 0.783
+    },
+    {
+      "epoch": 59,
+      "value": 0.766
+    },
+    {
+      "epoch": 60,
+      "value": 0.804
+    },
+    {
+      "epoch": 61,
+      "value": 0.817
+    },
+    {
+      "epoch": 62,
+      "value": 0.8165
+    },
+    {
+      "epoch": 63,
+      "value": 0.809
+    },
+    {
+      "epoch": 64,
+      "value": 0.8045
+    },
+    {
+      "epoch": 65,
+      "value": 0.803
+    },
+    {
+      "epoch": 66,
+      "value": 0.817
+    },
+    {
+      "epoch": 67,
+      "value": 0.8135
+    },
+    {
+      "epoch": 68,
+      "value": 0.81
+    },
+    {
+      "epoch": 69,
+      "value": 0.8135
+    },
+    {
+      "epoch": 70,
+      "value": 0.8115
+    },
+    {
+      "epoch": 71,
+      "value": 0.8225
+    },
+    {
+      "epoch": 72,
+      "value": 0.797
+    },
+    {
+      "epoch": 73,
+      "value": 0.833
+    },
+    {
+      "epoch": 74,
+      "value": 0.8185
+    },
+    {
+      "epoch": 75,
+      "value": 0.795
+    },
+    {
+      "epoch": 76,
+      "value": 0.813
+    },
+    {
+      "epoch": 77,
+      "value": 0.813
+    },
+    {
+      "epoch": 78,
+      "value": 0.795
+    },
+    {
+      "epoch": 79,
+      "value": 0.8255
+    },
+    {
+      "epoch": 80,
+      "value": 0.8145
+    },
+    {
+      "epoch": 81,
+      "value": 0.8125
+    },
+    {
+      "epoch": 82,
+      "value": 0.82
+    },
+    {
+      "epoch": 83,
+      "value": 0.7915
+    },
+    {
+      "epoch": 84,
+      "value": 0.787
+    },
+    {
+      "epoch": 85,
+      "value": 0.8245
+    },
+    {
+      "epoch": 86,
+      "value": 0.815
+    },
+    {
+      "epoch": 87,
+      "value": 0.817
+    },
+    {
+      "epoch": 88,
+      "value": 0.8025
+    },
+    {
+      "epoch": 89,
+      "value": 0.805
+    },
+    {
+      "epoch": 90,
+      "value": 0.804
+    },
+    {
+      "epoch": 91,
+      "value": 0.814
+    },
+    {
+      "epoch": 92,
+      "value": 0.8085
+    },
+    {
+      "epoch": 93,
+      "value": 0.8275
+    },
+    {
+      "epoch": 94,
+      "value": 0.809
+    },
+    {
+      "epoch": 95,
+      "value": 0.8005
+    },
+    {
+      "epoch": 96,
+      "value": 0.8105
+    },
+    {
+      "epoch": 97,
+      "value": 0.817
+    },
+    {
+      "epoch": 98,
+      "value": 0.8175
+    },
+    {
+      "epoch": 99,
+      "value": 0.8185
+    },
+    {
+      "epoch": 100,
+      "value": 0.813
+    },
+    {
+      "epoch": 101,
+      "value": 0.7955
+    },
+    {
+      "epoch": 102,
+      "value": 0.8195
+    },
+    {
+      "epoch": 103,
+      "value": 0.809
+    },
+    {
+      "epoch": 104,
+      "value": 0.804
+    },
+    {
+      "epoch": 105,
+      "value": 0.822
+    },
+    {
+      "epoch": 106,
+      "value": 0.796
+    },
+    {
+      "epoch": 107,
+      "value": 0.8095
+    },
+    {
+      "epoch": 108,
+      "value": 0.81
+    },
+    {
+      "epoch": 109,
+      "value": 0.8115
+    },
+    {
+      "epoch": 110,
+      "value": 0.811
+    },
+    {
+      "epoch": 111,
+      "value": 0.815
+    },
+    {
+      "epoch": 112,
+      "value": 0.826
+    },
+    {
+      "epoch": 113,
+      "value": 0.8145
+    },
+    {
+      "epoch": 114,
+      "value": 0.817
+    },
+    {
+      "epoch": 115,
+      "value": 0.816
+    },
+    {
+      "epoch": 116,
+      "value": 0.81
+    },
+    {
+      "epoch": 117,
+      "value": 0.7915
+    },
+    {
+      "epoch": 118,
+      "value": 0.823
+    },
+    {
+      "epoch": 119,
+      "value": 0.818
+    },
+    {
+      "epoch": 120,
+      "value": 0.8135
+    },
+    {
+      "epoch": 121,
+      "value": 0.8135
+    },
+    {
+      "epoch": 122,
+      "value": 0.818
+    },
+    {
+      "epoch": 123,
+      "value": 0.802
+    },
+    {
+      "epoch": 124,
+      "value": 0.8195
+    },
+    {
+      "epoch": 125,
+      "value": 0.805
+    },
+    {
+      "epoch": 126,
+      "value": 0.803
+    },
+    {
+      "epoch": 127,
+      "value": 0.815
+    },
+    {
+      "epoch": 128,
+      "value": 0.8145
+    },
+    {
+      "epoch": 129,
+      "value": 0.82
+    },
+    {
+      "epoch": 130,
+      "value": 0.8085
+    },
+    {
+      "epoch": 131,
+      "value": 0.811
+    },
+    {
+      "epoch": 132,
+      "value": 0.804
+    },
+    {
+      "epoch": 133,
+      "value": 0.8055
+    },
+    {
+      "epoch": 134,
+      "value": 0.8105
+    },
+    {
+      "epoch": 135,
+      "value": 0.805
+    },
+    {
+      "epoch": 136,
+      "value": 0.801
+    },
+    {
+      "epoch": 137,
+      "value": 0.8295
+    },
+    {
+      "epoch": 138,
+      "value": 0.8005
+    },
+    {
+      "epoch": 139,
+      "value": 0.8165
+    },
+    {
+      "epoch": 140,
+      "value": 0.8125
+    },
+    {
+      "epoch": 141,
+      "value": 0.805
+    },
+    {
+      "epoch": 142,
+      "value": 0.8015
+    },
+    {
+      "epoch": 143,
+      "value": 0.8005
+    },
+    {
+      "epoch": 144,
+      "value": 0.811
+    },
+    {
+      "epoch": 145,
+      "value": 0.7935
+    },
+    {
+      "epoch": 146,
+      "value": 0.7935
+    },
+    {
+      "epoch": 147,
+      "value": 0.818
+    },
+    {
+      "epoch": 148,
+      "value": 0.8015
+    },
+    {
+      "epoch": 149,
+      "value": 0.799
+    },
+    {
+      "epoch": 150,
+      "value": 0.82
+    },
+    {
+      "epoch": 151,
+      "value": 0.797
+    },
+    {
+      "epoch": 152,
+      "value": 0.8065
+    },
+    {
+      "epoch": 153,
+      "value": 0.828
+    },
+    {
+      "epoch": 154,
+      "value": 0.8045
+    },
+    {
+      "epoch": 155,
+      "value": 0.8215
+    },
+    {
+      "epoch": 156,
+      "value": 0.8045
+    },
+    {
+      "epoch": 157,
+      "value": 0.7935
+    },
+    {
+      "epoch": 158,
+      "value": 0.821
+    },
+    {
+      "epoch": 159,
+      "value": 0.7975
+    },
+    {
+      "epoch": 160,
+      "value": 0.8095
+    },
+    {
+      "epoch": 161,
+      "value": 0.807
+    },
+    {
+      "epoch": 162,
+      "value": 0.8135
+    },
+    {
+      "epoch": 163,
+      "value": 0.817
+    },
+    {
+      "epoch": 164,
+      "value": 0.816
+    },
+    {
+      "epoch": 165,
+      "value": 0.8095
+    },
+    {
+      "epoch": 166,
+      "value": 0.8175
+    },
+    {
+      "epoch": 167,
+      "value": 0.817
+    },
+    {
+      "epoch": 168,
+      "value": 0.801
+    },
+    {
+      "epoch": 169,
+      "value": 0.7975
+    },
+    {
+      "epoch": 170,
+      "value": 0.815
+    },
+    {
+      "epoch": 171,
+      "value": 0.836
+    },
+    {
+      "epoch": 172,
+      "value": 0.791
+    },
+    {
+      "epoch": 173,
+      "value": 0.8125
+    },
+    {
+      "epoch": 174,
+      "value": 0.794
+    },
+    {
+      "epoch": 175,
+      "value": 0.822
+    },
+    {
+      "epoch": 176,
+      "value": 0.797
+    },
+    {
+      "epoch": 177,
+      "value": 0.8255
+    },
+    {
+      "epoch": 178,
+      "value": 0.8175
+    },
+    {
+      "epoch": 179,
+      "value": 0.815
+    },
+    {
+      "epoch": 180,
+      "value": 0.8235
+    },
+    {
+      "epoch": 181,
+      "value": 0.8285
+    },
+    {
+      "epoch": 182,
+      "value": 0.818
+    },
+    {
+      "epoch": 183,
+      "value": 0.828
+    },
+    {
+      "epoch": 184,
+      "value": 0.8115
+    },
+    {
+      "epoch": 185,
+      "value": 0.8255
+    },
+    {
+      "epoch": 186,
+      "value": 0.807
+    },
+    {
+      "epoch": 187,
+      "value": 0.825
+    },
+    {
+      "epoch": 188,
+      "value": 0.807
+    },
+    {
+      "epoch": 189,
+      "value": 0.819
+    },
+    {
+      "epoch": 190,
+      "value": 0.8155
+    },
+    {
+      "epoch": 191,
+      "value": 0.8095
+    },
+    {
+      "epoch": 192,
+      "value": 0.8135
+    },
+    {
+      "epoch": 193,
+      "value": 0.8315
+    },
+    {
+      "epoch": 194,
+      "value": 0.803
+    },
+    {
+      "epoch": 195,
+      "value": 0.815
+    },
+    {
+      "epoch": 196,
+      "value": 0.8245
+    },
+    {
+      "epoch": 197,
+      "value": 0.8145
+    },
+    {
+      "epoch": 198,
+      "value": 0.8015
+    },
+    {
+      "epoch": 199,
+      "value": 0.8145
+    }
+  ],
+  "min": 0.3435,
+  "max": 0.836,
+  "mean": 0.770555,
+  "std": 0.09134219712159325,
+  "first_value": 0.367,
+  "final_value": 0.8145,
+  "delta": 0.4475,
+  "tail_mean": 0.8139999999999998,
+  "status": "PASS",
+  "acceptable_met": true,
+  "conclusion": "kBET mean acceptance went from 0.367 to 0.815 (improving), crossing the 0.80 standard threshold at epoch 51; tail mean 0.814 -> PASS.",
+  "per_batch_acceptance": {
+    "0": 0.0,
+    "1": 0.0
+  },
+  "original_train_metric_0": {
+    "name": "elbo_validation",
+    "value": 4915.52392578125,
+    "direction": "lower_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "elbo_train",
+    "value": 4506.626953125,
+    "direction": "lower_is_better"
+  }
+}

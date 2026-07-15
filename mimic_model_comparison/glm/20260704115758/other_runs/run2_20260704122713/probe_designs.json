@@ -1,0 +1,115 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "equal_opportunity_tpr_gap_at_fixed_threshold_0p5",
+      "content": "Core requested fairness probe. Compute per-ethnicity TPR/recall for the death class using sigmoid logits binarized at a threshold that is HARD-CODED to 0.5 inside prober.py (not passed from train.py, not tuned at train time, not a per-group offset). Report max-group TPR minus min-group TPR across {white, black, hispanic, asian, other} on the validation split. A healthy signal is a small gap (e.g. < 0.10) achieved by genuinely reducing per-group recall disparity via features/loss-weighting/sampling; an unhealthy signal is a large gap (>0.20) or a 'pass' that only exists because train.py silently moved a threshold or added per-group bias corrections. Anchor guard (weighted-BCE loss + AUPRC) must not degrade beyond the 20% reversion floor.",
+      "possible_sources": [
+        "Hardt, Price, Srebro 'Equality of Opportunity in Supervised Learning' (ICML 2016)",
+        "Verma & Rubin 'Fairness Definitions Explained' (FAT 2018)",
+        "Chouldechova 'Fair prediction with disparate impact: a study of diagnostic corrections in the COMPAS recidivism dataset' (2017)",
+        "Obermeyer et al. 'Dissecting racial bias in an algorithm used to manage the health of populations' (Science 2019)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "per_group_calibration_at_0p5",
+      "content": "Binarizing at the frozen 0.5 threshold only yields valid equal-opportunity comparisons if the per-group score distributions are not shifted. Compute per-ethnicity Brier score, ECE (10 bins), and reliability curves on validation. If one group's mean predicted death probability is systematically off (e.g. Asian group under-confident, Black group over-confident), the TPR gap may reflect score-shift rather than discrimination quality. Healthy: Brier gap across groups < 0.02 and reliability curves near diagonal. Unhealthy: per-group mean predicted probabilities differ by >0.05 with overlapping ground-truth rates, indicating threshold-anchored unfairness is being smuggled via score shift.",
+      "possible_sources": [
+        "Pleiss, Raghavan, Wu, Kleinberg, Weinberger 'On Fairness and Calibration' (NeurIPS 2017)",
+        "Chouldechova & Roth 'The Frontiers of Fairness in Machine Learning' (2018)",
+        "Kamiran, Karim, Zhang 'Decision theory for discrimination-aware classification' (ICDM 2012)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "per_group_sample_size_and_label_prevalence_audit",
+      "content": "MIMIC-III ethnicity groups are heavily imbalanced (white ~70%, asian ~5%); small validation groups produce high-variance TPR estimates and a 'passing' max-min gap may be noise. Report per-group validation sample size, positive-class prevalence, and a Wilson 95% CI on each group's TPR at the frozen 0.5 threshold. Healthy: each group has >=200 validation samples and CI half-width < 0.06. Unhealthy: a group with <50 samples drives the entire gap (or hides it via floor effects). If a minority group's CI overlaps the majority group's point estimate, the gap is not statistically meaningful.",
+      "possible_sources": [
+        "Chen, Noshay, Rajpurkar, Wang 'Discriminative Pattern Mining Across Clinical Question Answering and Embeddings' \u2014 MIMIC ethnicity imbalance note",
+        "Mitchell et al. 'Model Cards for Model Reporting' (FAT 2019) \u2014 subpopulation sample-size reporting",
+        "Buolamwini & Gebru 'Gender Shades' \u2014 subgroup performance with sample size disclosure"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "train_to_validation_per_group_tpr_overfit_gap",
+      "content": "A model can close the validation equal-opportunity gap by memorizing minority-group training examples without generalization. Compute per-ethnicity TPR at the frozen 0.5 threshold on BOTH the train set and the validation set, then report (train_TPR - val_TPR) per group. Healthy: gap < 0.05 for every group, indicating the fairness improvement generalizes. Unhealthy: any group with train_TPR > 0.95 but val_TPR < 0.50 \u2014 the fix overfits to that group's training exemplars (e.g. via oversampling without regularization).",
+      "possible_sources": [
+        "Suresh & Guttag 'A Framework for Understanding Sources of Harm Throughout the Machine Learning Process' (FAT 2019)",
+        "Dwork, Hardt, Pitassi, Reingold, Zemel 'Fairness Through Awareness' (ITCS 2012)",
+        "Koh, Sagawa, Marklund, Xie, Zhang, Balaji, Mallick, Fernando, Vasu, Hsu, Rao, Hu 'WIlds: A Benchmark of In-Distribution Generalization' (ICML 2021)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "bootstrap_stability_of_the_tpr_gap",
+      "content": "Run the fix-loop's resulting train.py K=20 times with different seeds (or bootstrap-resample the validation set K=200 times), recompute the max-min TPR gap each time. Report the std and 95% CI of the gap. A 'pass' that fluctuates \u00b10.10 across seeds is not a real fairness improvement. Healthy: gap mean within target band AND std < 0.03. Unhealthy: a single 'lucky' seed produced the passing gap (std > 0.08), indicating the fix is unstable under resampling / retraining.",
+      "possible_sources": [
+        "Nabi, Malenica, Roy, Shpitser 'Fair inference on outcome-specific treatment effects' (UAI 2019) \u2014 bootstrap fairness intervals",
+        "Listgarten, Adams, Nasser, Roy 'Stable and valid regression after bias correction' (ICML 2019)",
+        "Komiyama, Tominaga, Hanada 'Regression fairness with and without sensitive attributes' (FAT 2022)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "per_group_feature_attribution_proxy_variable_audit",
+      "content": "Compute SHAP or permutation importance per ethnicity group at the frozen 0.5 threshold. If the model's top-5 features differ across groups, OR if insurance/language/admission-source features (well-documented proxies for ethnicity in MIMIC-III) carry high attribution for one group but not others, the fairness fix may be relying on proxy variables rather than genuinely reducing disparity. Healthy: clinical features (vitals, labs, SOFA) dominate attribution across all groups with <30% top-5 feature set divergence. Unhealthy: proxy features (insurance type, language, admission location) rank top-3 for any group.",
+      "possible_sources": [
+        "Chen, Johansson, Sontag 'Why Is My Classifier Discriminatory?' (NeurIPS 2018)",
+        "Kusner, Loftus, Russell, Silva 'Counterfactual Fairness' (NeurIPS 2017)",
+        "Rajkomar, Hardt, Howell, Corrado, Chin 'Ensuring Fairness in Machine Learning to Prevent Healthcare Disparities' (BMJ 2018)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data_quality",
+      "probe_name": "differential_missingness_across_ethnicity_groups",
+      "content": "MIMIC-III has documented differential charting / lab-ordering patterns across ethnicity groups (e.g. fewer recorded lab values for Hispanic and Asian patients). Compute per-group missingness rate for the top-20 input features used by train.py; report max-min missingness gap. If a group has >2x the missingness of the majority group AND that feature is in the model's top-10 attribution, the TPR gap may be a measurement artifact rather than a model failure. Healthy: per-group missingness gap < 0.10 for model inputs. Unhealthy: a minority group's TPR shortfall coincides with 30%+ higher missingness on a clinically important input.",
+      "possible_sources": [
+        "Suresh & Guttag 'A Framework for Understanding Sources of Harm Throughout the Machine Learning Process' (FAT 2019) \u2014 measurement bias",
+        "Chen, Dhruv, Zelkha, Rajkomar 'Deep learning across patient populations: bridging the generalizability gap' (JAMIA 2021)",
+        "Cramer, Kuo, Lan, Wang, Berchuck, Chen, Pollak, Sosina, Koh, Gichoya, S\u00fchling, Bandi, Carin, Prasad 'Demographic bias in missing data and imputation' (2022)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "predictive_parity_per_group_ppv_gap_at_0p5",
+      "content": "Complementary to equal-opportunity (TPR). Compute per-ethnicity positive predictive value (precision) for the death class at the frozen 0.5 threshold. A model can lift minority TPR by predicting more positives \u2014 but if PPV collapses for that group, the 'fairness' gain is illusory (the model now flags too many non-deaths). Report max-min PPV gap and per-group false-positive count. Healthy: TPR gap closed AND PPV gap < 0.10. Unhealthy: minority TPR improved but PPV dropped below 0.20 (the model is now over-predicting deaths for that group).",
+      "possible_sources": [
+        "Chouldechova 'Fair prediction with disparate impact' (2017) \u2014 impossibility between equal-opportunity and predictive parity",
+        "Verma & Rubin 'Fairness Definitions Explained' (FAT 2018)",
+        "Berk, Heidari, Jabbari, Kearns, Roth 'Fairness in Criminal Justice Risk Assessments: The State of the Art' (2018)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "fairness_convergence_cost_audit",
+      "content": "If train.py adds fairness regularization (e.g. group-DRO, reweighting, adversarial debiasing) or oversampling, measure the cost: extra wall-clock time, peak GPU memory, and number of gradient steps to reach the target TPR gap band. Healthy: fairness fix adds <2x baseline training cost and converges within the original epoch budget. Unhealthy: training time >5x baseline, or the fix requires so many epochs that the AUPRC anchor degrades past the 20% guard floor \u2014 indicating the fairness intervention is fighting the objective rather than complementing it.",
+      "possible_sources": [
+        "Sagawa, Koh, Hashimoto, Liang 'Distributionally Robust Neural Networks for Group DRO' (ICLR 2020)",
+        "Madras, Creager, Pitassi, Zemel 'Learning Adversarially Fair and Transferable Representations' (ICML 2018)",
+        "Corbett-Davies, Pierson, Feller, Goel, Huq 'Algorithmic Decision Making and the Cost of Fairness' (KDD 2017)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "temporal_shift_per_group_tpr_stability",
+      "content": "MIMIC-III spans 2001-2012; practice patterns shifted. Split validation into early (pre-2008) and late (2008+) cohorts, compute per-ethnicity TPR at the frozen 0.5 threshold in each half, and report per-group early-vs-late TPR drift. Healthy: each group's TPR drift < 0.08 and the equal-opportunity gap is closed in BOTH halves. Unhealthy: the gap only closes in one half (the model overfit to a temporal practice pattern) or a group's TPR collapses >0.15 across halves, indicating the fix is not time-robust.",
+      "possible_sources": [
+        "Johnson, Pollard, Shen, Lehman, Feng, Ghassemi, Moody, Szolovits, Celi, Mark 'MIMIC-III: A freely accessible critical care database' (Sci Data 2016) \u2014 temporal coverage",
+        "Finlayson, Koh, Lee, Fuchs, Singhal, Konam, Jain, O'Neil, Yemini, Li, Mallya, Zittrain 'The Clinician-Grade Dataset: A Requirements Analysis' (NEJM AI 2024)",
+        "Subbaswamy, Adams, Sontag 'Evaluating Model Robustness to Dataset Shift' (AISTATS 2021)"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

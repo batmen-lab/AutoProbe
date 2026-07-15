@@ -1,0 +1,109 @@
+{
+  "metric_name": "ethnicity_equal_opportunity_recall_gap",
+  "standard_threshold": 0.05,
+  "acceptable_threshold": 0.1,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.0
+    },
+    {
+      "epoch": 2,
+      "value": 0.0
+    },
+    {
+      "epoch": 3,
+      "value": 0.0
+    },
+    {
+      "epoch": 4,
+      "value": 0.0
+    },
+    {
+      "epoch": 5,
+      "value": 0.0
+    },
+    {
+      "epoch": 6,
+      "value": 0.0
+    },
+    {
+      "epoch": 7,
+      "value": 0.0
+    },
+    {
+      "epoch": 8,
+      "value": 0.0
+    },
+    {
+      "epoch": 9,
+      "value": 0.0
+    },
+    {
+      "epoch": 10,
+      "value": 0.0024038461538461453
+    },
+    {
+      "epoch": 11,
+      "value": 0.0024038461538461453
+    },
+    {
+      "epoch": 12,
+      "value": 0.004807692307692291
+    },
+    {
+      "epoch": 13,
+      "value": 0.004807692307692291
+    },
+    {
+      "epoch": 14,
+      "value": 0.004807692307692291
+    },
+    {
+      "epoch": 15,
+      "value": 0.007211538461538436
+    },
+    {
+      "epoch": 16,
+      "value": 0.009615384615384581
+    },
+    {
+      "epoch": 17,
+      "value": 0.009615384615384581
+    },
+    {
+      "epoch": 18,
+      "value": 0.012019230769230727
+    },
+    {
+      "epoch": 19,
+      "value": 0.012019230769230727
+    },
+    {
+      "epoch": 20,
+      "value": 0.01666666666666672
+    }
+  ],
+  "min": 0.0,
+  "max": 0.01666666666666672,
+  "mean": 0.004318910256410247,
+  "std": 0.005056965871509131,
+  "first_value": 0.0,
+  "final_value": 0.01666666666666672,
+  "delta": 0.01666666666666672,
+  "tail_mean": 0.011987179487179467,
+  "status": "PASS",
+  "acceptable_met": true,
+  "conclusion": "Equal-opportunity recall gap (lower is better) went from 0.0000 to 0.0167 over 20 epochs, first reaching the 0.05 standard threshold at epoch 1; tail_mean=0.0120 -> PASS (acceptable_met=True).",
+  "original_train_metric_0": {
+    "name": "val_auprc",
+    "value": 0.35902164765680433,
+    "direction": "higher_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "train_loss",
+    "value": 1.477735998583775,
+    "direction": "lower_is_better"
+  }
+}

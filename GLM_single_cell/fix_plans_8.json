@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Set batch_balance_strength default to 1.0",
+      "content": "In train.py build_parser(), change the argparse default for --batch-balance-strength from 0.5 to 1.0 (the only edit; the symbol is the `parser.add_argument(\"--batch-balance-strength\", type=float, default=0.5)` line). This makes sample_cells() draw a uniform 0.5/0.5 batch composition (max 8000 cells, ~4000 per batch) instead of the current observed-proportion blend (~51/49), so kBET's null hypothesis (a cell's neighborhood batch composition matches the global composition) becomes the same target the encoder is trained against. This is the proven prior solve's other decisive lever: in the proven run, raising batch_balance_strength 0.5 -> 1.0 lifted kBET from 0.448 to 0.661 *before* encoder deepening (n_layers=2) was added; the current round-6 config already has n_layers=2 + adversarial_classifier + scale_adversarial_loss=2.0 + 100 epochs, but the metric plateaued at tail_mean 0.744 because batch_balance_strength=0.5 leaves the dataset's batch composition slightly skewed, capping the mean acceptance rate near ~0.76. Forcing a 50/50 batch composition removes this ceiling. ELBO anchor is unaffected \u2014 balanced subsampling does not change per-cell reconstruction difficulty; the ELBO anchor markers and original_train_metric recording remain intact. No changes to record()/conclude() call lines, _ProbeCallback, prober.py, or the SCVI constructor / plan_kwargs.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.62
+    },
+    {
+      "title": "Raise adversarial loss weight to 5",
+      "content": "In train.py main(), inside the vae.train(...) plan_kwargs dict, change `\"scale_adversarial_loss\": 2.0` to `\"scale_adversarial_loss\": 5.0` (single value edit; this is the only change). Round 6's tail_mean 0.744 with per-batch acceptance still 0.0/0.0 indicates the encoder still perfectly separates batches in latent space \u2014 the adversarial classifier is being fooled at the *global* level (mean ~0.74) but not at the per-batch level (per-batch 0.0/0.0 means each batch's own neighborhoods are still monolithic). The constant adversarial weight 2.0 (round 5) is not strong enough to fully break this separation; raising it to 5.0 multiplies the fool-loss gradient by 2.5x, forcing the encoder to prioritize batch-invariance over reconstruction sharpness. Expected: per-batch kBET rises above 0, mean kBET crosses 0.80 by epoch ~80. ELBO anchor will rise modestly (adversarial loss trades off against reconstruction) but the 100-epoch budget and 20-epoch KL warmup keep reconstruction healthy \u2014 the utility-floor guard (>20% degradation auto-revert) only triggers if ELBO degrades >20% vs round 6's 583/604, which a 2.5x adversarial weight does not cause in practice. No changes to record()/conclude() call lines, _ProbeCallback, prober.py, n_layers, n_epochs_kl_warmup, train_epochs, or any other hyperparameter.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.42
+    },
+    {
+      "title": "Add BatchSampler worker-based balancing at DataLoader level",
+      "content": "In train.py main(), between `scvi.model.SCVI.setup_anndata(...)` and `scvi.model.SCVI(...)`, build a custom balanced batch sampler and pass it via the `dataloader_kwargs` argument to vae.train(). Specifically: (1) compute batch_codes = adata.obs['batch'].astype('category').cat.codes.to_numpy(); (2) build per-batch index lists idx_0, idx_1; (3) define a torch.utils.data.Sampler subclass `BalancedBatchSampler` whose __iter__ yields, for each step, a list of `batch_size // 2` indices sampled without replacement from idx_0 concatenated with `batch_size // 2` from idx_1 (cycle with replacement if a batch is exhausted); (4) pass `dataloader_kwargs={'sampler': BalancedBatchSampler(adata, batch_size=args.batch_size)}` to vae.train(...) (and keep batch_size=args.batch_size so scVI knows the logical batch size). This is a data-handling lever distinct from plan 1 (which only changes the static subsample composition): it forces every training *minibatch* to be 50/50 batch-balanced, so the adversarial classifier's per-step gradient sees perfectly balanced batches \u2014 the strongest possible signal to push the encoder toward batch-invariant latents. Round 6's per-batch acceptance 0.0/0.0 indicates the encoder still collapses batches; balancing minibatches directly attacks this collapse at the gradient level. Expected: per-batch kBET rises above 0 within ~20 epochs, mean kBET crosses 0.80 by epoch ~60. ELBO anchor unaffected \u2014 balanced minibatches do not change the data distribution, only the order/composition of gradient steps. No changes to record()/conclude() call lines, _ProbeCallback, prober.py, n_layers, scale_adversarial_loss, train_epochs, or the build_parser() defaults (batch_balance_strength stays 0.5 since minibatch balancing subsumes the static-subsample balancing lever).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.33
+    }
+  ],
+  "chosen_index": 1,
+  "round": 8
+}

@@ -1,0 +1,85 @@
+Change log round 3 — mimic/train.py + mimic/dataset.py
+======================================================
+Selected plan: "Add small group-fairness penalty to BCE loss"
+
+Edits applied
+-------------
+1. File: dataset.py (__getitem__, ~line 45)
+   Added `eth_idx` to the per-sample return dict so the training loop
+   can bucket logits by ethnicity group without re-deriving from eth one-hot.
+   Before:
+       return {
+           "features": features,
+           "label": self.labels[idx],
+       }
+   After:
+       return {
+           "features": features,
+           "label": self.labels[idx],
+           "eth_idx": self.eth[idx].argmax().long(),
+       }
+   Default collate stacks the scalar long tensor into a (B,) long tensor
+   per batch. `self.eth` is still stored unconditionally on the dataset, so
+   prober._collect (which reads loader.dataset.eth directly) and
+   user_analyze() (which reads val_ds.eth) are unaffected.
+
+2. File: train.py — new helper `group_fairness_penalty` defined above
+   `train_one_epoch` (after select_device, before the Train/eval section
+   header). Signature:
+       group_fairness_penalty(logits, labels, eth_idx, lambda_=0.05)
+   Behaviour:
+     - s = logits.sigmoid()
+     - For each group g present in the batch with >=1 POSITIVE-label
+       sample, compute s_g_pos = s[(labels==1) & (eth_idx==g)].mean()
+     - If >=2 groups have positives, return lambda_ * (max - min) of those
+       means; otherwise return torch.tensor(0.0, device=logits.device).
+
+3. File: train.py — train_one_epoch
+   Added the penalty to the loss AFTER the ANCHOR-marked BCE line and
+   BEFORE optimizer.zero_grad()/loss.backward():
+       loss = criterion(logits, labels)  # ANCHOR: original train metric - do not remove
+       loss = loss + group_fairness_penalty(logits, labels, batch['eth_idx'].to(device))
+   lambda_ defaults to 0.05 (BCE+pos_weight stay dominant -> val_auprc
+   anchor preserved).
+
+Not touched
+-----------
+- prober.py (READ-ONLY) — not modified.
+- prober.record(...) and prober.conclude(standard_threshold=0.05,
+  acceptable_threshold=0.10) call lines — unchanged, both threshold
+  values still passed.
+- user_analyze() body, call site, and .agent_probe/.user_analysis output —
+  untouched (PROTECTED CODE).
+- ANCHOR markers (val_auprc, train_loss) and original_train_metric*
+  recording — unchanged. The penalty is added to the loss used for
+  backprop; the ANCHOR-commented `loss = criterion(logits, labels)` line
+  is preserved verbatim and the running_loss now includes the (small)
+  penalty term — val_auprc anchor is the higher_is_better guard.
+- Probe threshold / metric definition / operating point — unchanged.
+- All other hyperparameters (lr, weight_decay, epochs, pos_weight,
+  BATCH_SIZE, WeightedRandomSampler, use_eth=False) — unchanged.
+
+Discrepancies with plan
+-----------------------
+- Plan suggested the helper live "near line 90, after LogisticRegression".
+  Placed it after `select_device()` instead (immediately before the
+  Train/eval section header) — same logical region, keeps the model
+  class and the helper in the same pre-train block. Function body and
+  signature match the plan exactly.
+- Plan suggested the helper iterate over groups present in the batch.
+  Implementation uses torch.unique(eth_idx) so it correctly handles any
+  subset of groups appearing in a given batch; falls back to 0 when
+  fewer than 2 groups have positive-label samples (matches plan spec).
+- dataset.py edit placed at the existing return dict (lines 45-48 in the
+  round-2 file); plan referenced "dataset.py:36-44" which corresponds to
+  the same `__getitem__` return region — applied there faithfully.
+
+Expected effect
+---------------
+Third lever of the FAIRNESS-FIX NOTE (train.py:330-349). Round-2 gap
+plateaued at tail_mean=0.0753 because all three levers must be applied
+together. The penalty levels minority-group positive-class scores UP
+toward the majority's, lifting their recall at the fixed 0.5 operating
+point without collapsing predictions. Target: tail_mean < 0.05 (standard
+threshold) while val_auprc stays within the 20% anchor floor (round-2
+val_auprc was 0.364).

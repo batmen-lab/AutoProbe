@@ -1,0 +1,68 @@
+Change log round 2 — mimic/train.py
+====================================
+Selected plan: "Group-balanced sampler + drop eth features"
+
+Edits applied (file: train.py)
+------------------------------
+1. Import: added WeightedRandomSampler to the torch.utils.data import line.
+   Before:  from torch.utils.data import DataLoader
+   After:   from torch.utils.data import DataLoader, WeightedRandomSampler
+
+2. Dataset construction (main()): switched both MIMICMortalityDataset calls
+   to use_eth=False so the ethnicity one-hot is dropped from model INPUT.
+   Before:
+       train_ds = MIMICMortalityDataset(data_path, 'train')
+       val_ds   = MIMICMortalityDataset(data_path, 'val')
+   After:
+       train_ds = MIMICMortalityDataset(data_path, 'train', use_eth=False)
+       val_ds   = MIMICMortalityDataset(data_path, 'val', use_eth=False)
+   Ethnicity still stored on the dataset (dataset.py:29 stores self.eth
+   unconditionally), so val_ds.eth used by user_analyze() and the prober
+   is unaffected.
+
+3. Train DataLoader (main()): replaced shuffle=True with a
+   WeightedRandomSampler whose per-sample weight is
+   1.0 / count_of_that_sample's_ethnicity_group_in_train, computed from
+   train_ds.eth.argmax(dim=1) value counts via torch.bincount.
+   num_samples = len(train_ds); generator stays the seeded _loader_gen.
+   Before:
+       train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE,
+                                 shuffle=True, generator=_loader_gen)
+   After:
+       _train_eth_group = train_ds.eth.argmax(dim=1)
+       _group_counts = torch.bincount(_train_eth_group,
+                                      minlength=len(ETH_NAMES)).float()
+       _sample_weights = 1.0 / _group_counts[_train_eth_group].clamp(min=1.0)
+       _balanced_sampler = WeightedRandomSampler(
+           weights=_sample_weights,
+           num_samples=len(train_ds),
+           generator=_loader_gen,
+       )
+       train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE,
+                                 sampler=_balanced_sampler)
+   Note: with a sampler set, torch's DataLoader disallows shuffle=True, so
+   the generator is passed to the sampler instead (seeding preserved).
+
+Not touched
+-----------
+- prober.py (READ-ONLY) — not modified.
+- Loss, optimizer, epochs, lr, pos_weight — unchanged.
+- prober.record(...) and prober.conclude(standard_threshold=0.05,
+  acceptable_threshold=0.10) call lines — unchanged, both threshold
+  values still passed.
+- user_analyze() body, call site, and .agent_probe/.user_analysis output —
+  untouched (PROTECTED CODE).
+- ANCHOR markers (val_auprc, train_loss) and original_train_metric*
+  recording — unchanged.
+- Probe threshold / metric definition — unchanged.
+
+Discrepancies with plan
+-----------------------
+None. Plan's line references (300-301, 307) match the round-1 file
+exactly; both edits applied at those locations.
+
+Expected effect
+---------------
+Per-group recalls converge (gap toward 0.05) while val_auprc stays
+healthy — TF-IDF signal still carries mortality, BCE+pos_weight untouched,
+model can no longer key decisions on race.

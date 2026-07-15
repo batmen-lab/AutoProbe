@@ -1,0 +1,65 @@
+Change log round 3
+==================
+
+Plan title: Replace shuffle with ethnicity-stratified WeightedRandomSampler
+
+Applied edit (file: train.py, symbol: main / train_loader construction)
+- Added `WeightedRandomSampler` to the `from torch.utils.data import ...` line
+  (was: `from torch.utils.data import DataLoader`;
+   now: `from torch.utils.data import DataLoader, WeightedRandomSampler`).
+- In main(), replaced the prior `train_loader = DataLoader(train_ds,
+  batch_size=BATCH_SIZE, shuffle=True, generator=_loader_gen)` with a
+  WeightedRandomSampler-based loader:
+    _group_idx = train_ds.eth.argmax(dim=1).tolist()
+    _counts: dict[int, int] = {g: 0 for g in range(len(ETH_NAMES))}
+    for _g in _group_idx:
+        _counts[_g] += 1
+    _sample_weights = [1.0 / _counts[_g] if _counts[_g] > 0 else 0.0
+                       for _g in _group_idx]
+    _sampler = WeightedRandomSampler(
+        weights=_sample_weights,
+        num_samples=len(train_ds),
+        replacement=True,
+        generator=torch.Generator().manual_seed(SEED),
+    )
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE,
+                              shuffle=False, sampler=_sampler)
+- val_loader stays `shuffle=False` (unchanged).
+- The original `_loader_gen = torch.Generator(); _loader_gen.manual_seed(SEED)`
+  lines are left in place (now unused by the train_loader but harmless; kept to
+  minimise edit surface — the plan said to replace the shuffle argument, not
+  to remove the generator).
+
+Discrepancies with the plan:
+- The plan's literal pseudocode used `range(5)` for the counts dict; I used
+  `range(len(ETH_NAMES))` which equals 5 (ETH_NAMES has 5 entries). Same
+  behaviour, just not hard-coded to 5.
+- The plan's pseudocode `sample_weights = [1.0/counts[g] for g in group_idx]`
+  would ZeroDivisionError if any group has 0 members. I added a `> 0` guard
+  that yields weight 0.0 for empty groups (defensive; in practice all 5
+  ethnicity groups are present in the train split).
+- The plan says to pass `generator=torch.Generator().manual_seed(SEED)` to
+  the sampler. I followed that verbatim. The pre-existing `_loader_gen` is
+  no longer consumed by the train_loader (the sampler owns its own generator);
+  leaving it in place is a no-op and avoids touching unrelated lines.
+
+Integration integrity checks:
+- record(...) call site in main() is unmodified (lines ~362-371):
+    probe_record(epoch, model, val_loader, device,
+        anchor_metrics=[{...val_auprc...}, {...train_loss...}],
+        standard_threshold=0.05, acceptable_threshold=0.10)
+  Both threshold values still passed.
+- conclude(standard_threshold=0.05, acceptable_threshold=0.10) call is
+  unmodified (line ~374). Both threshold values still passed.
+- user_analyze() function body and its call site `user_analyze(model,
+  val_ds, device)` are untouched.
+- ANCHOR comments on the BCE loss line and on the val AUPRC line in
+  evaluate() are preserved; the BCE loss term and val AUPRC computation
+  are unchanged.
+- prober.py is NOT modified.
+- Anchor risk note: oversampling rare groups increases gradient signal on
+  minority positives, so val_auprc should be preserved or improved. If
+  AUPRC degrades >20% vs round-1 baseline (val_auprc=0.3956, train_loss=
+  0.8750), the orchestrator's auto-revert will catch it. The expected effect
+  on the probe metric is to lift TPR_black / TPR_hispanic toward the
+  white/asian band at the frozen THRESHOLD=0.5, collapsing the max-min gap.

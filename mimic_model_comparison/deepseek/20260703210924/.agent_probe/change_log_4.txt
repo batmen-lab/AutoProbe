@@ -1,0 +1,16 @@
+Plan: Add ReduceLROnPlateau and reduce epochs to 12
+
+File: train.py (only file touched)
+
+Changes:
+1. NUM_EPOCHS: 20 → 12 (line 61)
+2. LEARNING_RATE: 1e-3 → 5e-4 (line 59)
+3. Added ReduceLROnPlateau scheduler after optimizer definition (lines 322-324):
+   scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+       optimizer, mode='min', factor=0.5, patience=2, min_lr=1e-5,
+   )
+4. Added scheduler.step(val_metrics['loss']) after evaluate() call inside training loop (line 335)
+
+No discrepancies from plan.
+All record(), conclude(), and user_analyze() calls remain untouched.
+Both standard_threshold and acceptable_threshold still passed to conclude().

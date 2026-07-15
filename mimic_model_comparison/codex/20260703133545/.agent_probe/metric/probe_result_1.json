@@ -1,0 +1,131 @@
+{
+  "metric_name": "max_minus_min_ethnicity_tpr_gap",
+  "standard_threshold": 0.08,
+  "acceptable_threshold": 0.12,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.2115646258503402
+    },
+    {
+      "epoch": 2,
+      "value": 0.2032312925170069
+    },
+    {
+      "epoch": 3,
+      "value": 0.19489795918367347
+    },
+    {
+      "epoch": 4,
+      "value": 0.23571428571428565
+    },
+    {
+      "epoch": 5,
+      "value": 0.23571428571428565
+    },
+    {
+      "epoch": 6,
+      "value": 0.23571428571428565
+    },
+    {
+      "epoch": 7,
+      "value": 0.22738095238095235
+    },
+    {
+      "epoch": 8,
+      "value": 0.2394557823129252
+    },
+    {
+      "epoch": 9,
+      "value": 0.2394557823129252
+    },
+    {
+      "epoch": 10,
+      "value": 0.24319727891156462
+    },
+    {
+      "epoch": 11,
+      "value": 0.24319727891156462
+    },
+    {
+      "epoch": 12,
+      "value": 0.24693877551020416
+    },
+    {
+      "epoch": 13,
+      "value": 0.26360544217687076
+    },
+    {
+      "epoch": 14,
+      "value": 0.26360544217687076
+    },
+    {
+      "epoch": 15,
+      "value": 0.28775510204081634
+    },
+    {
+      "epoch": 16,
+      "value": 0.29608843537414964
+    },
+    {
+      "epoch": 17,
+      "value": 0.28775510204081634
+    },
+    {
+      "epoch": 18,
+      "value": 0.2998299319727892
+    },
+    {
+      "epoch": 19,
+      "value": 0.3119047619047619
+    },
+    {
+      "epoch": 20,
+      "value": 0.3202380952380953
+    }
+  ],
+  "min": 0.19489795918367347,
+  "max": 0.3202380952380953,
+  "mean": 0.2543622448979592,
+  "std": 0.034901476190616086,
+  "first_value": 0.2115646258503402,
+  "final_value": 0.3202380952380953,
+  "delta": 0.10867346938775513,
+  "tail_mean": 0.3031632653061225,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "Validation ethnicity TPR gap moved from 0.2116 to 0.3202; the last-5-epoch mean was 0.3032, did not reach the 0.08 standard threshold, and the final status is FAIL.",
+  "operating_threshold": 0.5,
+  "crossed_standard_epoch": null,
+  "worst_group_tpr": 0.5714285714285714,
+  "final_epoch_group_tpr": {
+    "white": 0.7740384615384616,
+    "black": 0.5714285714285714,
+    "hispanic": null,
+    "asian": null,
+    "other": 0.8916666666666667
+  },
+  "final_epoch_group_support": {
+    "white": 416,
+    "black": 49,
+    "hispanic": 13,
+    "asian": 19,
+    "other": 120
+  },
+  "insufficient_support_groups": [
+    "hispanic",
+    "asian"
+  ],
+  "alerts": [],
+  "original_train_metric_0": {
+    "name": "val_auprc",
+    "value": 0.3959095432316109,
+    "direction": "higher_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "val_loss",
+    "value": 0.952148648408743,
+    "direction": "lower_is_better"
+  }
+}

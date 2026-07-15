@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "pos_weight 1.7x + WEIGHT_DECAY 1e-2",
+      "content": "Two-line edit in mimic/train.py. (1) On the pos_weight line in main() (~line 351) change `pos_weight = torch.tensor(n_neg / n_pos, dtype=torch.float32, device=device)` to `pos_weight = torch.tensor((n_neg / n_pos) * 1.7, dtype=torch.float32, device=device)`. This gives effective pos_weight ~15.6x (vs round-6's 2x = 18.4x that hit train_loss 1.058, and round-5's 4x = 36.8x that blew up to 1.478); 1.7x sits below the round-6 multiplier, so BCE loss stays ~0.95-1.0, safely under the 1.05 anchor floor. (2) Raise the WEIGHT_DECAY constant (line 60) from 1e-4 to 1e-2 (a 100x increase). The round-6 failure mode was a widening gap in the FINAL third of training (epoch 10 gap 0.041 -> epoch 17 gap 0.166) as the linear model overfit the majority group's positive scores; L2 of 1e-2 on a TF-IDF logistic regression is a standard strong-regularization setting that flattens late-epoch score drift without disabling the discriminative signal. Keep lambda_=0.20 in group_fairness_penalty (still levels minority recall). Keep group-balanced WeightedRandomSampler, use_eth=False, user_analyze, anchor markers. Expected: at the final epoch, gap <= 0.05 (1.7x lifts all group recalls so worst group clears 0.85, while 1e-2 L2 stops the late overfit that pulled the majority recall above the rest), train_loss ~0.95-1.0 (under the 1.05 floor), val_auprc >= 0.32 (AUPRC is threshold-independent so the scalar pos weight doesn't hurt ranking; L2 of 1e-2 on TF-IDF logistic regression typically preserves AUPRC within a few points of the 1e-4 baseline's 0.366).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.7
+    },
+    {
+      "title": "lambda 0.50 + WEIGHT_DECAY 5e-3, no pos_weight lift",
+      "content": "Two-line edit in mimic/train.py, attacking the gap from the penalty+regularization side WITHOUT inflating pos_weight (so train_loss stays well below the 1.05 floor \u2014 round-3/4 at 1x pos_weight had train_loss 0.756-0.812, leaving large headroom). (1) In `group_fairness_penalty` definition (~line 112) change the default `lambda_: float = 0.20` to `lambda_: float = 0.50`. Rationale: at lambda=0.05 (round 3) and 0.20 (round 4) the gap moved 0.076 -> 0.099 \u2014 the penalty was still too weak relative to BCE ~0.75. At lambda=0.50 the penalty term (max_g s_g_pos - min_g s_g_pos) becomes ~0.04-0.06, large enough to push the worst-group positive scores up toward the majority's during training, but BCE still dominates so the model stays discriminative (penalty < 8% of BCE). (2) Raise WEIGHT_DECAY (line 60) from 1e-4 to 5e-3 (50x). Targets the same late-epoch overfit that bit round-6 (gap widened from 0.041 at epoch 10 to 0.166 at epoch 17 as the linear model kept fitting majority positives harder); 5e-3 is a moderate L2 that flattens that late drift without killing the TF-IDF signal. Keep pos_weight at the natural n_neg/n_pos (no multiplier), group-balanced sampler, use_eth=False, user_analyze, anchor markers, record/conclude call lines. Expected: gap <= 0.05 at the final epoch (0.50 lambda raises minority recall, 5e-3 L2 stops late majority-overfit widening), train_loss ~0.78-0.85 (close to round-3/4 baseline since pos_weight is unchanged and penalty+L2 add only a small term), val_auprc >= 0.32 (stronger L2 may cost a couple of AUPRC points off the 0.366 baseline but stays well above the 0.292 floor).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.35
+    },
+    {
+      "title": "Cosine LR decay + pos_weight 1.7x",
+      "content": "Two-edit change in mimic/train.py, attacking the late-overfit from the optimization-trajectory angle rather than via L2. The round-6 failure was that gap stayed <= 0.05 through epoch 10 then widened monotonically to 0.165 by epoch 17 \u2014 the model kept taking large gradient steps in late epochs that overfit the majority group's positives. A cosine LR schedule shrinks the step size through training so late epochs can only refine, not overfit. (1) After the optimizer construction in main() (~line 379-381) add a CosineAnnealingLR: `scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-4)`. (2) Add `scheduler.step()` at the bottom of the epoch loop body, after the prober.record(...) call and before the next epoch iteration (place it inside the `for epoch in range(1, NUM_EPOCHS + 1):` block, indented at the loop level). This decays LR from 1e-3 to 1e-4 over 20 epochs (10x reduction), so epochs 15-20 take steps ~5x smaller than round-6's constant 1e-3 \u2014 directly targeting the late-epoch widening. (3) On the pos_weight line (~line 351) change to `pos_weight = torch.tensor((n_neg / n_pos) * 1.7, dtype=torch.float32, device=device)` (same 1.7x as Plan A, lifts all group recalls so worst group clears 0.85 at threshold 0.5). Keep WEIGHT_DECAY=1e-4 (unchanged), lambda_=0.20, group-balanced sampler, use_eth=False, user_analyze, anchor markers, record/conclude call lines. Expected: gap <= 0.05 at the final epoch (1.7x pos_weight lifts minority recall, cosine LR stops the late majority-overfit widening that bit round-6), train_loss ~0.95-1.0 (1.7x is below round-6's 2x that hit 1.058, and decaying LR in late epochs further reduces loss growth), val_auprc >= 0.32 (cosine decay typically preserves or slightly improves AUPRC vs constant LR by avoiding late overfit; round-6 baseline was 0.366).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.65
+    }
+  ],
+  "chosen_index": 1,
+  "round": 7
+}

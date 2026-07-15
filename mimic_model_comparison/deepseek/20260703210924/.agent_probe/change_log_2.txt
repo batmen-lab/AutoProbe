@@ -1,0 +1,15 @@
+Plan: Oversample minority groups via WeightedRandomSampler
+
+File: train.py (only file touched)
+
+Changes:
+1. Added import: `from torch.utils.data import DataLoader, WeightedRandomSampler` (line 43)
+2. Removed the seeded `_loader_gen` generator block (lines 304-306, originally used for deterministic shuffle)
+3. Inserted WeightedRandomSampler construction block after train_ds/val_ds creation (lines 302-317):
+   - Compute group indices via `train_ds.eth.argmax(dim=1)`
+   - Build per-sample weights: `weight[group] = total_samples / (num_groups * count[group])`
+   - Create `WeightedRandomSampler` with `replacement=True`, `num_samples=len(train_ds)`
+4. Changed train_loader to use `sampler=sampler` instead of `shuffle=True, generator=_loader_gen` (line 319)
+
+No discrepancies from plan.
+All record(), conclude(), and user_analyze() calls remain untouched.

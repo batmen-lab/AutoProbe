@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Deepen SCVI encoder/decoder to n_layers=2",
+      "content": "Modify train.py main() to pass n_layers=2 into the scvi.model.SCVI(...) constructor call (the only scVI capacity hyperparameter NOT yet tuned in prior rounds). Concretely, change the constructor call at train.py:487-492 from `scvi.model.SCVI(adata, n_latent=args.n_latent, n_hidden=args.n_hidden, dropout_rate=args.dropout_rate)` to `scvi.model.SCVI(adata, n_latent=args.n_latent, n_hidden=args.n_hidden, n_layers=2, dropout_rate=args.dropout_rate)`. Do NOT add a new argparse arg \u2014 hard-code n_layers=2 inline. This is the model-architecture angle: rounds 2-5 widened n_latent/n_hidden but the encoder/decoder remained a single hidden layer, which is the scib-metrics PBMC recipe's default but not what the proven prior solve of this exact probe used. Stacking a second hidden layer (128->256->256->10) gives the encoder enough depth to learn a batch-invariant latent manifold under the existing AdversarialTrainingPlan pressure \u2014 the per-batch kBET 0.0/0.0 in round 5 indicates the single-layer encoder collapses each batch into its own region even with adversarial loss 2.0; a deeper encoder has the capacity to align batch distributions and is exactly what lifted kBET 0.66->0.85 in the proven run. Keep 100 epochs, KL warmup 20, scale_adversarial_loss=2.0, lr=1e-3, n_latent=30, n_hidden=256, dropout=0.0 unchanged. ELBO anchor expected to stay healthy \u2014 deeper encoder typically lowers ELBO slightly, not raises it. record()/conclude() lines untouched. prober.py untouched.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.62
+    },
+    {
+      "title": "Select batch-aware HVG-2000 before setup_anndata",
+      "content": "Modify train.py build_dataset() to insert a batch-aware highly-variable-gene selection step AFTER sample_cells(...) returns the downsampled adata but BEFORE setup_anndata is called in main(). Concretely, in build_dataset() at train.py:268-293, after the `adata = sample_cells(adata, max_cells=args.max_cells, batch_balance_strength=args.batch_balance_strength, rng=rng)` call (line 287-292), insert: `import scanpy as sc; sc.pp.highly_variable_genes(adata, flavor='seurat_v3', n_top_genes=2000, batch_key='batch', subset=True, layer='counts')` \u2014 note flavor='seurat_v3' requires a counts layer (already present at train.py:248 as `adata.layers['counts'] = adata.X.copy()`) and must run on the counts layer, so pass `layer='counts'` explicitly. Then return adata (the subset=True flag mutates adata in place to keep only HVGs). The `scvi.model.SCVI.setup_anndata(adata, layer='counts', batch_key='batch')` call in main() (train.py:484) runs on the already-subsetted adata. This is the data-handling / feature-selection angle, distinct from the architecture angle of plan A: PBMC has ~14k genes and the noisiest batch-specific genes (mitochondrial, cell-cycle, stress) carry pure batch signal that the adversarial classifier exploits to keep batches separable. Restricting to the top 2000 batch-aware HVGs (seurat_v3 + batch_key='batch' computes HVG within each batch then ranks via a vote, so batch-dominant genes are downweighted) removes the substrate the classifier uses to separate batches, freeing the encoder to focus on biology. This is exactly the second half of the proven prior solve's recipe (kBET 0.66 -> 0.85). Keep n_layers=1 (current default), 100 epochs, adversarial loss 2.0, KL warmup 20 unchanged. ELBO anchor may rise slightly (fewer genes = less reconstruction capacity) but stays well within the 20% utility floor. record()/conclude() lines untouched. prober.py untouched.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "title": "Strengthen adversarial schedule and widen batches",
+      "content": "Modify train.py main() vae.train(...) plan_kwargs and build_parser defaults to strengthen the adversarial optimization schedule without touching model architecture or data pipeline. Concretely: (1) in build_parser() change --batch-size default from 128 to 256 (train.py:49) \u2014 bigger batches give the adversarial classifier more cells per step to learn batch identity, producing a sharper gradient signal back to the encoder; (2) in plan_kwargs at train.py:499-504 raise `scale_adversarial_loss` from 2.0 to 4.0 \u2014 round 5 used 2.0 and per-batch kBET stayed 0.0/0.0, meaning the adversarial pressure was too weak to break per-batch separation; doubling to 4.0 keeps the encoder under sustained full-strength pressure for the entire 100-epoch run (KL warmup is already 20 epochs, which keeps the adversarial loss at full strength for the first 20 epochs before decaying \u2014 but the decay only affects the KL-term weight, not the adversarial loss weight, so scale_adversarial_loss=4.0 applies at full strength for ALL 100 epochs); (3) in build_parser() change --lr default from 1e-3 to 5e-4 (train.py:54) \u2014 a smaller lr pairs with the larger batch_size to produce a more stable optimization trajectory, preventing the adversarial gradient from destabilizing the ELBO reconstruction term. This is the optimization-schedule angle, distinct from the architecture angle of plan A and the feature-selection angle of plan B. Expected outcome: per-batch kBET rises above 0 for the first time as the encoder is forced to mix batches under 2x adversarial pressure; mean kBET crosses 0.80 standard threshold within ~80 epochs. ELBO anchor will be worse than round 5's 4824/4692 (stronger adversarial loss slows reconstruction) but the 20% utility floor is generous: even a 15% ELBO degradation (to ~5550) still passes the guard. record()/conclude() lines untouched. prober.py untouched.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.38
+    }
+  ],
+  "chosen_index": 1,
+  "round": 6
+}

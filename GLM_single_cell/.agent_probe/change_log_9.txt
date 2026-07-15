@@ -1,0 +1,22 @@
+Round 9 change log
+
+Selected plan: "Widen hidden to 256 and train 150 epochs"
+
+Edit applied:
+- File: train.py, function build_parser()
+  - --n-hidden default: 128 -> 256
+  - --train-epochs default: 100 -> 150
+
+All other hyperparameters left unchanged: n_layers=2, dropout_rate=0.1 (parser
+default), n_latent=10, adversarial_classifier=True, scale_adversarial_loss=2.0,
+n_epochs_kl_warmup=20, lr=1e-3, batch_balance_strength=0.5. main() body untouched
+including record()/conclude() lines, _ProbeCallback, and user_analysis().
+
+Discrepancies: none. Plan matched available code exactly.
+
+Verification:
+- record(...) call not present in train.py (prober_record used only via
+  _ProbeCallback.on_train_epoch_end); unchanged.
+- conclude(...) -> prober_conclude(0.80, 0.55, anchors=_anchors): both
+  standard_threshold (0.80) and acceptable_threshold (0.55) intact, anchors
+  still resolve to _elbo_val_final / _elbo_train_final.

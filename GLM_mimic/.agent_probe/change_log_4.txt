@@ -1,0 +1,35 @@
+Change log — round 4
+====================
+
+Plan applied: "Raise fairness penalty lambda to 0.20"
+
+Edit:
+  File: train.py
+  Symbol: group_fairness_penalty (definition, ~line 112)
+  Before: def group_fairness_penalty(logits, labels, eth_idx, lambda_: float = 0.05) -> torch.Tensor:
+  After:  def group_fairness_penalty(logits, labels, eth_idx, lambda_: float = 0.20) -> torch.Tensor:
+
+Call site in train_one_epoch (~line 150) left unchanged — it picks up the new default:
+    loss = loss + group_fairness_penalty(logits, labels, batch['eth_idx'].to(device))
+
+Discrepancies: none. The plan targeted exactly this default-arg change; no other edits made.
+
+Untouched (per plan + HARD RULES):
+  - prober.py
+  - record(...) and conclude(...) call sites in train.py (both thresholds intact)
+  - group-balanced WeightedRandomSampler
+  - dataset construction (use_eth=False)
+  - BCEWithLogitsLoss+pos_weight criterion
+  - user_analyze() function and its call site
+  - original_train_metric anchor markers
+  - all other hyperparameters (LR, WD, BATCH_SIZE, NUM_EPOCHS, SEED)
+
+Rationale (from plan): round 3 introduced the penalty at lambda=0.05 but tail_mean
+(0.076) was essentially identical to round 2 (0.075) — penalty contribution ~0.005
+was too small vs BCE ~0.75 to influence optimization. 4x stronger (0.20) pushes
+max_g s_g_pos - min_g s_g_pos toward 0 in training, lifting minority-group positive
+scores toward majority's, narrowing the recall gap at the fixed 0.5 prober threshold.
+
+Anchor risk note: val_auprc round-3 = 0.365, 20% floor ~0.292. Stronger penalty trades
+some AUPRC for fairness but should stay well above floor. BCE remains dominant
+(~0.75 vs penalty ~0.02 at lambda=0.20), so model stays discriminative — no collapse risk.

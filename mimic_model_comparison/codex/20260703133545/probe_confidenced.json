@@ -1,0 +1,114 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "Fixed-0.5 Equal-Opportunity TPR Gap by Ethnicity",
+      "content": "Evaluate equal opportunity on the validation split by decoding each sample's ethnicity from the N x 5 one-hot matrix and computing death-class recall / true-positive-rate separately for white, black, hispanic, asian, and other. The operating threshold must be hard-coded to 0.5 inside prober.py, never exposed in train.py, and never tuned or searched during training or selection. Report each group TPR, the worst-group TPR, and the max-minus-min TPR gap. Do not use AUROC anywhere in this probe. Healthy signal: a small TPR gap with no ethnicity group showing collapsed recall at the fixed 0.5 operating point. Unhealthy signal: one or more groups have materially lower recall, or fairness would only improve if the threshold were moved away from 0.5.",
+      "possible_sources": [
+        "Hardt, Price, and Srebro 2016, 'Equality of Opportunity in Supervised Learning'",
+        "Rajkomar et al. 2018, 'Ensuring Fairness in Machine Learning to Advance Health Equity'",
+        "Pfohl et al. 2021, 'An empirical characterization of fair machine learning for clinical risk prediction'"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "uncertainty",
+      "probe_name": "Bootstrap Confidence Interval for the Ethnicity TPR Gap",
+      "content": "Because some ethnicity groups have few death positives, estimate uncertainty around the fairness metric rather than trusting a single point estimate. Recompute the fixed-threshold 0.5 per-group TPRs and the max-minus-min gap over many bootstrap resamples of the validation set, preferably stratified by ethnicity and label. Report bootstrap confidence intervals for each group TPR and for the gap itself. Healthy signal: the TPR gap remains small with reasonably tight intervals. Unhealthy signal: the fairness conclusion is unstable, with wide intervals or frequent reversals driven by very small positive counts.",
+      "possible_sources": [
+        "TRIPOD+AI statement 2024, 'updated guidance for reporting clinical prediction models that use regression or machine learning methods'",
+        "Steyerberg et al. 2014, 'Towards better clinical prediction models: seven steps for development and an ABCD for validation'",
+        "Harrell 2015, 'Regression Modeling Strategies'"
+      ],
+      "confidence": 0.74
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Per-Ethnicity AUPRC Audit",
+      "content": "Compute precision-recall curves and AUPRC separately within each ethnicity group to assess minority-class ranking quality without relying on AUROC. This complements the fixed-threshold fairness probe: a model may have similar recall at 0.5 yet still rank positives poorly in one group. Compare each group's AUPRC against its prevalence baseline and inspect whether any group's PR curve collapses even if aggregate validation AUPRC looks acceptable. Healthy signal: all groups maintain useful AUPRC above prevalence with no severe subgroup collapse. Unhealthy signal: one or more groups have near-baseline AUPRC, meaning the model is effectively uninformative for that subgroup even if overall AUPRC is decent.",
+      "possible_sources": [
+        "Saito and Rehmsmeier 2015, 'The Precision-Recall Plot Is More Informative than the ROC Plot When Evaluating Binary Classifiers on Imbalanced Datasets'",
+        "Davis and Goadrich 2006, 'The Relationship Between Precision-Recall and ROC Curves'",
+        "Harutyunyan et al. 2019, 'Multitask learning and benchmarking with clinical time series data'"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Equalized-Odds Decomposition at Fixed 0.5",
+      "content": "Augment the equal-opportunity check with the false-positive-rate burden at the same hard-coded 0.5 threshold. For each ethnicity, compute both TPR and FPR, then summarize the TPR gap and FPR gap across groups. This matters because a model can reduce recall disparity by over-flagging one ethnicity, shifting harm from false negatives to false positives. Healthy signal: TPR disparity is small without a large FPR disparity. Unhealthy signal: the model appears fair on recall but creates substantially higher false-alarm rates for one or more groups.",
+      "possible_sources": [
+        "Hardt, Price, and Srebro 2016, 'Equality of Opportunity in Supervised Learning'",
+        "Chouldechova 2017, 'Fair prediction with disparate impact: A study of bias in recidivism prediction instruments'",
+        "Pfohl et al. 2021, 'An empirical characterization of fair machine learning for clinical risk prediction'"
+      ],
+      "confidence": 0.89
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Predictive Parity / PPV Gap at Fixed 0.5",
+      "content": "At the same fixed 0.5 threshold, compute precision / positive-predictive-value separately by ethnicity. In an imbalanced mortality task, similar recall across groups does not guarantee that positive predictions mean the same thing across groups. Report each group's PPV and the max-minus-min PPV gap. Healthy signal: positive alerts have reasonably similar trustworthiness across groups, acknowledging some base-rate-driven tradeoffs. Unhealthy signal: one ethnicity receives many more low-precision alerts, meaning the operational burden of positive predictions is uneven even if TPRs are aligned.",
+      "possible_sources": [
+        "Chouldechova 2017, 'Fair prediction with disparate impact: A study of bias in recidivism prediction instruments'",
+        "Pleiss et al. 2017, 'On Fairness and Calibration'",
+        "Pfohl et al. 2021, 'An empirical characterization of fair machine learning for clinical risk prediction'"
+      ],
+      "confidence": 0.83
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Subgroup Calibration Reliability by Ethnicity",
+      "content": "Assess whether predicted death probabilities are calibrated within each ethnicity group using reliability diagrams plus subgroup Brier score, expected calibration error, and calibration intercept / slope when feasible. A fixed 0.5 decision threshold is only interpretable if the score carries similar risk meaning across groups. Healthy signal: reliability curves are near the diagonal and subgroup calibration statistics are comparable. Unhealthy signal: systematic overprediction or underprediction for one ethnicity, which can directly create recall disparities at 0.5 even when ranking performance looks acceptable.",
+      "possible_sources": [
+        "Van Calster et al. 2019, 'Calibration: the Achilles heel of predictive analytics'",
+        "Guo et al. 2017, 'On Calibration of Modern Neural Networks'",
+        "Addressing bias in prediction models by improving subpopulation calibration, JAMIA 2021"
+      ],
+      "confidence": 0.87
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "Counterfactual Ethnicity-Swap Sensitivity",
+      "content": "Since ethnicity is explicitly fed into the classifier as a 5-d one-hot feature, test direct dependence on the protected attribute by holding the TF-IDF note vector fixed and swapping the ethnicity one-hot across the five possible groups at inference time. Measure the distribution of score changes, logit changes, and threshold-crossing flips around the fixed 0.5 cutoff. This is a sensitivity audit rather than a full causal fairness proof. Healthy signal: most predictions are stable and only weakly affected by ethnicity swaps. Unhealthy signal: many examples change materially, especially if they cross the 0.5 decision boundary solely because the ethnicity bit changed.",
+      "possible_sources": [
+        "Kusner et al. 2017, 'Counterfactual Fairness'",
+        "Rajkomar et al. 2018, 'Ensuring Fairness in Machine Learning to Advance Health Equity'",
+        "Manski, Mullahy, and Venkataramani 2022, 'Using Measures of Race to Make Clinical Predictions: Decision Making, Patient Health, and Fairness'"
+      ],
+      "confidence": 0.54
+    },
+    {
+      "probe_type": "ablation",
+      "probe_name": "Ethnicity-Feature Ablation Fairness-Utility Frontier",
+      "content": "Benchmark the current model against a variant that does not use the 5 ethnicity one-hot inputs, while keeping the rest of the pipeline, weighted BCE objective, and validation AUPRC checkpoint selection unchanged. Compare overall AUPRC and the fixed-0.5 equal-opportunity TPR gap between the two models. The goal is not to assume protected features must always be removed, but to quantify whether direct ethnicity access is helping, hurting, or merely shortcutting subgroup behavior. Healthy signal: the fairness gap improves or remains similar without large utility loss, or any utility gain from using ethnicity is transparent and justified. Unhealthy signal: fairness depends strongly on direct ethnicity encoding with little evidence of clinically meaningful benefit.",
+      "possible_sources": [
+        "Rajkomar et al. 2018, 'Ensuring Fairness in Machine Learning to Advance Health Equity'",
+        "Manski, Mullahy, and Venkataramani 2022, 'Using Measures of Race to Make Clinical Predictions: Decision Making, Patient Health, and Fairness'",
+        "Pfohl et al. 2021, 'An empirical characterization of fair machine learning for clinical risk prediction'"
+      ],
+      "confidence": 0.72
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Fairness Stability Across Random Seeds and Resamples",
+      "content": "Re-train the logistic model over multiple random seeds or repeated stratified resamples while preserving the anchor choices: class-weighted BCE, validation AUPRC model selection, and the probe's hard-coded 0.5 decision threshold. Track the distribution of overall AUPRC, per-ethnicity TPRs, and the equal-opportunity gap. Healthy signal: subgroup recall patterns and the fairness pass/fail outcome are stable across runs. Unhealthy signal: the fairness result changes substantially from run to run, indicating that the observed disparity is too fragile to trust.",
+      "possible_sources": [
+        "TRIPOD+AI statement 2024, 'updated guidance for reporting clinical prediction models that use regression or machine learning methods'",
+        "Steyerberg et al. 2014, 'Towards better clinical prediction models: seven steps for development and an ABCD for validation'",
+        "Harrell 2015, 'Regression Modeling Strategies'"
+      ],
+      "confidence": 0.69
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Ethnicity-Group Support and Positive-Denominator Adequacy",
+      "content": "Before interpreting any subgroup fairness number, audit the validation-set support behind it. Verify the ethnicity matrix is truly one-hot per sample, then report total cases and death positives for each ethnicity group alongside each TPR. Flag groups with very small positive denominators, because TPR is undefined with zero positives and highly unstable with only a handful of deaths. Healthy signal: every group has enough positive support for the recall gap to be interpretable, and denominators are always shown next to rates. Unhealthy signal: fairness claims are being made from tiny death counts where one or two cases can swing the gap sharply.",
+      "possible_sources": [
+        "Harutyunyan et al. 2019, 'Multitask learning and benchmarking with clinical time series data'",
+        "TRIPOD+AI statement 2024, 'updated guidance for reporting clinical prediction models that use regression or machine learning methods'",
+        "Steyerberg et al. 2014, 'Towards better clinical prediction models: seven steps for development and an ABCD for validation'"
+      ],
+      "confidence": 0.81
+    }
+  ]
+}

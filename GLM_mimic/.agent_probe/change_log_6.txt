@@ -1,0 +1,50 @@
+Change log — round 6
+====================
+
+Plan applied: "Set pos_weight multiplier to 2.0x"
+
+Edit:
+  File: train.py
+  Symbol: pos_weight (in main(), line 351)
+  Before: pos_weight = torch.tensor(n_neg / n_pos, dtype=torch.float32, device=device)
+  After:  pos_weight = torch.tensor((n_neg / n_pos) * 2.0, dtype=torch.float32, device=device)
+
+Rationale (from plan): interpolate between the 1x baseline (round-3/4: train_loss
+0.756-0.812, gap 0.076-0.099) and the 4x round-5 blow-up (train_loss 1.478, gap 0.017
+but auto-reverted for anchor degradation). 2.0x gives effective pos_weight ~18.4x
+(vs 4x's ~36.8x that blew up loss). Target: train_loss <= 1.0 (within 1.05 anchor
+floor, 20% above round-1 baseline 0.875), gap <= 0.05, val_auprc >= 0.32.
+
+Round-5 was AUTO-REVERTED: round-5 train_loss=1.4777 was +68.9% over the 0.875
+baseline (max allowed +20% = 1.05). 2.0x is the conservative choice within the
+user-hint feasible zone (1.8-2.2x), leaving seed-variance headroom under the 1.05
+floor. AUPRC is threshold-independent ranking, so a scalar pos_weight only shifts
+the operating point — round-5 at 4x still had val_auprc=0.359 (above the 0.292
+floor), so 2x should sit comfortably >= 0.34.
+
+ANTI-GAMING checks (per plan): BCEWithLogitsLoss retained (no one-class collapse —
+2x is moderate at ~9% prevalence), round-2 group-balanced WeightedRandomSampler
+retained, use_eth=False retained, round-3 group_fairness_penalty lambda_=0.20
+retained (still helps worst groups). BCE stays dominant so model remains
+discriminative and val_auprc anchor holds.
+
+Discrepancies: none. The plan targeted exactly this single-line change; no other
+edits made.
+
+Untouched (per plan + HARD RULES):
+  - prober.py
+  - record(...) and conclude(...) call sites in train.py (both thresholds intact)
+  - train_one_epoch's ANCHOR loss line (loss = criterion(logits, labels))
+  - group-balanced WeightedRandomSampler
+  - dataset construction (use_eth=False)
+  - user_analyze() function and its call site
+  - original_train_metric anchor markers
+  - all other hyperparameters (LR, WD, BATCH_SIZE, NUM_EPOCHS, SEED)
+
+Integration integrity verified:
+  - prober.record(...) at line 406 with standard_threshold=0.05,
+    acceptable_threshold=0.10, original_train_metrics=[val_auprc
+    (higher_is_better), train_loss (lower_is_better)] — intact
+  - prober.conclude(standard_threshold=0.05, acceptable_threshold=0.10) at
+    line 429 — intact
+  - user_analyze(model, val_ds, device) call at line 424 — intact, ungated

@@ -1,0 +1,121 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "Equal-Opportunity Recall Gap (death class, ethnicity)",
+      "content": "The canonical equal-opportunity probe for this task. At the FROZEN threshold=0.5 (hard-coded inside prober.py \u2014 must not be tunable via train.py args or selected at train time), compute per-ethnicity recall/TPR for the death class across the 5 one-hot ethnicity groups (white, black, hispanic, asian, other) on validation. Report max-recall minus min-recall and also the std across groups. A healthy sign is a gap at or near 0 (e.g., <0.05 absolute) and not systematically negative for any single group. An unhealthy sign is a large gap (\u22650.10) or a consistent under-recall on a minority group (e.g., black or hispanic patients are less often flagged for death), indicating the model has learned an ethnicity-correlated decision surface that fails equal-opportunity. Must be reported alongside the ANCHOR (weighted-BCE loss + AUPRC) to ensure parity is not achieved by collapsing the overall recall.",
+      "possible_sources": [
+        "Hardt, Price, Srebro 2016 \u2014 Equality of Opportunity in Supervised Learning (NeurIPS)",
+        "Chouldechova 2017 \u2014 Fair prediction with disparate impact",
+        "Kompa et al. 2021 \u2014 Empirical observation of negligible fairness-accuracy trade-offs in ICU outcome models",
+        "Harutyunyan et al. 2019 \u2014 Multitask Learning and Benchmarking with Clinical Time Series Data (MIMIC-III benchmark)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Predictive Parity \u2014 Per-Ethnicity PPV Gap",
+      "content": "Equal-opportunity (TPR parity) is logically independent of predictive parity (PPV parity); satisfying one can violate the other under base-rate imbalance (Chouldechova 2017 impossibility). At the frozen 0.5 threshold, compute per-ethnicity PPV (= precision) for the death class and report max-PPV minus min-PPV. Healthy: small PPV gap (e.g., <0.08) and no group systematically over-flagged. Unhealthy: a minority group shows dramatically lower PPV (over-alerting, many false positives) \u2014 clinically this wastes clinician attention and can cause alarm fatigue \u2014 or dramatically higher PPV (under-alerting). This probe is supplementary: the project's primary lever is equal-opportunity recall, but reporting PPV surfaces whether the fix-loop trades recall-parity for precision-collapse on smaller groups.",
+      "possible_sources": [
+        "Chouldechova 2017 \u2014 Fair prediction with disparate impact",
+        "Chouldechova & Roth 2020 \u2014 The Frontiers of Fairness in Machine Learning (impossibility of concurrent criteria)",
+        "Barocas, Hardt, Narayanan 2023 \u2014 Fairness and Machine Learning (textbook, ch. 3 on criteria incompatibility)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "False-Positive-Rate (FPR) Parity Across Ethnicities",
+      "content": "Compute per-ethnicity FPR (= 1 - specificity) at the frozen 0.5 threshold for the death class. Report max-FPR minus min-FPR. FPR parity is the 'other side' of equal-opportunity: a model can have equal recall across groups but achieve it by over-labeling a minority group as 'at risk' (inflated FPR), causing unnecessary interventions and alarm fatigue in the ICU. Healthy: FPR gap < 0.05. Unhealthy: a minority group shows dramatically higher FPR (e.g., non-white patients systematically over-alerted), or the fix-loop drives the equal-opportunity recall gap to zero by pushing all groups' thresholds implicitly (via feature representations) toward uniform FPR but at the cost of collapsed calibration.",
+      "possible_sources": [
+        "Hardt, Price, Srebro 2016 \u2014 Equality of Opportunity (defines both equalized odds \u2014 TPR + FPR parity \u2014 and its relaxation)",
+        "Obermeyer et al. 2019 \u2014 Dissecting racial bias in an algorithm used to manage the health of populations (Science)",
+        "Gianfrancesco et al. 2021 \u2014 Health equity and AI in critical care"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Per-Ethnicity Calibration (ECE + reliability diagrams at 0.5 operating regime)",
+      "content": "Even with equal-opportunity recall achieved, the model may be poorly calibrated within some ethnic groups \u2014 i.e., predicted probabilities do not match empirical frequency of death. Compute per-ethnicity Expected Calibration Error (ECE) and plot per-ethnicity reliability diagrams on the validation set, using probability bins (e.g., 10 equal-width bins). Focus on the high-probability regime near the 0.5 operating point: are patients predicted ~0.5-dying in group A actually dying 50% of the time, and likewise in group B? Healthy: per-ethnicity ECE within 2x of each other and no group shows severe overconfidence in the tail. Unhealthy: a minority group shows ECE \u2265 2-3x that of the majority group, indicating the model has learned poorly-calibrated confidence for that group \u2014 clinically dangerous because a probability of 0.6 should mean the same thing for a white and a Black patient.",
+      "possible_sources": [
+        "Guo et al. 2017 \u2014 On Calibration of Modern Neural Networks (ICML)",
+        "Pleiss et al. 2020 \u2014 On fairness and calibration (NeurIPS)",
+        "Nixon et al. 2019 \u2014 Measuring calibration in deep learning",
+        "Zhang et al. 2020 \u2014 Calibrating Deep Neural Networks under subgroup shift"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Counterfactual Ethnicity-Swap Perturbation Test",
+      "content": "For each validation sample, construct 4 counterfactual copies where ONLY the 5-dim one-hot ethnicity slot is permuted to each of the other 4 ethnicity values (features, vitals, labs, demographics besides ethnicity held fixed). Re-pass all counterfactuals through the trained model and compute the fraction of cases where the 0.5-decision flips solely due to ethnicity change. Healthy: flip-rate at or near the random baseline (\u2248 0 for an unfaulty model; statistically insignificant difference from the base prediction). Unhealthy: systematic flips in one direction \u2014 e.g., flipping a patient's one-hot from white\u2192black consistently lowers the death probability \u2014 indicating the model's decision surface has encoded an ethnicity-dependent bias beyond what the clinical features justify. This directly tests individual fairness (Dwork et al.) at the fixed operating threshold.",
+      "possible_sources": [
+        "Kusner et al. 2017 \u2014 Counterfactual Fairness (NeurIPS)",
+        "Dwork et al. 2012 \u2014 Fairness Through Awareness",
+        "Black et al. 2022 \u2014 Towards a rigorous science of interchangeable algorithms and causal fairness",
+        "CelebA counterfactual CMI probe (internal AutoProbe precedent, mimic-race-fairness memory)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Bootstrap Stability of the Ethnicity-Recall Gap",
+      "content": "A single reported recall gap on one validation split is a point estimate \u2014 the fix-loop could be chasing noise. Resample the validation set with replacement (e.g., 200 bootstrap replicates) and recompute the equal-opportunity max-min recall gap at 0.5 for each replicate. Report the 95% bootstrap CI of the gap. Healthy: the CI is tight (width < 0.05) and the gap's sign is stable (e.g., the worst-performing ethnicity is consistently the same across replicates). Unhealthy: wide CI (\u22650.10) or sign-flips across replicates, indicating the fairness gap is a stochastic artefact of the validation split rather than a stable property of the model \u2014 i.e., the fix-loop is fitting to a noisy fairness signal and will not generalize.",
+      "possible_sources": [
+        "Efron & Tibshirani 1993 \u2014 An Introduction to the Bootstrap (Chapman & Hall)",
+        "Romano, Schafer, Segal 2019 \u2014 A tutorial on bootstrapping for biomedical engineers",
+        "Calders, Verwer 2010 \u2014 Three scenarios for fairness evaluation \u2014 discussion of sampling variability"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Fairness Across Acuity Strata (SOFA / APACHE-II Bins)",
+      "content": "The ethnicity-recall gap may vanish on average but be concentrated in specific severity bands. Bin validation patients into low / medium / high acuity using SOFA or APACHE-II scores computed at ICU admission (e.g., terciles or clinically-meaningful thresholds). Compute per-ethnicity recall at 0.5 within each acuity bin, then report the within-bin max-min recall gap. Healthy: fairness gap \u2264 0.05 in every bin. Unhealthy: aggregate parity masks severe disparity in a specific stratum \u2014 e.g., equal-opportunity is achieved overall, but the high-acuity bin has a 0.15 recall gap against minority groups, precisely where clinical decisions are most urgent. This is the 'intersectional' fairness check (Crenshaw-inspired) that catches the model gaming by averaging across heterogeneous severities.",
+      "possible_sources": [
+        "Crenshaw 1989 \u2014 Demarginalizing the Intersection of Race and Sex (legal theory)",
+        "Suresh, Gutmann, Ng 2021 \u2014 A Framework for Understanding Sources of Harm throughout the Machine Learning Life Cycle (intersectional fairness)",
+        "Dwork et al. 2020 \u2014 Decouled classifiers: fair and efficient individual fairness",
+        "Ke et al. 2022 \u2014 Intersectional fairness in clinical prediction models"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Per-Ethnicity Class-Weight / Gradient Contribution Audit",
+      "content": "The training uses class-weighted BCE; the inverse-frequency weighting on the ~9% positive class can massively inflate gradient variance on the ethnically smallest groups (e.g., asian, other may be <2% of the cohort). Compute for each ethnicity: (a) its share of the training cohort, (b) its share of positive (death) examples, (c) the effective per-sample gradient magnitude contributed by that group under the class-weighted BCE, and (d) the class-weight \u00d7 group-size product. Healthy: gradient contribution is proportional across groups within an order of magnitude and no group has <100 positive examples driving its loss. Unhealthy: the 'other' group contributes <1% of total gradient despite being 5% of patients, OR a small group has so few positive examples that a single misclassified case moves its recall by \u22650.2 \u2014 indicating the fairness gap is driven by statistical starvation, not model bias.",
+      "possible_sources": [
+        "Menon et al. 2022 \u2014 Long-tail learning via logit adjustment (ICLR)",
+        "He, Zhang \u2014 Boundary-aware Instance Reweighting (AAAI)",
+        "Bao et al. 2022 \u2014 Fairness under class imbalance: pitfalls and remedies",
+        "Johnson, Pollard, Shen et al. 2016 \u2014 MIMIC-III original cohort description (demographics by ethnicity)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "Proxy-Feature Leakage Check (Ethnicity-Correlated Non-Clinical Features)",
+      "content": "MIMIC-III contains non-clinical features that are strongly correlated with ethnicity and have no direct causal role in mortality risk \u2014 e.g., primary insurance (Medicare/Medicaid/private), hospital ward/region proxies, preferred language, marital status, employment status. If the model is learned purely via clinical features, these proxies can still re-introduce ethnicity bias. Compute feature importances (permutation importance or SHAP values) over the validation set and rank. Healthy: top-importance features are pathophysiological (SOFA components, lactate, vasopressor use, age, vent settings); ethnicity-correlated proxies rank in the bottom ~25%. Unhealthy: insurance or language features rank in the top-10 with SHAP contributions >0.05, indicating the model uses ethnicity proxies to discriminate \u2014 which can produce proxy-mediated recall gaps even when the one-hot ethnicity itself is dropped from inputs.",
+      "possible_sources": [
+        "Datta, Sen, Jamieson 2016 \u2014 BiasBusters: Detecting, Quantifying and Reducing Proxy Discrimination",
+        "Grgic-Hlaca, Zafar, Gummadi, Weller 2017 \u2014 The role of proxy variables in fair classification",
+        "Chen, Kaplan, O'Connell 2022 \u2014 Insurance status as a proxy for race in clinical AI",
+        "Lundberg, Lee 2017 \u2014 A Unified Approach to Interpreting Model Predictions (SHAP)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Per-Ethnicity Brier Score Decomposition",
+      "content": "The Brier score decomposes into uncertainty (irreducible), reliability (calibration) and resolution (discrimination power) \u2014 all three can be computed per ethnicity group. Compute the Brier score on the validation set for the death class per ethnicity, then run Murphy-style decomposition. Healthy: Brier scores across ethnicities differ by at most ~15% (reflecting base-rate variance), and the reliability component is small and similar across groups. Unhealthy: a minority group has 2x+ the Brier score of the majority, and the reliability component dominates \u2014 indicating the model is not just less accurate but systematically miscalibrated for that group. This probe complements the ECE probe (probe #4) with a proper scoring rule; it is strictly proper and not threshold-dependent, so it captures quality even outside the 0.5 operating regime.",
+      "possible_sources": [
+        "Murphy 1973 \u2014 A new vector partition, the probability score (forecasting literature)",
+        "Broecker, Smith 2008 \u2014 Measuring the quality of probability forecasts (Brier decomposition primer)",
+        "Pleiss et al. 2020 \u2014 On fairness and calibration (NeurIPS)",
+        "Guo et al. 2017 \u2014 On Calibration of Modern Neural Networks"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

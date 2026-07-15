@@ -1,0 +1,69 @@
+{
+  "run_id": "20260704102557",
+  "workspace": "/home/xuanhe_linux_001/AutoProbe/mimic",
+  "created_at": "2026-07-04T10:25:57",
+  "stage": 4,
+  "phase": "ready",
+  "context": "This MIMIC-III ICU mortality task has a strongly imbalanced label (~9% positive / in-ICU deaths). AUROC is misleadingly optimistic; the baseline trains with class-weighted BCE and selects on validation AUPRC. Design a FAIRNESS probe across the 5 ethnicity groups (white, black, hispanic, asian, other; one-hot N x 5 on validation): the equal-opportunity max-min recall/TPR gap for the death class. Do NOT use AUROC. CRITICAL: the operating threshold used for per-group TPR must be FROZEN at 0.5 HARD-CODED INSIDE prober.py (not a tunable constant/arg in train.py, not selected at train time), so passing requires genuinely reducing the per-group recall disparity at the fixed 0.5 point via the model/features/loss-weighting/sampling -- NOT by moving the threshold or per-group score offsets. train.py already has a protected user_analyze() audit (per-ethnicity confusion + plots at 0.5) and the ANCHOR (weighted-BCE loss + AUPRC) -- keep both intact.",
+  "probe_index": 1,
+  "plan_index": 1,
+  "iterations": [
+    {
+      "index": 1,
+      "metric_name": "max_per_group_recall_gap_at_fixed_0p5",
+      "metric_value": 0.3563,
+      "threshold": "0.1",
+      "acceptable_threshold": "0.18",
+      "last_epoch": 0.3563,
+      "direction": "lower_is_better",
+      "status": "FAIL",
+      "acceptable_met": false,
+      "note": "stage 3 first run",
+      "fix_plan_chosen_index": null,
+      "best_value": null
+    },
+    {
+      "index": 2,
+      "metric_name": "max_per_group_recall_gap_at_fixed_0p5",
+      "metric_value": 0.2024,
+      "threshold": "0.1",
+      "acceptable_threshold": "0.18",
+      "last_epoch": 0.2024,
+      "direction": "lower_is_better",
+      "status": "FAIL",
+      "acceptable_met": false,
+      "note": "auto-pick fix plan #1: Drop ethnicity one-hot dummies from feature input",
+      "fix_plan_chosen_index": 1,
+      "best_value": null
+    },
+    {
+      "index": 3,
+      "metric_name": "max_per_group_recall_gap_at_fixed_0p5",
+      "metric_value": 0.0024,
+      "threshold": "0.1",
+      "acceptable_threshold": "0.18",
+      "last_epoch": 0.0024,
+      "direction": "lower_is_better",
+      "status": "PASS",
+      "acceptable_met": true,
+      "note": "auto-pick fix plan #3: Stratified minority bootstrap in training loader",
+      "fix_plan_chosen_index": 3,
+      "best_value": null
+    }
+  ],
+  "debug_flags": {
+    "auto_research": false,
+    "threshold_override": null
+  },
+  "tried_probe_indices": [],
+  "tried_plan_indices": [],
+  "current_action": null,
+  "auto_research_target_runs": 0,
+  "auto_research_runs_completed": 0,
+  "auto_research_best_value": null,
+  "auto_research_best_direction": null,
+  "auto_research_best_max": null,
+  "auto_research_best_mean": null,
+  "fix_plan_round": null,
+  "fix_plan_index": null
+}

@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Add batch-aware HVG selection n_top_genes=2000",
+      "content": "In build_dataset() (train.py, after the sample_cells(...) call, BEFORE the return and BEFORE scvi.model.SCVI.setup_anndata is invoked in main()), insert a gene-selection step: sc.pp.highly_variable_genes(adata, flavor='seurat_v3', n_top_genes=2000, batch_key='batch', subset=True). Concretely, after line `adata = sample_cells(adata, max_cells=args.max_cells, batch_balance_strength=args.batch_balance_strength, rng=rng)` and before `return adata`, add: `sc.pp.highly_variable_genes(adata, flavor='seurat_v3', n_top_genes=2000, batch_key='batch', subset=True)`. This restricts scVI to the 2000 most informative genes chosen in a batch-aware way (seurat_v3 ranks HVGs per batch then unions, so batch-specific markers survive), which is the missing half of the proven prior solve that paired n_layers=2 (applied in round 6, lifted kBET to 0.7615) with batch-aware HVG selection to reach 0.85. The current adata carries the full ~14k-19k gene space with no HVG filter, forcing scVI to model batch-driven noise genes; subsetting to 2000 batch-aware HVGs sharpens the signal the adversarial batch head can act on and closes the remaining 0.04 gap to the 0.80 standard threshold. Keep n_layers=2, 100 epochs, n_epochs_kl_warmup=20, scale_adversarial_loss=2.0, adversarial_classifier=True, n_latent=30, n_hidden=256, dropout_rate=0.0, lr=1e-3 \u2014 all already in train.py. Do NOT touch record()/conclude() call lines, _ProbeCallback, prober.py, or the ANCHOR markers. The ELBO anchor stays in place; HVG subsetting typically lowers ELBO (fewer noise genes to fit) so the utility floor is not at risk.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.8
+    },
+    {
+      "title": "Raise adversarial loss to 3.0 and extend KL warmup to 40",
+      "content": "In train.py main() vae.train(...) plan_kwargs (currently lines ~500-505), change two values: (a) 'n_epochs_kl_warmup': 20 -> 40, (b) 'scale_adversarial_loss': 2.0 -> 3.0. Keep adversarial_classifier=True and lr=args.lr unchanged. Round 6 reached tail kBET 0.7495 with per-batch acceptance still 0.0/0.0 \u2014 the encoder still separates batches in latent space even under adversarial pressure 2.0. The adversarial classifier head is winning the z-vs-batch game, so the encoder has no incentive to mix. Raising the weight to 3.0 strengthens the fooling gradient that pushes the encoder to scramble batch information, and extending KL warmup to 40 epochs keeps scale_adversarial_loss decaying from 3.0 over a longer ramp (scvi's AdversarialTrainingPlan scales adversarial_loss * scale_adversarial_loss where scale = 1-kl_weight during warmup, ramping to 0 after warmup ends) \u2014 so the adversarial pressure stays high during the critical early-to-mid training where the latent manifold is still forming, before KL weight fully ramps to 1.0. Combined with the existing n_layers=2 depth, 100 epochs, and HVG-free full-gene space, this is the optimization-loss angle: rounds 4-6 climbed 0.55 -> 0.62 -> 0.76 as the adversarial loss went from auto -> 2.0; sharpening that same lever (3.0 + 40-epoch warmup) is the next increment along a proven direction, not a new direction. ELBO anchor may rise a few percent (stronger adversarial loss slows reconstruction) but the 100-epoch budget and 40-epoch warmup keep reconstruction healthy; utility-floor guard (>20% degradation auto-revert) intact. Do NOT touch record()/conclude() call lines, _ProbeCallback, prober.py, ANCHOR markers, n_layers, n_latent, n_hidden, dropout_rate, batch_size, train_epochs.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.6
+    },
+    {
+      "title": "Increase n_latent to 60 for richer batch-mixed manifold",
+      "content": "In train.py build_parser() (line ~50), change the argparse default --n-latent from 10 to 60: `parser.add_argument('--n-latent', type=int, default=60)`. Leave all other args (n_hidden=256, dropout_rate=0.0, train_epochs=100, lr=1e-3, batch_size=128, max_cells=8000, batch_balance_strength=0.5, accelerator='auto', devices='auto', seed=42) and the vae.train plan_kwargs (n_epochs_kl_warmup=20, scale_adversarial_loss=2.0, adversarial_classifier=True) unchanged. Round 6 lifted kBET to 0.7615 with n_latent=30 still bottlenecking the latent to 30 dims \u2014 under AdversarialTrainingPlan the encoder must simultaneously encode enough biological variance to reconstruct while being batch-invariant; a 30-dim latent under the adversarial pressure may collapse batch-correlated directions to near-zero variance, leaving the remaining biological axes overcrowded and the per-batch kBET stuck at 0.0/0.0. Doubling latent capacity to 60 gives the encoder room to spread batch-aligned directions into low-variance directions while preserving biological signal in higher-variance directions, which is exactly the regime where adversarial training produces batch-mixed latents in scVI literature. This is the model-capacity angle (distinct from round 2's width change and round 6's depth change): round 2 widened hidden, round 6 deepened layers, this widens latent. ELBO anchor expected to stay healthy or improve \u2014 more latent dims lower reconstruction loss monotonically in VAEs; utility-floor guard intact. Do NOT touch record()/conclude() call lines, _ProbeCallback, prober.py, ANCHOR markers, n_layers=2, n_hidden, dropout_rate, or any plan_kwargs.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.35
+    }
+  ],
+  "chosen_index": 1,
+  "round": 7
+}

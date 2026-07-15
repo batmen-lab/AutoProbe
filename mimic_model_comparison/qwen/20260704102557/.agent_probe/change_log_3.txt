@@ -1,0 +1,49 @@
+Plan: Stratified minority bootstrap in training loader
+
+Edit applied:
+    File: train.py (main())
+    What moved:
+        (a) Class-imbalance block (`n_pos`, `n_neg`, pos_weight scalar+tensor)
+            MOVED ABOVE the train_loader construction so the sampler can read
+            pos_weight_val. Added `max(n_pos, 1)` guard and a separate
+            pos_weight_val (Python float) used by the sampler weights.
+            nn.BCEWithLogitsLoss still receives the original `pos_weight` tensor.
+        (b) `_loader_gen = torch.Generator(); _loader_gen.manual_seed(SEED)`
+            kept verbatim, now also passed to the sampler's `generator=` arg.
+        (c) `DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,
+            generator=_loader_gen)` REPLACED with:
+            - pos_eth_idx = [i | labels[i] > 0.5]
+            - neg_idx = [i | labels[i] <= 0.5]
+            - eth_counts = {g: sum(eth_group[pos_eth_idx + neg_idx] == g) for g in ETH_NAMES}
+              (logged as audit parity with the plan; pos_eth_idx + neg_idx covers
+              every index since any sample has label > 0.5 or <= 0.5, so this
+              collapses to the raw group frequencies — kept to match the plan
+              wording verbatim).
+            - w_i = (1 / n_tfidf) * (pos_weight_val if label_i>0.5 else 1.0)
+                         * (MINORITY_BOOST if eth_i in {black,hispanic,asian} else 1.0)
+              with n_tfidf = train_ds.tfidf.shape[1] and MINORITY_BOOST = 2.0.
+            - torch.utils.data.WeightedRandomSampler(weights=w, num_samples=len(train_ds),
+              replacement=True, generator=_loader_gen)
+            - DataLoader(train_ds, batch_size=BATCH_SIZE, sampler=sampler)
+                Note: generator is supplied to the sampler, not the loader (WRS
+                already consumes it; passing to both would be redundant).
+
+    val_loader: UNTOUCHED (still shuffle=False so the probe's per-row bucketing
+    in prober._collect lines up with `val_ds.eth` row-for-row).
+
+Rationale (per plan): oversample the 9% positive class AND black/hispanic/asian
+groups so LogisticRegression's single weight vector sees enough minority-group
+death examples to lift their logit past the FROZEN 0.5 decision threshold. Loss
+and model are unchanged; only gradient-exposure rate shifts.
+
+Discrepancy: the plan's phrase `pos_eth_idx + neg_idx` covers every index
+(label is either >0.5 or <=0.5), so eth_counts[white/black/hispanic/asian/other]
+is exactly the full-group frequency histogram. Kept verbatim for audit parity
+rather than redefining as `sum(eth_group == minority_col[g])`; the logged dict
+matches the spec. `pos_weight` is a tensor (for BCEWithLogitsLoss); the sampler
+uses `pos_weight_val = float(pos_weight.item())` because weights must be a plain
+float numpy array.
+
+No other files touched; no changes to user_analyze(), no changes to record()/
+conclude() call sites; `standard_threshold` and `acceptable_threshold` still
+both passed through to conclude.

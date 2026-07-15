@@ -1,0 +1,124 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "Equal-Opportunity Max-Min Recall/TPR Gap at Frozen 0.5",
+      "content": "Compute per-ethnicity recall (TPR on the death class) across the 5 groups (white, black, hispanic, asian, other) from the N\u00d75 one-hot ethnicity matrix on the validation split. The operating threshold is HARD-CODED at 0.5 inside prober.py \u2014 never exposed as a tunable constant in train.py, never a CLI argument, never selected at train time, never per-group offset. Report each group's TPR, the worst-group TPR, and the max-minus-min TPR gap (equal-opportunity difference). Do NOT use AUROC anywhere in this probe. Healthy signal: max-min TPR gap \u2264 0.10 (acceptable) or \u2264 0.05 (standard), with no single ethnicity group showing collapsed recall at 0.5, and the improvement comes from genuine model/feature/loss/sampling changes (not threshold shopping). Unhealthy signal: groups with materially lower recall that only improve when the threshold is moved; or the gap closes because all TPRs collapsed together (leveling-down). Groups with fewer than MIN_GROUP_POSITIVES=20 death positives are excluded from the gap calculation to avoid noise-driven conclusions.",
+      "possible_sources": [
+        "Hardt, Price, and Srebro 2016, 'Equality of Opportunity in Supervised Learning', NeurIPS",
+        "Rajkomar et al. 2018, 'Ensuring Fairness in Machine Learning to Advance Health Equity', Annals of Internal Medicine",
+        "Pfohl et al. 2021, 'An Empirical Characterization of Fair Machine Learning for Clinical Risk Prediction', JBI",
+        "Obermeyer et al. 2019, 'Dissecting Racial Bias in an Algorithm Used to Manage the Health of Populations', Science"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Equalized-Odds FPR Disparity at Frozen 0.5",
+      "content": "The equal-opportunity TPR gap alone is insufficient \u2014 a model can equalize recall by over-flagging a minority group, shifting harm from false negatives to false positives. Compute per-ethnicity FPR at the same frozen 0.5 threshold and report the max-minus-min FPR gap alongside the TPR gap. This is the equalized-odds decomposition: both TPR and FPR should be comparable across groups. Healthy signal: both TPR gap and FPR gap are small (\u2264 0.10); the model does not achieve recall equality by inflating false alarms in one group. Unhealthy signal: TPR gap closes but FPR gap widens materially \u2014 e.g., black patients get flagged at much higher false-alarm rates while hispanic deaths remain missed \u2014 indicating the fix shifted rather than removed the disparity. Also report the within-group flag rate (% predicted positive at 0.5) per ethnicity to catch extreme over-flagging.",
+      "possible_sources": [
+        "Hardt, Price, and Srebro 2016, 'Equality of Opportunity in Supervised Learning', NeurIPS",
+        "Chouldechova 2017, 'Fair Prediction with Disparate Impact: A Study of Bias in Recidivism Prediction Instruments', Big Data",
+        "Kleinberg, Mullainathan, and Raghavan 2016, 'Inherent Trade-Offs in the Fair Determination of Risk Scores', ITCS",
+        "Pfohl et al. 2021, 'An Empirical Characterization of Fair Machine Learning for Clinical Risk Prediction', JBI"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Per-Ethnicity Expected Calibration Error and Reliability Diagrams",
+      "content": "A frozen 0.5 threshold is only clinically interpretable if the predicted probability of death carries the same risk meaning across ethnicity groups. Compute per-ethnicity calibration using: (a) Expected Calibration Error (ECE) with 10 equal-width bins, (b) reliability diagrams (predicted vs. observed death rate per bin) overlaid for all 5 groups, (c) Brier score per group, and (d) calibration intercept and slope from a logistic recalibration of predictions against outcomes within each group. Healthy signal: all groups' reliability curves track the diagonal within sampling noise, per-group ECE \u2264 0.05, and calibration slopes near 1.0 \u2014 meaning a predicted 50% death risk means approximately 50% observed death rate in every ethnicity. Unhealthy signal: systematic overprediction or underprediction in one group (e.g., model predicts 30% risk but only 10% of that group dies), which directly creates TPR disparity at a fixed 0.5 cutoff independently of ranking quality. Calibration disparity is the most common root cause of fixed-threshold TPR gaps in clinical models.",
+      "possible_sources": [
+        "Guo et al. 2017, 'On Calibration of Modern Neural Networks', ICML",
+        "Van Calster et al. 2019, 'Calibration: the Achilles Heel of Predictive Analytics', BMC Medicine",
+        "Nixon et al. 2019, 'Measuring Calibration in Deep Learning', CVPR Workshop",
+        "Pfohl et al. 2021, 'An Empirical Characterization of Fair Machine Learning for Clinical Risk Prediction', JBI"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "Counterfactual Ethnicity-Swap Score Sensitivity",
+      "content": "Since ethnicity is explicitly concatenated as a 5-dim one-hot input to the logistic regression, test the model's direct dependence on the protected attribute. For each validation sample, hold the 10,000 TF-IDF clinical-note features fixed and swap the ethnicity one-hot vector across all 5 possible groups at inference time. Measure: (a) the distribution of absolute score changes (|\u0394prob|) per swap direction, (b) the fraction of samples whose prediction crosses the frozen 0.5 decision boundary solely due to an ethnicity swap (decision flip rate), and (c) the mean logit change per ethnicity bit. This is a sensitivity audit, not a causal fairness proof \u2014 it quantifies how much the ethnicity feature mechanically shifts scores independently of clinical content. Healthy signal: the vast majority of scores are stable under ethnicity swaps (< 2% decision flips, median |\u0394prob| < 0.05), meaning the model is not riding the ethnicity one-hot as a shortcut. Unhealthy signal: many samples cross 0.5 purely from changing the ethnicity bit, especially if the flip direction is asymmetric (e.g., swapping to white always raises the score).",
+      "possible_sources": [
+        "Kusner et al. 2017, 'Counterfactual Fairness', NeurIPS",
+        "Rajkomar et al. 2018, 'Ensuring Fairness in Machine Learning to Advance Health Equity', Annals of Internal Medicine",
+        "Manski, Mullahy, and Venkataramani 2022, 'Using Measures of Race to Make Clinical Predictions: Decision Making, Patient Health, and Fairness', PNAS",
+        "Gichoya et al. 2022, 'AI Recognition of Patient Race in Medical Imaging', The Lancet Digital Health"
+      ],
+      "confidence": 0.6
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Per-Ethnicity AUPRC Stratified Audit",
+      "content": "Compute precision-recall curves and AUPRC (average precision) separately within each of the 5 ethnicity groups on the validation split. AUPRC is prevalence-sensitive and directly measures how well the model ranks the minority (death) class within each group, complementing the fixed-0.5 TPR probe which only evaluates behavior at one operating point. Compare each group's AUPRC against its own random-chance baseline (group death prevalence) and against the overall validation AUPRC. Healthy signal: every ethnic group's AUPRC is meaningfully above its prevalence baseline, and no group's AUPRC collapses while another's improves \u2014 per-group AUPRC tracks together within ~0.05 of the overall value. Unhealthy signal: one or more groups have near-baseline AUPRC (the model is essentially uninformative for that subgroup) even though overall AUPRC looks acceptable; this is the signature of a model that learned to rank deaths for the majority group while abandoning minorities \u2014 a failure mode that aggregate metrics completely hide.",
+      "possible_sources": [
+        "Saito and Rehmsmeier 2015, 'The Precision-Recall Plot Is More Informative than the ROC Plot When Evaluating Binary Classifiers on Imbalanced Datasets', PLOS ONE",
+        "Davis and Goadrich 2006, 'The Relationship Between Precision-Recall and ROC Curves', ICML",
+        "Harutyunyan et al. 2019, 'Multitask Learning and Benchmarking with Clinical Time Series Data', Scientific Data",
+        "Seyyed-Kalantari et al. 2021, 'Underdiagnosis Bias of Artificial Intelligence Algorithms Applied to Chest Radiographs in Under-Served Patient Populations', Nature Medicine"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Bootstrap Confidence Intervals for the TPR Gap",
+      "content": "With only ~9% death prevalence overall and some ethnicity groups having very few death positives (e.g., hispanic ~13 deaths in validation), point estimates of per-group TPR and the max-min gap are dominated by sampling noise, making it impossible to distinguish genuine fairness improvement from random fluctuation across fix-loop rounds. Compute the equal-opportunity max-min TPR gap with bootstrap confidence intervals: resample the validation set (stratified by ethnicity and label) B=500-1000 times, recompute the gap on each bootstrap replicate, and report the 95% percentile confidence interval. Healthy signal: the CI width is small relative to the point estimate (e.g., CI half-width < 0.5 \u00d7 gap), and the CI shrinks or shifts downward across rounds, confirming that the fix-loop is improving a real signal. Unhealthy signal: the CI straddles 0 or its width exceeds the point estimate \u2014 fairness improvements across rounds are indistinguishable from noise, meaning the fix-loop is optimizing a random variable (which reliably produces gaming behavior as the agent overfits the validation noise).",
+      "possible_sources": [
+        "Efron and Tibshirani 1993, 'An Introduction to the Bootstrap', CRC Press",
+        "Chen et al. 2020, 'Why Is My Classifier Discriminatory?', NeurIPS",
+        "TRIPOD+AI Statement 2024, 'Updated Guidance for Reporting Clinical Prediction Models That Use Regression or Machine Learning Methods', BMJ",
+        "Steyerberg et al. 2014, 'Towards Better Clinical Prediction Models: Seven Steps for Development and an ABCD for Validation', European Heart Journal"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Ethnicity-Group Support Adequacy and Minimum-Denominator Audit",
+      "content": "Before interpreting any per-ethnicity fairness metric, audit whether the validation data supports reliable estimation. Verify the ethnicity matrix is a proper one-hot (each row sums to exactly 1, exactly one 1 per row), then report for each of the 5 groups: total samples, death positives, death negatives, and the minimum detectable TPR difference at 80% power given the group's positive count. TPR is undefined with zero positives and highly unstable with < 20 positives \u2014 a single missed death can swing recall by 5+ percentage points. Flag any group below MIN_GROUP_POSITIVES=20 and exclude it from the gap calculation with an explicit logged warning. Healthy signal: every group used in the gap has \u2265 20 death positives, and the reported TPR is accompanied by its exact denominator (n_positives). Unhealthy signal: fairness claims are based on groups with single-digit death counts where the TPR point estimate is essentially meaningless; or the one-hot encoding is corrupted (multiple 1s per row, all zeros for some samples). This probe also cross-validates that the validation-set ethnicity distribution matches the training set within sampling tolerance.",
+      "possible_sources": [
+        "Harutyunyan et al. 2019, 'Multitask Learning and Benchmarking with Clinical Time Series Data', Scientific Data",
+        "TRIPOD+AI Statement 2024, BMJ",
+        "Steyerberg et al. 2014, 'Towards Better Clinical Prediction Models', European Heart Journal",
+        "Johnson et al. 2016, 'MIMIC-III, a Freely Accessible Critical Care Database', Scientific Data"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "Per-Ethnicity Learning Curves and Sample-Efficiency Parity",
+      "content": "Fairness gaps can arise from differential sample efficiency \u2014 the model may learn quickly for the majority group but require disproportionately more data to reach comparable performance for minorities. Train the final-round model configuration on random stratified subsamples of the training set at 10%, 25%, 50%, 75%, and 100% of the full data, and measure per-ethnicity AUPRC and TPR at 0.5 on the full validation set for each subsample size. Plot learning curves (subsample fraction vs. metric) for all 5 groups on the same axes. Healthy signal: all 5 groups' curves rise monotonically and converge toward a shared ceiling; the ratio of minority-to-majority area under the learning curve is \u2265 0.85. Unhealthy signal: minority-group learning curves plateau early (e.g., black AUPRC stops improving past 50% data while white continues climbing) \u2014 this indicates a representation bottleneck specific to that group that no amount of loss reweighting or threshold tuning will fix; the fix needs feature augmentation, data balancing, or collection of more representative training data. Also identifies whether the model overfits small subgroups at full data size.",
+      "possible_sources": [
+        "Hestness et al. 2017, 'Deep Learning Scaling is Predictable, Empirically', arXiv",
+        "Chen et al. 2020, 'Why Is My Classifier Discriminatory?', NeurIPS",
+        "Hooker et al. 2021, 'Characterising Bias in Compressed Models', arXiv",
+        "Idrissi et al. 2022, 'Simple Data Balancing Achieves Competitive Worst-Group-Accuracy', CVPR"
+      ],
+      "confidence": 0.45
+    },
+    {
+      "probe_type": "clinical_utility",
+      "probe_name": "Per-Ethnicity Decision-Curve Net Benefit at Frozen 0.5",
+      "content": "In clinical decision-making, the ultimate question is whether the model improves outcomes over default strategies for every ethnicity group. Compute decision-curve net benefit per ethnicity at the frozen 0.5 threshold: net_benefit = (TP/N) \u2212 (FP/N) \u00d7 (0.5/(1\u22120.5)) = TPR \u00d7 prevalence \u2212 FPR \u00d7 (1\u2212prevalence) \u00d7 1. This quantifies the net value of using the model vs. treating-none (net benefit = 0 by definition) and vs. treating-all (net benefit = prevalence \u2212 (1\u2212prevalence) = 2\u00d7prevalence \u2212 1, which is negative at 9% prevalence). Report each group's net benefit and whether it is positive. Healthy signal: net benefit > 0 for all 5 groups \u2014 the model is net-helpful in every ethnicity, improving over both default strategies. Unhealthy signal: net benefit \u2264 0 for a minority group, meaning the model at 0.5 does more harm than treating-none for that group even if the TPR gap looks acceptable \u2014 this catches a fix that equalizes TPR by inflating FPR so much that the clinical net effect is negative. Also report the 'treat-all' reference line per group to calibrate expectations at the 9% prevalence level.",
+      "possible_sources": [
+        "Vickers and Elkin 2006, 'Decision Curve Analysis: A Novel Method for Evaluating Prediction Models', Medical Decision Making",
+        "Van Calster et al. 2019, 'Calibration: the Achilles Heel of Predictive Analytics', BMC Medicine",
+        "Wynants et al. 2020, 'Prediction Models for Diagnosis and Prognosis of COVID-19: Systematic Review and Critical Appraisal', BMJ",
+        "Kerr et al. 2016, 'Assessing the Clinical Impact of Risk Prediction Models with Decision Curves: Guidance for Correct Interpretation and Appropriate Use', JCO"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "probe_type": "representation",
+      "probe_name": "Ethnicity Encodability from Learned Model Representations",
+      "content": "A model that achieves recall parity by encoding ethnicity as a latent proxy (rather than learning mortality-predictive features that generalize across groups) has only achieved superficial fairness \u2014 the disparity is hidden in the representation, not removed. Probe: extract the learned weight vector of the logistic regression (a single linear layer, so the representation is the input features themselves weighted by learned coefficients) and compute: (a) the L2 norm of the 5 ethnicity-dimension weights relative to the average TF-IDF-dimension weight \u2014 if ethnicity weights dominate, the model is shortcutting on demographics; (b) train a 5-class ethnicity classifier using only the model's logit as input (logistic regression on the scalar logit \u2192 5-class ethnicity) \u2014 if ethnicity is predictable from the mortality score alone beyond chance (balanced accuracy > 0.30 for 5 classes, where chance is 0.20), the model's risk score is confounded with ethnicity; (c) report the Spearman correlation between the model's logit and each ethnicity one-hot column. Healthy signal: ethnicity weights have small magnitude relative to TF-IDF weights; ethnicity is not predictable from the mortality logit beyond slight above-chance levels (balanced accuracy \u2264 0.30); no strong correlation between logit and any ethnicity column. Unhealthy signal: ethnicity weights dominate or the mortality logit strongly encodes ethnicity (balanced accuracy > 0.50) \u2014 the model has learned ethnicity as a direct risk feature rather than learning clinical signal.",
+      "possible_sources": [
+        "Dwork et al. 2018, 'Decoupled Classifiers for Group-Fair and Efficient Machine Learning', FAT*",
+        "Zhao et al. 2020, 'On the Tradeoff Between Accuracy and Fairness in Representation Learning', NeurIPS Workshop",
+        "Madras et al. 2018, 'Learning Adversarially Fair and Transferable Representations', ICML",
+        "Gichoya et al. 2022, 'AI Recognition of Patient Race in Medical Imaging', The Lancet Digital Health"
+      ],
+      "confidence": 0.55
+    }
+  ]
+}

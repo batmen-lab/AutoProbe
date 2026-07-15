@@ -1,0 +1,13 @@
+Plan: Train without ethnicity features in input
+
+File: train.py (only file touched)
+
+Changes:
+1. Changed train_ds construction from `MIMICMortalityDataset(data_path, 'train')` to `MIMICMortalityDataset(data_path, 'train', use_eth=False)` (line 299)
+2. Changed val_ds construction from `MIMICMortalityDataset(data_path, 'val')` to `MIMICMortalityDataset(data_path, 'val', use_eth=False)` (line 300)
+3. Changed test_ds construction from `MIMICMortalityDataset(data_path, 'test')` to `MIMICMortalityDataset(data_path, 'test', use_eth=False)` (line 357) — necessary companion edit: the model trained without ethnicity features has a smaller input_dim, so test features must match.
+
+The dataset.py class already supports `use_eth=False`, which returns only the TF-IDF feature vector without appending the 5-dim ethnicity one-hot. The `input_dim` auto-adjusts from `train_ds[0]['features'].shape[0]`. The probe (`prober.py`) accesses `ds.eth` directly (not through batch features), so it continues to work unchanged.
+
+No discrepancies from plan.
+All record(), conclude(), user_analyze() calls remain untouched.

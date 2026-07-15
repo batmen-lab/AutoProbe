@@ -1,0 +1,114 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "batch_integration",
+      "probe_name": "kBET per-batch acceptance",
+      "content": "Run scib_metrics.kBET on the scVI latent embedding, stratified by the 'batch' covariate. For each batch-specific neighborhood, kBET tests whether local kNN neighborhoods have batch compositions consistent with the global batch ratio. Healthy: mean kBET acceptance rate >= 0.8 with per-batch acceptance rate variance < 0.1. Unhealthy: acceptance near 0 (over-correction / miscalibrated null) or below 0.5 (batch effect remains).",
+      "possible_sources": [
+        "B\u00fcttner et al. 2019 'A test metric for assessing single-cell RNA-seq batch correction' (kBET)",
+        "scib_metrics.kBET implementation",
+        "Luecken et al. 2022 'Benchmarking atlas-level data integration in single-cell genomics' (scIB)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "batch_integration",
+      "probe_name": "iLISI / cLISI composite",
+      "content": "Compute scib_metrics.ilisi_graph and clisi_graph on the latent kNN graph. iLISI measures how mixed batches are in local neighborhoods (higher = more mixed, good); cLISI measures how mixed cell-types are (lower = better bio-preservation). Healthy: iLISI close to max (n_batches=2) AND cLISI close to 1. Unhealthy: iLISI=1 (no mixing) or cLISI=2 (bio-structure destroyed by over-integration). Report both together to detect over-correction.",
+      "possible_sources": [
+        "Korsunsky et al. 2019 'Fast, sensitive and accurate integration of single-cell data with Harmony' (LISI)",
+        "scib_metrics.ilisi_graph / clisi_graph",
+        "Luecken et al. 2022 scIB benchmark"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "batch_integration",
+      "probe_name": "Graph connectivity per cell-type",
+      "content": "Use scib_metrics.graph_connectivity on the latent kNN graph restricted to each cell-type label. Connectivity = 1 means cells of the same type form a single connected component across both batches (bio-structure intact after integration). Healthy: graph_connectivity >= 0.9 for every cell-type label. Unhealthy: < 0.5 for any type indicates the integration fragmented a cell-type into batch-separated subclusters.",
+      "possible_sources": [
+        "Luecken et al. 2022 scIB (graph_connectivity metric)",
+        "scib_metrics.graph_connectivity",
+        "Traag et al. 2019 'From Louvain to Leiden' (connected-component / community foundation)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bio_conservation",
+      "probe_name": "ASW_label / ASW_label_batch isolation",
+      "content": "Run scib_metrics.asw_label and scib_metrics.asw_label_batch on the latent space. asw_label measures cell-type silhouette width (higher = tighter bio clusters, good); asw_label_batch computes per-batch silhouette and averages 1 - |0.5 - score| to penalize batch isolation. Healthy: asw_label >= 0.6 and asw_label_batch >= 0.7. Unhealthy: asw_label < 0.4 (bio-structure lost) or asw_label_batch < 0.5 (silhouette dominated by batch).",
+      "possible_sources": [
+        "Luecken et al. 2022 scIB (ASW_label, ASW_label_batch)",
+        "scib_metrics.asw_label / asw_label_batch",
+        "Rosenberg et al. 2018 'OpenProblems' single-cell ASW formulation"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bio_conservation",
+      "probe_name": "Isolated label F1",
+      "content": "Use scib_metrics.isolated_labels_f1 with a kNN classifier (k=5) trained on the latent embedding, predicting the cell-type label. Isolated labels are those rare cell-types that are geographically isolated (present in only one batch or unique). F1 here measures how well the latent space preserves hard-to-separate biological labels. Healthy: isolated-label F1 >= 0.7. Unhealthy: <= 0.4 indicates the integration smeared out rare cell-type signal.",
+      "possible_sources": [
+        "Luecken et al. 2022 scIB (isolated_labels_F1)",
+        "scib_metrics.isolated_labels_f1",
+        "Abdelaal et al. 2019 'Comparison of automated cell-type identification methods for single-cell transcriptomics'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Held-out batch reconstruction / ELBO",
+      "content": "Train scVI with one batch held out of the encoder posterior (use scVI's batch as covariate but mask 20% of cells for ELBO eval). Report held-out negative ELBO vs in-distribution ELBO gap. Healthy: gap < 10% of the in-distribution ELBO magnitude. Unhealthy: large gap indicates overfitting to batch-specific noise rather than learning a shared latent manifold.",
+      "possible_sources": [
+        "Lopez et al. 2018 'Deep generative modeling for single-cell transcriptomics' (scVI, ELBO)",
+        "Lopez et al. 2018 'Multi-resolution scVI' held-out evaluation",
+        "scvi-tools train() ELBO validation"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Posterior predictive decoupling from library size",
+      "content": "Sample posterior predictive counts from the scVI decoder and regress decoded total counts against observed per-cell library size and against batch id. Compute partial R\u00b2. Healthy: posterior predictive mean correlates with observed library size (R\u00b2 > 0.5) but is independent of batch id given library size (partial R\u00b2 < 0.05). Unhealthy: batch drives predictive counts \u2192 batch leakage into decoder.",
+      "possible_sources": [
+        "Lopez et al. 2018 scVI (decoder generative model w/ library size factor)",
+        "Svensson et al. 2020 'Interpretable factor models for single-cell expression'",
+        "Yip et al. 2017 'Bayesian approaches for single-cell transcriptomics'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Latent kNN stability under sub-sampling",
+      "content": "Subsample 80% of cells 5 times with fixed seed, recompute the scib_metrics.ilisi_graph and graph_connectivity each run, and measure coefficient of variation (CV). Healthy: CV of iLISI < 5% and CV of graph_connectivity < 3%. Unhealthy: high CV indicates the integration result is fragile to which cells were sampled, i.e., the latent manifold is unstable.",
+      "possible_sources": [
+        "Luecken et al. 2022 scIB (stability protocol)",
+        "scib_metrics repeated-run evaluation",
+        "B\u00fcttner et al. 2019 kBET subsampling robustness"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Highly variable gene overlap across batches",
+      "content": "Before/after integration, compute per-batch highly variable genes (scanpy.pp.highly_variable_genes, flavor='seurat_v3', n_top_genes=2000) and report Jaccard overlap of the HVG set between b1 and b2. Healthy: Jaccard >= 0.3 (shared biological signal dominates). Unhealthy: Jaccard < 0.1 means batches measure largely disjoint gene sets \u2014 integration quality has an upstream ceiling that the latent space cannot recover from.",
+      "possible_sources": [
+        "Hafemeister & Satija 2019 'Normalization and variance stabilization of single-cell RNA-seq data' (sctransform)",
+        "Stuart et al. 2019 'Comprehensive integration of single-cell data' (HVG anchor selection)",
+        "Wolf et al. 2018 scanpy HVG"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "Convergence-quality tradeoff curve",
+      "content": "Sweep over max_epochs in {20, 50, 100, 200} (or checkpoint every 20 epochs in one run), evaluate scib_metrics.ilisi_graph + asw_label at each. Plot the integration-vs-bio trajectory. Healthy: both iLISI and ASW_label plateau together around the same epoch (efficiency is reached without bio degradation). Unhealthy: iLISI improves only after ASW_label drops \u2192 over-correction regime; or neither moves \u2192 under-trained.",
+      "possible_sources": [
+        "Lopez et al. 2018 scVI training schedule recommendations",
+        "Gayoso et al. 2022 'Deep generative modeling for single-cell transcriptomics with scvi-tools' (training heuristics)",
+        "Luecken et al. 2022 scIB epoch-sweep evaluation"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

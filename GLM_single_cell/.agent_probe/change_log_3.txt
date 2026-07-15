@@ -1,0 +1,46 @@
+Change log for round 3
+======================
+
+Plan title: Train 50 epochs with KL warmup and lr decay
+
+Applied edits (train.py):
+
+1. build_parser defaults:
+   --train-epochs  : 10 -> 50
+   (added new arg) --lr  type=float  default=1e-3
+
+2. main() vae.train(...) kwargs: added
+   early_klwarmup=5
+   early_epoch_klwarmup=5
+   plan_kwargs={"lr": args.lr, "n_epochs_kl_warmup": 5}
+
+Other args (n-latent, n-hidden, dropout-rate, max-cells, batch-balance-strength,
+accelerator, devices, seed, batch-size) left unchanged from prior round values.
+
+Rationale (per plan): scVI had not converged after 10 epochs (kBET flat at
+~0.26, per-batch acceptance 0.0/0.0 — encoder still perfectly separates
+batches). The fix is to extend training dramatically with proper KL warmup
+and an explicit lr via plan_kwargs. scVI's batch-correction head only begins
+to align batches once the ELBO has converged AND the KL warmup has finished
+(the batch head depends on a well-formed latent prior). The canonical
+scib-metrics PBMC recipe uses early_klwarmup + n_epochs_kl_warmup of ~5 with
+~50 epochs. Expected outcome: by epoch ~30 scVI typically reaches kBET
+acceptance of 0.7-0.85 on PBMC; per-batch acceptance should rise to >0.5.
+ELBO anchor will continue to drop monotonically, satisfying the utility
+floor.
+
+record()/conclude() call lines: untouched.
+- _ProbeCallback.on_train_epoch_end still calls prober_record(int(trainer.current_epoch), self.vae, self.adata).
+- prober_conclude(0.80, 0.55, anchors=_anchors) still passes BOTH threshold values (standard=0.80, acceptable=0.55) and the elbo anchors.
+prober.py: untouched.
+user_analysis(): untouched (still empty pass-through).
+ANCHOR markers and original_train_metric recording: untouched.
+
+Discrepancies with the plan: none. The plan named --train-epochs default
+change, a new --lr argparse arg, and three vae.train kwargs
+(early_klwarmup=5, early_epoch_klwarmup=5, plan_kwargs={'lr': 1e-3,
+'n_epochs_kl_warmup': 5}). All applied verbatim; the only minor
+interpretation was wiring plan_kwargs['lr'] to args.lr (the new argparse
+arg) rather than a hard-coded 1e-3, which is the canonical scib-metrics
+PBMC recipe and matches the plan's intent of "pass it via
+plan_kwargs={'lr': args.lr}".

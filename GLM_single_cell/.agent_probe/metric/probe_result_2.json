@@ -1,0 +1,73 @@
+{
+  "metric_name": "kBET mean acceptance",
+  "standard_threshold": 0.8,
+  "acceptable_threshold": 0.55,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.272
+    },
+    {
+      "epoch": 1,
+      "value": 0.2405
+    },
+    {
+      "epoch": 2,
+      "value": 0.242
+    },
+    {
+      "epoch": 3,
+      "value": 0.253
+    },
+    {
+      "epoch": 4,
+      "value": 0.262
+    },
+    {
+      "epoch": 5,
+      "value": 0.2625
+    },
+    {
+      "epoch": 6,
+      "value": 0.2535
+    },
+    {
+      "epoch": 7,
+      "value": 0.256
+    },
+    {
+      "epoch": 8,
+      "value": 0.2625
+    },
+    {
+      "epoch": 9,
+      "value": 0.271
+    }
+  ],
+  "min": 0.2405,
+  "max": 0.272,
+  "mean": 0.2575,
+  "std": 0.010151354589413188,
+  "first_value": 0.272,
+  "final_value": 0.271,
+  "delta": -0.0010000000000000009,
+  "tail_mean": 0.2611,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "kBET mean acceptance went from 0.272 to 0.271 (degrading), never crossing the 0.80 standard threshold; tail mean 0.261 -> FAIL.",
+  "per_batch_acceptance": {
+    "0": 0.0,
+    "1": 0.0
+  },
+  "original_train_metric_0": {
+    "name": "elbo_validation",
+    "value": 5135.52001953125,
+    "direction": "lower_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "elbo_train",
+    "value": 5066.72705078125,
+    "direction": "lower_is_better"
+  }
+}

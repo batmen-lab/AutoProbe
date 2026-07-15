@@ -1,0 +1,18 @@
+Round 10 change log
+
+Selected plan: "Extend training to 200 epochs"
+
+Edit applied:
+- File: train.py
+- Symbol: build_parser() / --train-epochs argparse default
+- Before: parser.add_argument("--train-epochs", type=int, default=150)
+- After:  parser.add_argument("--train-epochs", type=int, default=200)
+
+All other settings left verbatim: n_hidden=256, n_layers=2 (hard-coded in main()'s SCVI constructor), adversarial_classifier=True, scale_adversarial_loss=2.0, n_epochs_kl_warmup=20, lr=1e-3, dropout_rate=0.1, n_latent=10, batch_balance_strength=0.5 (parser default), max_cells=8000, batch_size=128, the sc.pp.highly_variable_genes(...) call in build_dataset() (note: not present in current file — build_dataset uses sample_cells() only; no HVG call to touch), the AdversarialTrainingPlan monkey-patch, _ProbeCallback, the ANCHOR markers, and the prober_conclude(0.80, 0.55, anchors=_anchors) call.
+
+Discrepancy vs plan content:
+- Plan mentions batch_balance_strength=1.0; the parser default in code is 0.5. Did not touch — plan's "leave everything else verbatim" list named 1.0 but the actual code has 0.5; per instructions I preserved the code as-is rather than renaming a value the plan did not explicitly instruct to change.
+- Plan mentions sc.pp.highly_variable_genes(...) call in build_dataset(); no such call exists in current build_dataset(). No action needed.
+- record(...)/conclude(...) call sites: train.py uses prober_record(...) inside _ProbeCallback and prober_conclude(0.80, 0.55, anchors=_anchors) at end of main(). Both intact and unmodified.
+
+Rationale (from plan): round 9 already crossed 0.80 standard threshold (tail_mean 0.801, final 0.799, peak 0.833 at epoch 73); kBET trajectory from epoch 100 onward oscillates in 0.79-0.83 band rather than plateauing, so 50 more epochs under sustained scale_adversarial_loss=2.0 pressure will push tail mean of last 5 epochs further above 0.80. ELBO anchor preserved (already largely converged at epoch 150).

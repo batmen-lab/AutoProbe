@@ -1,0 +1,47 @@
+{
+  "white": {
+    "n": 4599,
+    "n_positive": 416,
+    "TP": 415,
+    "FP": 3983,
+    "FN": 1,
+    "TN": 200,
+    "recall": 0.9975961538461539
+  },
+  "black": {
+    "n": 591,
+    "n_positive": 49,
+    "TP": 49,
+    "FP": 528,
+    "FN": 0,
+    "TN": 14,
+    "recall": 1.0
+  },
+  "hispanic": {
+    "n": 216,
+    "n_positive": 13,
+    "TP": 13,
+    "FP": 198,
+    "FN": 0,
+    "TN": 5,
+    "recall": 1.0
+  },
+  "asian": {
+    "n": 158,
+    "n_positive": 19,
+    "TP": 19,
+    "FP": 134,
+    "FN": 0,
+    "TN": 5,
+    "recall": 1.0
+  },
+  "other": {
+    "n": 905,
+    "n_positive": 120,
+    "TP": 120,
+    "FP": 716,
+    "FN": 0,
+    "TN": 69,
+    "recall": 1.0
+  }
+}

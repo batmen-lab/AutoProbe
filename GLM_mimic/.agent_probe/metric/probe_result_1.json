@@ -1,0 +1,109 @@
+{
+  "metric_name": "ethnicity_equal_opportunity_recall_gap",
+  "standard_threshold": 0.05,
+  "acceptable_threshold": 0.1,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.24489795918367352
+    },
+    {
+      "epoch": 2,
+      "value": 0.3076923076923077
+    },
+    {
+      "epoch": 3,
+      "value": 0.25769230769230766
+    },
+    {
+      "epoch": 4,
+      "value": 0.25769230769230766
+    },
+    {
+      "epoch": 5,
+      "value": 0.33461538461538454
+    },
+    {
+      "epoch": 6,
+      "value": 0.25769230769230766
+    },
+    {
+      "epoch": 7,
+      "value": 0.24102564102564106
+    },
+    {
+      "epoch": 8,
+      "value": 0.3948717948717949
+    },
+    {
+      "epoch": 9,
+      "value": 0.3865384615384616
+    },
+    {
+      "epoch": 10,
+      "value": 0.3865384615384616
+    },
+    {
+      "epoch": 11,
+      "value": 0.3782051282051282
+    },
+    {
+      "epoch": 12,
+      "value": 0.3698717948717949
+    },
+    {
+      "epoch": 13,
+      "value": 0.3012820512820512
+    },
+    {
+      "epoch": 14,
+      "value": 0.3782051282051282
+    },
+    {
+      "epoch": 15,
+      "value": 0.3698717948717949
+    },
+    {
+      "epoch": 16,
+      "value": 0.35627530364372473
+    },
+    {
+      "epoch": 17,
+      "value": 0.3615384615384616
+    },
+    {
+      "epoch": 18,
+      "value": 0.35627530364372473
+    },
+    {
+      "epoch": 19,
+      "value": 0.35627530364372473
+    },
+    {
+      "epoch": 20,
+      "value": 0.35627530364372473
+    }
+  ],
+  "min": 0.24102564102564106,
+  "max": 0.3948717948717949,
+  "mean": 0.3326666253545953,
+  "std": 0.052072167912697524,
+  "first_value": 0.24489795918367352,
+  "final_value": 0.35627530364372473,
+  "delta": 0.11137734446005121,
+  "tail_mean": 0.3573279352226721,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "Equal-opportunity recall gap (lower is better) went from 0.2449 to 0.3563 over 20 epochs, never reaching the 0.05 standard threshold; tail_mean=0.3573 -> FAIL (acceptable_met=False).",
+  "original_train_metric_0": {
+    "name": "val_auprc",
+    "value": 0.39564465512711394,
+    "direction": "higher_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "train_loss",
+    "value": 0.8749668387805715,
+    "direction": "lower_is_better"
+  }
+}

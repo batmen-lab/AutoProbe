@@ -1,0 +1,43 @@
+Round 7 change log
+==================
+
+Selected plan: "Add batch-aware HVG selection n_top_genes=2000"
+
+Applied edit
+------------
+File: train.py
+Function: build_dataset()
+Location: immediately after the `adata = sample_cells(...)` call, before `return adata`.
+
+Before:
+    adata = sample_cells(
+        adata,
+        max_cells=args.max_cells,
+        batch_balance_strength=args.batch_balance_strength,
+        rng=rng,
+    )
+    return adata
+
+After:
+    adata = sample_cells(
+        adata,
+        max_cells=args.max_cells,
+        batch_balance_strength=args.batch_balance_strength,
+        rng=rng,
+    )
+    sc.pp.highly_variable_genes(adata, flavor="seurat_v3", n_top_genes=2000, batch_key="batch", subset=True)
+    return adata
+
+Rationale
+---------
+Adds the missing half of the proven prior solve: batch-aware HVG selection (seurat_v3, n_top_genes=2000, batch_key='batch', subset=True) on top of the n_layers=2 / scale_adversarial_loss=2.0 / adversarial_classifier=True configuration already in train.py from round 6. seurat_v3 with batch_key ranks HVGs per batch then unions, so batch-specific markers survive the subset. This restricts scVI to the 2000 most informative genes (vs the full ~14k-19k gene space it currently models) and sharpens the signal the adversarial batch head can act on, closing the remaining ~0.04 gap to the 0.80 standard threshold (round-6 kBET was 0.7615).
+
+Touched only train.py, only the one line insertion. Did not modify prober.py, _ProbeCallback, user_analyze (which is a stub `pass` here), record()/conclude() call sites, ANCHOR markers, or any hyperparameter. HVG subsetting typically lowers ELBO (fewer noise genes to fit) so the utility floor is not at risk; the ELBO anchor markers and `original_train_metric` recording remain intact.
+
+Discrepancy
+-----------
+None. The plan's target insertion point (after sample_cells, before return, before setup_anndata in main) was found exactly as described; the call was inserted verbatim.
+
+Integration integrity
+---------------------
+Re-read `record(...)` (via _ProbeCallback.on_train_epoch_end → prober_record) and `conclude(...)` (line 533: `prober_conclude(0.80, 0.55, anchors=_anchors)`). Both are present and unmodified; both `standard_threshold=0.80` and `acceptable_threshold=0.55` are still passed to `conclude`. The HVG call sits inside build_dataset() and runs before setup_anndata, so adata.var will have `highly_variable` consumed by subset=True and adata will be left with 2000 genes before SCVI.setup_anndata is invoked in main().

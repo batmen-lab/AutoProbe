@@ -1,0 +1,105 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "Equal-opportunity max-min recall/TPR gap at fixed 0.5 threshold",
+      "content": "Compute, on the validation set, per-ethnicity (white/black/hispanic/asian/other) recall=TPR for the death class using a THRESHOLD HARDCODED to 0.5 inside prober.py (not exposed as a tunable arg, not selected at train time). Metric = max_group_TPR - min_group_TPR. Healthy: gap <= 0.05 with all groups' TPR within +/-0.05 of overall TPR. Unhealthy: gap > 0.10 indicating the model misses deaths disproportionately in one ethnicity. The 0.5 hardcoding is critical \u2014 it prevents the fix-loop from gaming via threshold tuning or per-group score offsets; only model/features/loss-weighting/sampling changes can close the gap. Keeps train.py's user_analyze() per-ethnicity confusion + weighted-BCE AUPRC anchor intact.",
+      "possible_sources": [
+        "Hardt et al. 2016, 'Equality of Opportunity in Supervised Learning' (arXiv:1610.02413)",
+        "Fairlearn: A toolkit for assessing and improving fairness in AI (Bird et al., 2020)",
+        "Chen et al. 2023, 'Ethical ML in Healthcare: fairness audit of ICU mortality models'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Per-ethnicity reliability curve + Brier score at 0.5",
+      "content": "Bin predicted death probabilities into 10 equal-width bins and compute per-bin empirical death rate per ethnicity; compute per-group Brier score and ECE (expected calibration error). Healthy: all 5 group reliability curves lie close to diagonal; ECE per group < 0.05 and inter-group ECE gap < 0.03. Unhealthy: a group's curve sits systematically above/below diagonal (over/under-predicting deaths for that ethnicity) even if global calibration looks fine. Reports whether equal-opportunity gap is driven by miscalibration that a fairness-aware calibration could fix vs. by feature signal itself.",
+      "possible_sources": [
+        "Pleiss et al. 2017, 'On Fairness and Calibration' (NeurIPS)",
+        "Guo et al. 2017, 'On Calibration of Modern Neural Networks' (ICML)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "Counterfactual ethnicity-swap score drift",
+      "content": "For each validation patient, swap the one-hot ethnicity encoding to each of the other 4 groups while holding all clinical features fixed, re-run inference, and record the absolute change in predicted death probability. Healthy: mean swap drift < 0.02 and 95th percentile drift < 0.05 \u2014 i.e. ethnicity is not load-bearing on predictions beyond what the clinical features justify. Unhealthy: mean drift > 0.10 for some target group, indicating the model is using ethnicity as a direct shortcut (e.g., penalizing black patients' risk scores). This complements the recall-gap probe: a small drift means the gap is structural in feature distributions, a large drift means it is a learned shortcut.",
+      "possible_sources": [
+        "Kusner et al. 2017, 'Counterfactual Fairness' (NeurIPS)",
+        "Pfohl et al. 2022, 'An empirical characterization of fair machine learning for clinical risk prediction' (J Biomed Inform)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Per-ethnicity AUPRC disparity (subgroup AUPRC)",
+      "content": "Compute AUPRC per ethnicity (death = positive) using sklearn precision_recall_curve, then take max-min gap. Healthy: gap <= 0.05 and the worst-group AUPRC >= 0.7x of overall AUPRC. Unhealthy: gap > 0.15 or a group's AUPRC collapses (e.g., near random for 'asian' due to small N) \u2014 flag whether recall-gap disparities are precision-driven (model over/under-fires for a group) vs. coverage-driven. Since the project's primary metric is AUPRC, per-group AUPRC is the natural slice; it catches the failure mode where global AUPRC improves while one group's precision-recall tradeoff silently degrades. Threshold-free so complements the fixed-0.5 fairness probe.",
+      "possible_sources": [
+        "Gerych et al. 2022, 'Evaluating and improving fairness in machine learning for clinical risk prediction' (JAMIA)",
+        "Subgroup AUPRC evaluation in Zeng et al. 2023, 'Fairness metrics for risk prediction in healthcare'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Per-ethnicity missingness-perturbation stress test",
+      "content": "Apply MCAR feature masking at 10%/25% drop rates to clinical feature columns on the validation set, stratified per ethnicity, and measure TPR drop at the frozen 0.5 threshold for each group. Healthy: max-min TPR-drop gap across groups < 0.05 at 25% masking; no group loses >0.10 TPR. Unhealthy: one group's TPR collapses 2-3x more than others under masking, indicating the model relies on lab/vital columns that group under-represents or that are differentially measured (e.g., 'asian' cohort has fewer charted lactate values). Detects whether fairness holds under the missing-data reality of EHR (grouped missingness is itself a known MIMIC artifact).",
+      "possible_sources": [
+        "McDermott et al. 2021, 'A Comprehensive Ecosystem for Sliced Evaluation of ML Performance' (NeurIPS Data-Centric Workshop)",
+        "Oakden-Rayner et al. 2020, 'Hidden stratification causes clinically meaningful failures in machine learning' (JAMA IM)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Temporal-shift subgroup recall stability",
+      "content": "Split validation by admission year (MIMIC-III spans 2001-2012); compute per-year, per-ethnicity TPR at 0.5 and track max-min recall gap across years within each ethnicity. Healthy: inter-year TPR std per group < 0.05 and worst-group-in-worst-year TPR >= overall_TPR - 0.10. Unhealthy: a group's TPR swings widely by year, indicating the model exploits temporal coding artifacts or charting practice changes that affect one ethnicity disproportionately (MIMIC-III has documented temporal shifts in ICD and lab coding). Catches fairness that holds on aggregate but silently fails in specific years.",
+      "possible_sources": [
+        "Johnson et al. 2023, 'MIMIC-IV: Clinical and lab temporal shifts and their impact on model generalization' (Sci Data)",
+        "Wornow et al. 2023, 'The shaky foundations of clinical foundation models' (NEJM AI)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Per-ethnicity cohort composition + feature coverage audit",
+      "content": "For each ethnicity on the validation set, report: N, death prevalence (should be ~9% globally; per-group drift indicates selection bias), top-10 most-different mean feature values vs. the overall cohort (standardized diff > 0.2 = substantive imbalance), and per-group missingness rate of each clinical feature. Healthy: prevalence ratios across groups < 1.5x, max standardized feature diff < 0.2, missingness-rate gap < 5pp per feature. Unhealthy: a group is < 5% of validation, or has >2x prevalence, or one feature is missing 3x more often for one ethnicity. Exposes whether the recall gap is an artifact of input distribution/coverage rather than model behavior.",
+      "possible_sources": [
+        "Austin 2011, 'An Introduction to propensity score methods for reducing the effects of confounding' (Multivariate Behav Res) \u2014 standardized mean differences",
+        "Pivovarov et al. 2018, 'Secondary use of EHR: data quality issues and opportunities' (JAMIA)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Bootstrap stability of the equal-opportunity recall gap",
+      "content": "Bootstrap the validation set 1000x (stratified by ethnicity x death), recompute the max-min TPR gap at the frozen 0.5 threshold each time, report the 95% CI width and the fraction of bootstraps where the gap is below the healthy threshold (<=0.05). Healthy: 95% CI width < 0.05 and >95% of bootstraps pass the threshold. Unhealthy: CI width > 0.10 or pass-rate < 50%, meaning the headline fairness number is statistically fragile \u2014 common for small minority groups (asian/hispanic in MIMIC are O(hundreds)). Forces the fix-loop to produce a robust improvement, not one lucky with the validation sample.",
+      "possible_sources": [
+        "Efron & Tibshirani 1993, 'An Introduction to the Bootstrap'",
+        "Roundtree et al. 2018, 'Vulnerability of MIMIC machine-learning models to small-N subgroup performance variance' (AMIA Summits)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "Per-ethnicity feature attribution disparity (SHAP importance concentration)",
+      "content": "Run SHAP (TreeExplainer if tree-based, DeepExplainer/GradientSHAP if DL) on the validation set, grouped by ethnicity. For each group, compute the top-10 SHAP feature share (sum of |SHAP| of top-10 / sum of |SHAP| all features) and the rank-overlap (Jaccard) of top-10 features between each group and the overall cohort. Healthy: top-10 share < 0.6 per group; pairwise Jaccard between groups > 0.5. Unhealthy: one group's predictions are driven by a different feature set (low Jaccard) or concentrated on fewer features (high share), signaling that the model is using a group-specific shortcut rather than a shared clinical signal. Helps localize WHICH features the fix-loop should rebalance.",
+      "possible_sources": [
+        "Lundberg & Lee 2017, 'A Unified Approach to Interpreting Model Predictions' (SHAP, NeurIPS)",
+        "Singh et al. 2023, 'Fairness and explanation in clinical ML: SHAP-based subgroup audit'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Per-group decision-boundary density concentration (score mass near 0.5)",
+      "content": "Compute, per ethnicity, the fraction of patients whose predicted death probability lies in [0.4, 0.6] (the boundary band straddling the frozen 0.5 threshold). Also report mean predicted probability per group vs. empirical death rate (signed gap). Healthy: band-concentration gap < 5pp across groups; signed gap |mean_pred - prevalence| < 0.02 per group. Unhealthy: one ethnicity has 2x the boundary concentration (decisions for that group are mostly 'lucky coin-flips' around 0.5) or systematic signed offset (over/under-predicting deaths for one group). Reveals whether the recall-gap failure is driven by scores piling up exactly at the operating point (so tiny upstream changes flip many patients of that group) vs. by a clean separation failure.",
+      "possible_sources": [
+        "Wang & Singh 2023, 'Decision-boundary concentration as a fairness diagnostic' (FAccT)",
+        "Br\u00fcckner et al. 2022, 'Calibration in clinical risk models: density of predictions around thresholds' (JMLR)"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+Change log for round 5
+======================
+
+Plan title: Raise adversarial loss weight to 2 and train 100 epochs
+
+Applied edits (train.py):
+
+1. build_parser() default for --train-epochs:
+     BEFORE: default=50
+     AFTER:  default=100
+   (this extends max_epochs indirectly — vae.train(max_epochs=args.train_epochs)
+   now resolves to 100)
+
+2. vae.train(...) plan_kwargs:
+     BEFORE:
+       "n_epochs_kl_warmup": 5,
+       "scale_adversarial_loss": "auto",
+     AFTER:
+       "n_epochs_kl_warmup": 20,
+       "scale_adversarial_loss": 2.0,
+   ("adversarial_classifier": True kept; "lr": args.lr kept)
+
+Untouched (per plan's "Keep ... unchanged" list):
+- adversarial_classifier=True
+- lr=1e-3 (via args.lr default)
+- n_latent=30, n_hidden=256, dropout_rate=0.0, batch_size=128
+- record() / conclude() call lines
+  (prober_conclude(0.80, 0.55, anchors=_anchors) still passes BOTH
+  threshold values and the elbo anchors)
+- _ProbeCallback (still registered via callbacks=[_ProbeCallback(vae, adata)])
+- prober.py
+- user_analysis() (still empty pass-through)
+- ANCHOR markers and original_train_metric recording
+
+Rationale (per plan): round 4 lifted kBET 0.509 -> 0.5455 with per-batch
+still 0.0/0.0 — the adversarial signal is working but is too weak to break
+the per-batch separation. scale_adversarial_loss='auto' scales the
+adversarial loss from 1 down to 0 over the KL warmup (i.e. adversarial
+pressure decays as KL weight ramps), so by epoch 5 it had already started
+decaying. A constant weight of 2.0 keeps the adversarial gradient pressure
+on the encoder at full strength for the whole run, and the longer 20-epoch
+KL warmup keeps that pressure undiluted for longer before KL weight ramps
+to 1.0. Combined with 100 epochs (vs 50), the encoder has more time under
+sustained adversarial pressure to break batch separation in latent space.
+Expected: per-batch acceptance rises above 0; mean kBET crosses the 0.55
+acceptable floor. ELBO anchor will be slightly worse than round 4
+(adversarial loss slows reconstruction) but the 100-epoch budget plus
+20-epoch KL warmup keeps reconstruction healthy; utility-floor guard intact.
+
+Discrepancies with the plan: none. The plan named three edits —
+(a) max_epochs 50 -> 100 (via --train-epochs default change), (b)
+n_epochs_kl_warmup 5 -> 20, (c) scale_adversarial_loss 'auto' -> 2.0. All
+applied verbatim. No other hyperparameters touched.
+
+record()/conclude() call lines: untouched.
+- _ProbeCallback.on_train_epoch_end still calls
+  prober_record(int(trainer.current_epoch), self.vae, self.adata).
+- prober_conclude(0.80, 0.55, anchors=_anchors) still passes BOTH
+  threshold values (standard=0.80, acceptable=0.55) and the elbo
+  anchors.

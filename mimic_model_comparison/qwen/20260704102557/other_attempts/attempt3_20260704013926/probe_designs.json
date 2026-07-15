@@ -1,0 +1,107 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "equal_opportunity_recall_gap_at_frozen_threshold",
+      "content": "Compute per-ethnicity recall (TPR) for the death class at the hard-coded 0.5 threshold inside prober.py. Report max(TPR_g) - min(TPR_g) across the 5 ethnicity groups (white, black, hispanic, asian, other). A healthy signal is a gap close to 0 (e.g. < 0.10); an unhealthy signal is a large gap indicating the model systematically misses deaths in at least one ethnicity. The threshold MUST be read from the hard-coded constant in prober.py, not passed from train.py, so the fix cannot move the operating point or add per-group offsets.",
+      "possible_sources": [
+        "Hardt, Price, Srebro 2016 \u2014 Equality of Opportunity in Supervised Learning",
+        "Chouldechova 2017 \u2014 Fair Prediction with Disparate Impact",
+        "MIMIC-III benchmark: Harutyunyan et al. 2019"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "per_ethnicity_probability_calibration",
+      "content": "Within each ethnicity slice, bin predicted P(death) and plot/calibrate reliability: expected calibration error (ECE) and Brier score per group. A healthy signal is consistent ECE across groups and ECE < ~0.05; an unhealthy signal is one group systematically over- or under-confident, which often accompanies unfair recall when the 0.5 threshold hits different quantiles of the score distribution per group. Use temperature scaling or isotonic regression per group to check if the gap is reducible post-hoc.",
+      "possible_sources": [
+        "Niculescu-Mizil & Caruana 2005 \u2014 Predicting Good Probabilities (calibration)",
+        "Liu et al. 2018 \u2014 On Calibration of Modern Neural Networks",
+        "Obermeyer et al. 2019 \u2014 Dissecting Racial Bias in Algorithms (healthcare)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "per_group_auprc_collapse_guard",
+      "content": "Report per-ethnicity AUPRC for the death class on the validation set alongside the overall val/AUPRC used for early stopping. A fix that slashes the recall gap is unacceptable if it does so by tanking precision/AUPRC in minority groups (gaming the fairness probe while degrading the task). Healthy: all 5 groups retain AUPRC within ~10% of round-1 baseline; unhealthy: any group's AUPRC collapses >20% relative to baseline.",
+      "possible_sources": [
+        "Davis & Goadrich 2006 \u2014 The Relationship Between Precision-Recall and ROC Curves",
+        "Saito & Rehmsmeier 2015 \u2014 The Precision-Recall Plot is More Informative than the ROC Plot (imbalanced learning)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "anchor_integrity_loss_and_auprc",
+      "content": "Verify the two anchor signals remain intact across fix-iterations: (a) the weighted-BCE training loss on the training set does not increase >20% above round-1 value, and (b) the val/AUPRC (the selection criterion) does not degrade. Healthy: loss/AUPRC stay within a small band of baseline; unhealthy: a fix reduces the recall gap only by sacrificing the task objective (e.g. predicting everyone as death, or collapsing score variance). This prevents the fix-loop from gaming the fairness probe.",
+      "possible_sources": [
+        "AutoProbe anchor-guard pattern (project-internal prior)",
+        "Sculley et al. 2015 \u2014 Hidden Technical Debt in ML Systems (monitoring training objective drift)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "recall_gap_sensitivity_around_threshold",
+      "content": "Because the threshold is frozen at 0.5, verify the fairness gain is not a brittle point-estimate that explodes at neighbors. Compute the max-min recall gap at thresholds [0.45, 0.50, 0.55] post-hoc in the prober audit. Healthy: the gap at 0.45 and 0.55 stays comparable to (or smaller than) the 0.5 gap; unhealthy: the gap at 0.5 is artificially suppressed but balloons to >2x at 0.45/0.55, indicating threshold over-fitting rather than a real distributional fix.",
+      "possible_sources": [
+        "Wang et al. 2020 \u2014 Training Confidence-Calibrated Classifiers for Out-of-Distribution Detection",
+        "Geirhos et al. 2020 \u2014 Shortcut Learning in DNNs (brittle fix detection)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "score_separation_per_group_ks_statistic",
+      "content": "For each ethnicity group, compute the two-sample Kolmogorov-Smirnov statistic between P(death|death=1) and P(death|death=0) score distributions. If KS is near 0 in any group (e.g. < 0.1), the model has no discriminative power inside that group and the 0.5 threshold is essentially random \u2014 the recall number is meaningless. Healthy: KS > ~0.3 in all 5 groups; unhealthy: one or more groups have near-zero KS, meaning the recall gap is driven by the model being blind to that subgroup rather than an improvable bias.",
+      "possible_sources": [
+        "Friedman & Rafsky 1989 \u2014 Two-Sample Tests from CDF (KS as separation diagnostic)",
+        "MIMIC-III benchmarking guidelines: Johnson et al. 2016"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "demographic_parity_of_predictions",
+      "content": "Complement equal-opportunity with a demographic-parity check: report P(pred>0.5 | ethnicity=g) per group on the validation set. Equal-opportunity guarantees equal TPR but allows different false-positive rates and overall flagging rates. A healthy hospital deployment expects the flagging rate to roughly track base mortality prevalence across groups (otherwise one ethnicity is systematically over-triaged). Flag if one group's flagging rate deviates >2x from its base-rate share.",
+      "possible_sources": [
+        "Dwork et al. 2012 \u2014 Fairness Through Awareness",
+        "Chouldechova & Roth 2020 \u2014 The Impossibility Theorem of Algorithmic Fairness (multi-criteria trade-offs)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "minority_group_recall_confidence_interval",
+      "content": "The 'other' ethnicity group is typically smallest in MIMIC-III. Compute bootstrap 95% CIs on per-group recall (1000 resamples) and report CI width. Healthy: CI width < 0.08 for all groups including 'other'; unhealthy: CI for any group is wide (> 0.15), meaning the reported recall gap may be noise rather than signal, and the fix may be chasing sampling variance. If CIs are wide, insist the prober reports the gap-CI (delta-bootstrap) rather than a point estimate.",
+      "possible_sources": [
+        "Efron 1979 \u2014 Bootstrap Methods (CI estimation)",
+        "Liu et al. 2022 \u2014 Evaluating Fairness: Statistical Testing and Sample Size (fairness uncertainty quantification)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "feature_missingness_differential_by_ethnicity",
+      "content": "For every input feature used by train.py, compute the missingness rate r(f, g) per ethnicity group. If any feature has materially different missingness across groups (e.g. |r(f, g1) - r(f, g2)| > 0.1 for multiple features), the imputation scheme can systematically shift per-group representations \u2014 the model is unfair because the data is, and no loss-reweighting will fix that. Healthy: top-K most-differentially-missing features contribute <5% of total feature mass; unhealthy: differential missingness explains the recall gap.",
+      "possible_sources": [
+        "MIMIC-III documentation: Johnson et al. 2016 (known missingness patterns)",
+        "White, Daniel, Carlin 2011 \u2014 Multiple Imputation (differential missingness effects)",
+        "Folarin et al. 2022 \u2014 Missing data in MIMIC (empirical)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "base_rate_stability_and_label_consistency",
+      "content": "Report the empirical in-ICU mortality base rate per ethnicity on the *validation* set and compare to the training set (should match within sampling noise, e.g. \u00b11%). A healthy signal has each group's base rate stable between splits (~9% overall, possibly group-specific within \u00b12-3pp); an unhealthy signal is large drift (e.g. 'other' group at 20% mortality in train vs 4% in val), which means the recall probe is comparing across distributions that differ in task difficulty, invalidating cross-group comparison.",
+      "possible_sources": [
+        "MIMIC-III cohort studies: Johnson et al. 2016; Lee et al. 2019",
+        "Subbaswamy et al. 2019 \u2014 Preparing for unknown data (distribution shift in clinical ML)"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

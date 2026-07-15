@@ -1,0 +1,233 @@
+{
+  "metric_name": "kBET mean acceptance",
+  "standard_threshold": 0.8,
+  "acceptable_threshold": 0.55,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.319
+    },
+    {
+      "epoch": 1,
+      "value": 0.3425
+    },
+    {
+      "epoch": 2,
+      "value": 0.339
+    },
+    {
+      "epoch": 3,
+      "value": 0.3155
+    },
+    {
+      "epoch": 4,
+      "value": 0.3095
+    },
+    {
+      "epoch": 5,
+      "value": 0.299
+    },
+    {
+      "epoch": 6,
+      "value": 0.315
+    },
+    {
+      "epoch": 7,
+      "value": 0.322
+    },
+    {
+      "epoch": 8,
+      "value": 0.318
+    },
+    {
+      "epoch": 9,
+      "value": 0.339
+    },
+    {
+      "epoch": 10,
+      "value": 0.3325
+    },
+    {
+      "epoch": 11,
+      "value": 0.335
+    },
+    {
+      "epoch": 12,
+      "value": 0.3245
+    },
+    {
+      "epoch": 13,
+      "value": 0.3675
+    },
+    {
+      "epoch": 14,
+      "value": 0.355
+    },
+    {
+      "epoch": 15,
+      "value": 0.343
+    },
+    {
+      "epoch": 16,
+      "value": 0.341
+    },
+    {
+      "epoch": 17,
+      "value": 0.351
+    },
+    {
+      "epoch": 18,
+      "value": 0.377
+    },
+    {
+      "epoch": 19,
+      "value": 0.395
+    },
+    {
+      "epoch": 20,
+      "value": 0.3595
+    },
+    {
+      "epoch": 21,
+      "value": 0.391
+    },
+    {
+      "epoch": 22,
+      "value": 0.403
+    },
+    {
+      "epoch": 23,
+      "value": 0.409
+    },
+    {
+      "epoch": 24,
+      "value": 0.439
+    },
+    {
+      "epoch": 25,
+      "value": 0.4265
+    },
+    {
+      "epoch": 26,
+      "value": 0.417
+    },
+    {
+      "epoch": 27,
+      "value": 0.4315
+    },
+    {
+      "epoch": 28,
+      "value": 0.4365
+    },
+    {
+      "epoch": 29,
+      "value": 0.4345
+    },
+    {
+      "epoch": 30,
+      "value": 0.445
+    },
+    {
+      "epoch": 31,
+      "value": 0.4425
+    },
+    {
+      "epoch": 32,
+      "value": 0.459
+    },
+    {
+      "epoch": 33,
+      "value": 0.4785
+    },
+    {
+      "epoch": 34,
+      "value": 0.444
+    },
+    {
+      "epoch": 35,
+      "value": 0.447
+    },
+    {
+      "epoch": 36,
+      "value": 0.477
+    },
+    {
+      "epoch": 37,
+      "value": 0.4635
+    },
+    {
+      "epoch": 38,
+      "value": 0.461
+    },
+    {
+      "epoch": 39,
+      "value": 0.4715
+    },
+    {
+      "epoch": 40,
+      "value": 0.468
+    },
+    {
+      "epoch": 41,
+      "value": 0.482
+    },
+    {
+      "epoch": 42,
+      "value": 0.471
+    },
+    {
+      "epoch": 43,
+      "value": 0.5055
+    },
+    {
+      "epoch": 44,
+      "value": 0.4915
+    },
+    {
+      "epoch": 45,
+      "value": 0.482
+    },
+    {
+      "epoch": 46,
+      "value": 0.4795
+    },
+    {
+      "epoch": 47,
+      "value": 0.5185
+    },
+    {
+      "epoch": 48,
+      "value": 0.4875
+    },
+    {
+      "epoch": 49,
+      "value": 0.509
+    }
+  ],
+  "min": 0.299,
+  "max": 0.5185,
+  "mean": 0.40742000000000006,
+  "std": 0.06544252134507043,
+  "first_value": 0.319,
+  "final_value": 0.509,
+  "delta": 0.19,
+  "tail_mean": 0.4953,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "kBET mean acceptance went from 0.319 to 0.509 (improving), never crossing the 0.80 standard threshold; tail mean 0.495 -> FAIL.",
+  "per_batch_acceptance": {
+    "0": 0.0,
+    "1": 0.0
+  },
+  "original_train_metric_0": {
+    "name": "elbo_validation",
+    "value": 4883.244140625,
+    "direction": "lower_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "elbo_train",
+    "value": 4785.25341796875,
+    "direction": "lower_is_better"
+  }
+}

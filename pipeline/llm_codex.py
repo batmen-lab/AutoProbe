@@ -4,10 +4,13 @@ Only imported when LLM_BACKEND=codex (see the trailer in pipeline/llm.py).
 The rest of the pipeline (stages.py, state.py, workspace.py) is unchanged
 and unaware which backend is in use.
 
-NLP_MODEL: gpt-5.4 (non-codex, supports clean JSON output under read-only sandbox)
-AGENT_MODEL: gpt-5.3-codex (codex variant, native to Codex CLI's shell/apply_patch tools)
+NLP_MODEL: gpt-5.4 (clean JSON output under read-only sandbox)
+AGENT_MODEL: gpt-5.4 (drives the Codex CLI's shell/apply_patch tools for workspace edits)
 
-These are the two models confirmed to work under a ChatGPT-account subscription.
+Confirmed 2026-07 under a ChatGPT-account subscription: the dedicated *-codex
+models (gpt-5-codex, gpt-5.3-codex, ...) return "model is not supported when using
+Codex with a ChatGPT account", so both entry points use the general gpt-5.4, which
+works for read-only JSON and for file-writing agent turns via the Codex CLI tools.
 """
 
 from __future__ import annotations
@@ -18,10 +21,19 @@ import re
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 NLP_MODEL = "gpt-5.4"
-AGENT_MODEL = "gpt-5.3-codex"
+AGENT_MODEL = "gpt-5.4"
+
+# Robustness parity with the claude backend (pipeline/llm.py): retry transient
+# failures so a blip doesn't fail a whole stage — codex CLI 5xx / idle-timeout /
+# rollout-db hiccups (positive exit code) and empty/malformed-JSON nlp output. A
+# process killed by a signal (user cancel -> negative exit) is never retried.
+NLP_MAX_RETRIES = 2            # extra attempts after the first (3 total)
+AGENT_MAX_RETRIES = 2         # extra attempts after the first (3 total)
+AGENT_RETRY_BACKOFF_S = 4.0   # pause before re-invoking the agent on a transient failure
 
 
 # ── Cancellation registry (private to codex backend) ─────────────────────────
@@ -183,36 +195,63 @@ def nlp_call(
     log_path: Path | None = None,
     label: str = "nlp_call",
 ) -> dict:
-    """Read-only-sandbox codex call. Final agent message parsed as JSON."""
-    tmp_fd, tmp_path = tempfile.mkstemp(prefix="codex_last_", suffix=".txt")
-    os.close(tmp_fd)
-    try:
-        cmd = [
-            "codex", "exec",
-            "--model", model,
-            "--json",
-            "--sandbox", "read-only",
-            "--skip-git-repo-check",
-            "--ephemeral",
-            "--output-last-message", tmp_path,
-            message,
-        ]
-        from_stream, _stderr = _stream_codex(
-            cmd, cwd=None, log_path=log_path, label=f"{label} → {model}",
-        )
+    """Read-only-sandbox codex call. Final agent message parsed as JSON.
+
+    Retries transient (positive-exit) codex failures and empty/malformed-JSON
+    output, each time with a reinforced JSON-only nudge — mirroring the claude
+    backend. A signal-kill (negative exit = user cancel) is not retried.
+    """
+    last_err: Exception | None = None
+    for attempt in range(NLP_MAX_RETRIES + 1):
+        msg = message
+        if attempt > 0:
+            msg = (
+                message
+                + "\n\nIMPORTANT: Respond with ONLY the JSON object — no prose and no "
+                "markdown fences. Do not run any tools; just return the JSON."
+            )
+        lbl = f"{label} → {model}" + (f"  (retry {attempt}/{NLP_MAX_RETRIES})" if attempt else "")
+        tmp_fd, tmp_path = tempfile.mkstemp(prefix="codex_last_", suffix=".txt")
+        os.close(tmp_fd)
         try:
-            from_file = Path(tmp_path).read_text()
-        except FileNotFoundError:
-            from_file = ""
-        final = from_file.strip() or from_stream.strip()
-        if not final:
-            raise RuntimeError(f"{label}: empty response from model")
-        return _parse_json_response(final)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except FileNotFoundError:
-            pass
+            cmd = [
+                "codex", "exec",
+                "--model", model,
+                "--json",
+                "--sandbox", "read-only",
+                "--skip-git-repo-check",
+                "--ephemeral",
+                "--output-last-message", tmp_path,
+                msg,
+            ]
+            from_stream, _stderr = _stream_codex(cmd, cwd=None, log_path=log_path, label=lbl)
+            try:
+                from_file = Path(tmp_path).read_text()
+            except FileNotFoundError:
+                from_file = ""
+            final = from_file.strip() or from_stream.strip()
+            if not final:
+                raise RuntimeError(f"{label}: empty response from model")
+            return _parse_json_response(final)
+        except subprocess.CalledProcessError as e:
+            if e.returncode is not None and e.returncode < 0:
+                raise
+            last_err = e
+        except (json.JSONDecodeError, RuntimeError) as e:
+            last_err = e
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
+        if log_path is not None:
+            with log_path.open("a", encoding="utf-8") as ff:
+                ff.write(
+                    f"[retry] {label}: attempt {attempt + 1} failed: "
+                    f"{type(last_err).__name__}: {_truncate(str(last_err), 300)}\n"
+                )
+    assert last_err is not None
+    raise last_err
 
 
 def agent_call(
@@ -223,7 +262,12 @@ def agent_call(
     model: str = AGENT_MODEL,
     label: str = "agent_call",
 ) -> None:
-    """Workspace-write codex call with approvals bypassed. Native codex tool surface."""
+    """Workspace-write codex call with approvals bypassed. Native codex tool surface.
+
+    Retries transient (positive-exit) failures with a short backoff, mirroring the
+    claude backend; the agent re-reads the workspace each attempt so a retry safely
+    re-does the work. A signal-kill (negative exit = user cancel) is not retried.
+    """
     cmd = [
         "codex", "exec",
         "--model", model,
@@ -234,4 +278,22 @@ def agent_call(
         "-C", str(cwd),
         prompt,
     ]
-    _stream_codex(cmd, cwd=cwd, log_path=log_path, label=f"{label} → {model}  cwd={cwd}")
+    for attempt in range(AGENT_MAX_RETRIES + 1):
+        lbl = f"{label} → {model}  cwd={cwd}" + (
+            f"  (retry {attempt}/{AGENT_MAX_RETRIES})" if attempt else ""
+        )
+        try:
+            _stream_codex(cmd, cwd=cwd, log_path=log_path, label=lbl)
+            return
+        except subprocess.CalledProcessError as e:
+            if e.returncode is not None and e.returncode < 0:
+                raise
+            if attempt >= AGENT_MAX_RETRIES:
+                raise
+            if log_path is not None:
+                with log_path.open("a", encoding="utf-8") as ff:
+                    ff.write(
+                        f"[retry] {label}: attempt {attempt + 1} failed "
+                        f"(exit={e.returncode}) — retrying in {AGENT_RETRY_BACKOFF_S:g}s...\n"
+                    )
+            time.sleep(AGENT_RETRY_BACKOFF_S)

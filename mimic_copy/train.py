@@ -22,6 +22,10 @@ import logging
 import os
 import random
 
+# Deterministic cuBLAS matmul on CUDA >= 10.2 — must be set BEFORE the CUDA
+# context (and any torch import that could touch cuBLAS) is initialised.
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +42,8 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+import prober
 
 
 logging.basicConfig(
@@ -65,11 +71,17 @@ ETH_NAMES = ['white', 'black', 'hispanic', 'asian', 'other']
 def _seed_all(seed: int) -> None:
     """Pin every RNG we touch so back-to-back runs produce identical metrics."""
     os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    # GPU ops (cuBLAS matmul, cuDNN, atomic reductions) are non-deterministic by
+    # default — pin them so the SAME train.py reproduces identical metrics.
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +123,7 @@ def train_one_epoch(
         labels = batch['label'].to(device)
 
         logits = model(features)
-        loss = criterion(logits, labels)
+        loss = criterion(logits, labels)  # ANCHOR: original train metric - do not remove
 
         optimizer.zero_grad()
         loss.backward()
@@ -151,6 +163,7 @@ def evaluate(
         'loss': total_loss / len(loader),
         # AUPRC (average precision) is the primary metric on this imbalanced
         # label: it reflects how well the rare death class is recovered.
+        # ANCHOR: original train metric - do not remove
         'auprc': average_precision_score(labels, probs),
         'recall': recall_score(labels, preds, zero_division=0),
         'precision': precision_score(labels, preds, zero_division=0),
@@ -242,6 +255,31 @@ def user_analyze(model, val_ds, device, threshold: float = 0.5) -> None:
     fig.tight_layout(); fig.savefig(out_dir / 'per_group_recall_stacked.png', dpi=130)
     plt.close(fig)
 
+    # Chart 3: absolute counts per group (numbers, not %) — bar height = group
+    # size, stacked TP/FN/FP/TN, annotated with n + deaths. Also cross-checks the
+    # ground-truth n_positive against TP+FN and flags the group label if they
+    # disagree (a self-verifying sanity check on the confusion computation).
+    fig, ax = plt.subplots(figsize=(8.5, 5))
+    bottom = np.zeros(len(ETH_NAMES))
+    for seg, col in segs:
+        vals = np.array([data[g][seg] for g in ETH_NAMES], float)
+        ax.bar(x, vals, bottom=bottom, label=seg, color=col)
+        bottom += vals
+    labels_cnt = []
+    for g in ETH_NAMES:
+        v = data[g]; tp_fn = v['TP'] + v['FN']
+        labels_cnt.append(g if v['n_positive'] == tp_fn
+                          else f"{g}\n(!n_pos {v['n_positive']}!=TP+FN {tp_fn})")
+    for i, g in enumerate(ETH_NAMES):
+        ax.text(i, bottom[i], f"n={data[g]['n']}\ndeaths={data[g]['n_positive']}",
+                ha='center', va='bottom', fontsize=7)
+    ax.set_xticks(x); ax.set_xticklabels(labels_cnt, fontsize=8)
+    ax.set_ylabel('count (validation samples)'); ax.legend(ncol=4, fontsize=8)
+    ax.set_title('Per-ethnicity prediction outcomes (absolute counts)')
+    ax.margins(y=0.12)
+    fig.tight_layout(); fig.savefig(out_dir / 'per_group_outcomes_counts.png', dpi=130)
+    plt.close(fig)
+
     logger.info('[user_analyze] wrote per-group audit to %s', out_dir)
 
 
@@ -262,7 +300,11 @@ def main(data_dir: str) -> None:
     train_ds = MIMICMortalityDataset(data_path, 'train')
     val_ds = MIMICMortalityDataset(data_path, 'val')
 
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+    # Seeded generator so the shuffle order is identical every run regardless of
+    # how much RNG upstream code (e.g. prober integration) happened to consume.
+    _loader_gen = torch.Generator()
+    _loader_gen.manual_seed(SEED)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, generator=_loader_gen)
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False)
 
     # ---- Class imbalance weight (positives are rare) ----
@@ -298,6 +340,22 @@ def main(data_dir: str) -> None:
             torch.save(model.state_dict(), ckpt_path)
             logger.info('  -> Saved best model (AUPRC=%.4f) to %s', best_auprc, ckpt_path)
 
+        # Probe: per-epoch equal-opportunity ethnicity recall gap.
+        # Anchors (train.py's own primary eval metric + loss) are carried
+        # through to conclude() so the orchestrator can detect a fix-loop
+        # that games the probe by sacrificing the model's own objective.
+        prober.record(
+            epoch, model, val_loader, device,
+            standard_threshold=0.05,
+            acceptable_threshold=0.10,
+            original_train_metrics=[
+                {'name': 'val_auprc', 'value': float(val_metrics['auprc']),
+                 'direction': 'higher_is_better'},
+                {'name': 'train_loss', 'value': float(train_loss),
+                 'direction': 'lower_is_better'},
+            ],
+        )
+
     # ---- Test with best checkpoint ----
     logger.info('Loading best checkpoint for test evaluation ...')
     model.load_state_dict(torch.load(ckpt_path, map_location=device, weights_only=True))
@@ -306,6 +364,10 @@ def main(data_dir: str) -> None:
     # Human-owned independent per-ethnicity fairness audit. Keep exactly as-is.
     user_analyze(model, val_ds, device)
     # === END USER ANALYSIS CALL ===
+
+    # Probe conclude — emit final JSON + Plotly PDF after training ends.
+    # Pass both thresholds (standard, acceptable) in that order.
+    prober.conclude(standard_threshold=0.05, acceptable_threshold=0.10)
 
     test_ds = MIMICMortalityDataset(data_path, 'test')
     test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
