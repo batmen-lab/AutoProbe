@@ -231,10 +231,14 @@ export const api = {
     http<RunRecord>(`/api/runs/${runId}/stage3/implement`, {
       method: "POST",
     }),
-  iterateOnce: (runId: string) =>
-    http<RunRecord>(`/api/runs/${runId}/stage4/iterate`, {
-      method: "POST",
-    }),
+  // STALE — DISABLED. `iterateOnce` hit the old `/stage4/iterate` route, which
+  // ran the fix-plan-less `iterate_once` engine. No component calls this and the
+  // backend route is commented out. Use `autoFixLoop` / the fix-plan flow
+  // instead. Do NOT re-enable. See CLAUDE.md ("Stale pipeline").
+  // iterateOnce: (runId: string) =>
+  //   http<RunRecord>(`/api/runs/${runId}/stage4/iterate`, {
+  //     method: "POST",
+  //   }),
   autoResearchIterate: (runId: string, count: number) =>
     http<RunRecord>(`/api/runs/${runId}/stage4/auto-research-iterate`, {
       method: "POST",

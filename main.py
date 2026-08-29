@@ -1,7 +1,9 @@
-"""CLI driver for the 4-stage agentic probe pipeline.
+"""CLI driver for stages 1–3 of the agentic probe pipeline.
 
-The same pipeline that the Next.js frontend drives via the FastAPI server.
-Use this for headless / scripted runs.
+WARNING: This CLI does NOT drive the real Stage-4 auto-probe pipeline. Its
+Stage-4 loop used the stale `iterate_once` engine (no fix-plan mechanism) and
+is now DISABLED. The live auto-probe / auto-research flows run ONLY through the
+frontend + FastAPI server (`make api` + `make web`). See CLAUDE.md.
 
 Usage:
     python main.py --workspace ./mimic
@@ -10,7 +12,7 @@ Usage:
 Stage 1: ask for context, generate probe designs, prompt user to pick one
 Stage 2: generate dev plans, prompt user to pick one
 Stage 3: agent writes prober.py, integrates train.py, runs training once
-Stage 4: iterate N times (or until probe passes)
+Stage 4: DISABLED here — run it through the frontend (stale iterate_once path)
 
 Backward navigation is exposed via `--revert <run_id> --to-stage N`.
 
@@ -109,16 +111,30 @@ def cmd_run(args) -> None:
             print(f"Stage 3 first run: {last.get('metric_name')} = {last.get('metric_value')} ({last.get('status')})")
 
     # Stage 4
+    # ── STALE PIPELINE DISABLED ───────────────────────────────────────────────
+    # This CLI Stage-4 loop drove the OLD `iterate_once` engine, which has NO
+    # fix-plan mechanism (no candidate plans, no confidence gating, no anchor
+    # guard on the fix step). It is NOT the real "auto-probe" pipeline. The live
+    # auto-probe / auto-research flows run ONLY through the frontend + FastAPI
+    # server (`make api` + `make web`): stage4/auto-fix-loop and the fix-plan
+    # routes. Do NOT re-enable this to "auto-run the pipeline headlessly" — it
+    # silently bypasses the fix-plan machinery. See CLAUDE.md ("Stale pipeline").
     if state.record.stage == Stage.FOUR:
-        n = args.iterations or 3
-        for i in range(n):
-            if stages_mod.probe_passed(state):
-                print("Probe PASSED — stopping early.")
-                break
-            print(f"Iteration {i + 1}/{n}…")
-            result = stages_mod.iterate_once(state)
-            print(f"  -> {result['iteration']}")
-        print("Done.")
+        raise SystemExit(
+            "Stage 4 via the CLI is DISABLED (stale iterate_once path). "
+            "Run the real auto-probe pipeline through the frontend: "
+            "`make api` + `make web`, then use 'Start auto probe-fixing'. "
+            "See CLAUDE.md."
+        )
+        # n = args.iterations or 3
+        # for i in range(n):
+        #     if stages_mod.probe_passed(state):
+        #         print("Probe PASSED — stopping early.")
+        #         break
+        #     print(f"Iteration {i + 1}/{n}…")
+        #     result = stages_mod.iterate_once(state)
+        #     print(f"  -> {result['iteration']}")
+        # print("Done.")
 
 
 def cmd_revert(args) -> None:

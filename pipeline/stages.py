@@ -3,7 +3,10 @@
 Stage 1 (NLP):  generate_probes, select_probe
 Stage 2 (NLP):  generate_dev_plans, select_plan
 Stage 3 (agent): implement
-Stage 4 (agent): iterate_once
+Stage 4 (agent): fix-plan flow — generate_fix_plans, select_and_apply_fix_plan,
+                 auto_fix_loop (auto-research: auto_research_iterate_batch).
+                 NOTE: `iterate_once` is the STALE, DISABLED Stage-4 engine
+                 (no fix-plan mechanism) — do not use. See CLAUDE.md.
 
 Each function reads/writes via the RunState passed in and returns the new
 phase/output suitable for the API response.
@@ -671,46 +674,63 @@ def _iteration_record_from_snapshot(snapshot: dict, *, note: str | None = None, 
 
 # ── Stage 4: iteration ───────────────────────────────────────────────────────
 def iterate_once(state: RunState) -> dict:
-    """Run a single improvement iteration. Snapshots train.py first."""
-    if not (state.workspace / "prober.py").exists():
-        raise ValueError("Stage 4 requires prober.py from stage 3.")
+    """STALE — DISABLED. The old fix-plan-less Stage-4 improvement engine.
 
-    state.set_phase(Stage.FOUR, "running")
-
-    next_idx = _next_round_index(state)
-
-    state.set_action(f"improving-implement:{next_idx}")
-    # Auto-research mode uses a different iteration prompt (regression-aware,
-    # comment-driven). Normal mode uses the dev-plan-driven iteration prompt.
-    iter_prompt = (
-        PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT
-        if state.record.debug_flags.get("auto_research")
-        else PROMPT_SEVEN
+    This ran a single blind improvement pass with NO fix-plan mechanism (no
+    candidate plans, no confidence gating on the fix step). It is NOT the real
+    auto-probe pipeline and must never be used to "auto-run" a run. The live
+    Stage-4 flow is the fix-plan machinery: `generate_fix_plans` +
+    `select_and_apply_fix_plan` + `auto_fix_loop` (auto-research uses
+    `auto_research_iterate_batch`). All call sites (CLI main.py, the
+    /stage4/iterate route, the api.ts client stub) are commented out. This stub
+    raises so any accidental re-wiring fails loudly instead of silently running
+    the stale path. See CLAUDE.md ("Stale pipeline").
+    """
+    raise RuntimeError(
+        "iterate_once is the DISABLED stale Stage-4 engine (no fix-plan "
+        "mechanism). Use auto_fix_loop / the fix-plan flow instead. See "
+        "CLAUDE.md."
     )
-    # If the previous round was auto-reverted for breaching the anchor floor,
-    # surface that to this round's agent (one-shot; consumed on read).
-    anchor_warning = _consume_anchor_warning(state.workspace)
-    if anchor_warning:
-        iter_prompt = f"{iter_prompt}\n\n{anchor_warning}"
-    agent_call(iter_prompt, cwd=state.workspace, log_path=state.log_path)
-
-    state.set_action(f"iteration-test-run:{next_idx}")
-    run_training_with_autofix(state, expected_index=next_idx)
-
-    # Orchestrator-level revert-on-regression: compares this round's tail_mean
-    # to the prior iteration record and restores train.py from
-    # round-{N-1}-post if worsened. Also tags the resulting train.py as
-    # round-{N}-post so future rounds can revert back to it.
-    revert_note = _maybe_revert_on_regression(state, next_idx)
-    snapshot = _read_latest_metric(state.workspace)
-    if snapshot is not None:
-        rec = _iteration_record_from_snapshot(snapshot, note=revert_note)
-    else:
-        rec = IterationRecord(index=next_idx, note=revert_note)
-    state.record_iteration(rec)
-    state.set_action(None)
-    state.set_phase(Stage.FOUR, "ready")
-    return {"iteration": rec.__dict__, "passed": rec.status == "PASS"}
+    # ── Original stale body, preserved for reference only ─────────────────────
+    # if not (state.workspace / "prober.py").exists():
+    #     raise ValueError("Stage 4 requires prober.py from stage 3.")
+    #
+    # state.set_phase(Stage.FOUR, "running")
+    #
+    # next_idx = _next_round_index(state)
+    #
+    # state.set_action(f"improving-implement:{next_idx}")
+    # # Auto-research mode uses a different iteration prompt (regression-aware,
+    # # comment-driven). Normal mode uses the dev-plan-driven iteration prompt.
+    # iter_prompt = (
+    #     PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT
+    #     if state.record.debug_flags.get("auto_research")
+    #     else PROMPT_SEVEN
+    # )
+    # # If the previous round was auto-reverted for breaching the anchor floor,
+    # # surface that to this round's agent (one-shot; consumed on read).
+    # anchor_warning = _consume_anchor_warning(state.workspace)
+    # if anchor_warning:
+    #     iter_prompt = f"{iter_prompt}\n\n{anchor_warning}"
+    # agent_call(iter_prompt, cwd=state.workspace, log_path=state.log_path)
+    #
+    # state.set_action(f"iteration-test-run:{next_idx}")
+    # run_training_with_autofix(state, expected_index=next_idx)
+    #
+    # # Orchestrator-level revert-on-regression: compares this round's tail_mean
+    # # to the prior iteration record and restores train.py from
+    # # round-{N-1}-post if worsened. Also tags the resulting train.py as
+    # # round-{N}-post so future rounds can revert back to it.
+    # revert_note = _maybe_revert_on_regression(state, next_idx)
+    # snapshot = _read_latest_metric(state.workspace)
+    # if snapshot is not None:
+    #     rec = _iteration_record_from_snapshot(snapshot, note=revert_note)
+    # else:
+    #     rec = IterationRecord(index=next_idx, note=revert_note)
+    # state.record_iteration(rec)
+    # state.set_action(None)
+    # state.set_phase(Stage.FOUR, "ready")
+    # return {"iteration": rec.__dict__, "passed": rec.status == "PASS"}
 
 
 # ── Stage 4: fix-plan flow ──────────────────────────────────────────────────

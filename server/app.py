@@ -298,11 +298,18 @@ async def stage3_implement(run_id: str):
 
 
 # ── Stage 4 ──────────────────────────────────────────────────────────────────
-@app.post("/api/runs/{run_id}/stage4/iterate")
-async def stage4_iterate(run_id: str):
-    state = load_run(run_id)
-    _launch(stages_mod.iterate_once, state, run_id=run_id)
-    return _state_payload(load_run(run_id))
+# ── STALE ROUTE DISABLED ─────────────────────────────────────────────────────
+# `/stage4/iterate` drove the OLD `iterate_once` engine — a single blind
+# improvement pass with NO fix-plan mechanism (no candidate plans, no confidence
+# gating). No frontend button calls it; it only lingered as an attack surface for
+# an agent trying to "auto-run the pipeline." The real Stage-4 auto-probe path is
+# /stage4/auto-fix-loop + the /stage4/fix-plans/* routes. Do NOT re-enable.
+# See CLAUDE.md ("Stale pipeline").
+# @app.post("/api/runs/{run_id}/stage4/iterate")
+# async def stage4_iterate(run_id: str):
+#     state = load_run(run_id)
+#     _launch(stages_mod.iterate_once, state, run_id=run_id)
+#     return _state_payload(load_run(run_id))
 
 
 @app.post("/api/runs/{run_id}/stage4/auto-fix-loop")
