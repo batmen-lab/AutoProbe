@@ -1,0 +1,16 @@
+{
+  "attr": "Heavy_Makeup",
+  "sex": "Female",
+  "true_label": 0,
+  "image": {
+    "prob": 0.704,
+    "pred": 1,
+    "correct": false
+  },
+  "flipped_image_hair_masked": {
+    "prob": 0.712,
+    "pred": 1,
+    "correct": false
+  },
+  "conclusion": "WRONG on the original face; prediction unchanged when the cue is masked"
+}

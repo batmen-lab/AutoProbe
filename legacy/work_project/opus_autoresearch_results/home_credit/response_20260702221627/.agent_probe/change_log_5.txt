@@ -1,0 +1,5 @@
+Chose potential_improvement_7.
+
+Change: Replaced the single-hidden-layer MLP stack in train.py (MLP.__init__, line ~67) with the recommended deeper architecture: BatchNorm1d(in_dim) -> Linear(in_dim,hidden) -> BatchNorm1d(hidden) -> ReLU -> Dropout(0.2) -> Linear(hidden, hidden//2) -> BatchNorm1d(hidden//2) -> ReLU -> Dropout(0.2) -> Linear(hidden//2, 1).
+
+Rationale: Prior three levers (scaling, all features, HIDDEN_DIM=128) plus a batch-size tweak lifted tail_mean from ~0.088 to ~0.1998, but the last delta was small (~+0.004) — the shallow Linear->ReLU->Linear architecture is now the bottleneck. Adding input BN normalizes the per-feature distributions the MLP sees each batch, hidden BN accelerates convergence within our 3-epoch budget, dropout(0.2) regularizes the larger hidden layer, and the second Linear(hidden, hidden//2) adds a nonlinear composition layer. This is a structural upgrade that stays contained in MLP.__init__ (no cascading changes elsewhere) and is a well-known tabular-MLP AUPRC lift over shallow one-hidden-layer nets.

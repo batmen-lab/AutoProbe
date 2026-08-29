@@ -1,0 +1,111 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "equal_opportunity_recall_gap",
+      "content": "Compute per-race-group recall/TPR on the validation set among patients who actually died (label=1). Gap = max(group recall) - min(group recall). A fair model has gap < 0.05; >0.10 indicates the model misses deaths disproportionately in some race groups. Report each group's TPR and the gap. Anchor AUPRC so fairness isn't bought by globally degrading recall.",
+      "possible_sources": [
+        "Hardt et al. 2016 'Equality of Opportunity' (FATML)",
+        "Chen et al. 2023 fairlearn clinical evaluation",
+        "Obermeyer et al. 2019 'Dissecting racial bias in an algorithm' (Science)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "demographic_parity_auprc_gap",
+      "content": "Compute per-group AUPRC (precision-recall, mortality-positive) and report the gap between max and min group AUPRC. Unlike recall gap, this surfaces whether precision-quality of death prediction is uniform across race groups. Gap <0.05 healthy; large gap reveals a model that performs qualitatively better for some ethnicities even if TPR looks matched.",
+      "possible_sources": [
+        "Plebani et al. 2024 subgroup AUPRC fairness",
+        "fairlearn.metrics.demographic_parity_difference",
+        "Suresh & Guttag 2021 'A framework for understanding sources of harm throughout the ML lifecycle'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "per_group_calibration_curve",
+      "content": "Plot reliability (calibration) curves of predicted death probability vs observed mortality rate, separately per race group, with Brier score and ECE per group. A healthy model has all 5 curves close to diagonal and group ECE within 0.03 of each other. Divergence indicates race-specific over/under-confidence \u2014 clinically dangerous since risk scores drive ICU triage.",
+      "possible_sources": [
+        "Niculescu-Mizil & Caruana 2005 calibration of logistic regression",
+        "Pleiss et al. 2017 'On fairness and calibration'",
+        "MIMIC benchmark calibration best practices (Johnson et al. 2023)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "eth_feature_ablation_coefficient_audit",
+      "content": "Because 'eth' one-hot features are direct inputs, inspect the logistic regression coefficients on eth columns (and TF-IDF features correlated with eth). A large-magnitude eth coefficient means race is being used as a direct predictor. Healthy: eth coefficients near-zero, model relies on clinical notes; Unhealthy: large eth coefficients indicating the model is shortcutting on protected attribute directly.",
+      "possible_sources": [
+        "Bellamy et al. 2019 fairlearn 'mitigating disparate impact'",
+        "Zhang et al. 2018 'Mitigating unwanted biases with adversarial learning'",
+        "Mehrabi et al. 2021 'A Survey on Bias and Fairness in ML'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "label_noise_stability",
+      "content": "Inject 5-10% label noise on training mortality labels and retrain; measure per-group recall shift. Healthy: <3% TPR shift per group. Unhealthy: a single group's recall swings >10%, indicating that group's positive predictions are driven by a few borderline samples \u2014 a fragile signal of fairness rather than robust learning.",
+      "possible_sources": [
+        "Northcutt et al. 2021 'Pervasive label errors in ML benchmarks' (PLOS One)",
+        "Song et al. 2022 'Learning from noisy labels with deep learning'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "subgroup_threshold_invariance",
+      "content": "Sweep decision thresholds from 0.1 to 0.9 per race group; for each group find threshold achieving target TPR=0.7. Healthy model: thresholds needed per group are within 0.05 of each other (groups behave similarly). Unhealthy: a group needs a very different threshold \u2192 model's risk-score distribution shifts per race, indicating feature-distribution or coefficient mismatch.",
+      "possible_sources": [
+        "Hardt et al. 2016 equality of opportunity thresholds",
+        "fairlearn PostProcessingThreshold (ThresholdOptimizer)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "across_split_recall_consistency",
+      "content": "Compute per-group recall on both train and validation splits; flag groups with >10pt train-vs-val recall gap (overfitting to that group's training positives). Healthy: per-group train-val recall gap <5pt across all 5 groups. Unhealthy: a group with high train recall but low val recall indicates memorization of that group's positives.",
+      "possible_sources": [
+        "Mitchell et al. 2019 'Model Cards for Model Reporting'",
+        "Rajkomar et al. 2018 'Scalable and accurate deep learning for electronic health records' (Nature Digital Medicine)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "group_prevalence_and_support_audit",
+      "content": "Audit per-group positive-class support: count of (group, label=1) in train and val. Flag groups with <50 death positives in val (statistically unreliable recall estimate). Healthy: each group has >100 death positives; Unhealthy: a group with <30 positives yields noisy per-group recall \u2014 fairness gap may be artifact of low support rather than bias.",
+      "possible_sources": [
+        "Mitchell et al. 2019 Model Cards (datasheets)",
+        "Gebru et al. 2021 'Datasheets for Datasets'",
+        "Chen et al. 2021 subgroup sample-size requirements in fairness audits"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "tfidf_feature_density_per_group",
+      "content": "Audit TF-IDF feature density (non-zero fraction) per race group \u2014 a sparse/biased note vocabulary per group could mean the model learns group-specific lexical shortcuts rather than clinical signal. Healthy: feature density within 20% across groups; Unhealthy: one group has much lower density \u2192 its notes are shorter/noisier, recall gaps may stem from data-quality not model bias.",
+      "possible_sources": [
+        "Chen et al. 2022 clinical NLP MIMIC subgroup text analysis",
+        "Johnson & Khanna 2022 MIMIC-IV NLP benchmarks",
+        "Rajkomar et al. 2018"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "decision_cost_curve_net_benefit",
+      "content": "Compute Vickers decision-curve net-benefit per race group at threshold probabilities 0.05\u20130.30 (ICU-mortality clinically-relevant range). Healthy: net-benefit curves overlap across groups; Unhealthy: one group has consistently lower net-benefit \u2192 clinical utility of acting on predictions is race-dependent, even if AUPRC looks acceptable.",
+      "possible_sources": [
+        "Vickers & Elkin 2006 'Decision curve analysis' (Med Decis Making)",
+        "Vickers et al. 2019 net benefit extensions",
+        "Rousson & G\u00f6nen 2023 decision-curve for fairness in clinical prediction models"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

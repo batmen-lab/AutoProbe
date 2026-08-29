@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Strengthen batch decorrelation penalty weight",
+      "content": "In lightningmodules/classification.py, training_step(), change the decorrelation penalty weight from 0.5 to 2.0 in the line `total_loss = bce_loss + 0.5 * pen`. The penalty `pen` already squares and averages the per-batch covariance between the six target probabilities and the Male label \u2014 exactly the dependence the conditional-MI probe measures \u2014 but at lambda=0.5 it left the tail at 0.0337, just above the 0.03 standard threshold, with an epoch-10 rebound to 0.0524. Raising lambda to 2.0 increases the gradient pressure to zero out that covariance four-fold, which should pull the tail epochs (10-14) consistently below 0.03 without destabilizing the BCE term (the penalty is bounded by ~0.25 per column so total_loss stays well-scaled). This sharpens the approach from change_log_6, which moved the metric in the right direction (acceptable_met already true), rather than repeating a tried-and-failed lever.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "title": "Add cosine LR schedule to stabilize tail",
+      "content": "In lightningmodules/classification.py, configure_optimizers(), replace the bare `return optimizer` with a cosine-annealing schedule: build `scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15, eta_min=1e-6)` (T_max matches Hparams.max_epochs=15) and `return {\"optimizer\": optimizer, \"lr_scheduler\": scheduler}`. The latest trajectory is converged-but-noisy in the tail \u2014 epochs 11-14 sit at 0.028/0.028/0.033/0.027 but epoch 10 spiked to 0.0524, and that variance is what pushes tail_mean (last-5 average) to 0.0337 over the 0.03 line. Decaying the constant 5e-5 LR toward zero across the run shrinks late-epoch weight updates, damping the per-epoch oscillation so the tail epochs settle tightly near their 0.027 floor and the last-5 mean drops below 0.03. This is a fresh angle (LR scheduling) untouched by change_logs 2-7, which only altered augmentation, sampling, weight decay, dropout, the loss penalty, and epoch count.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "title": "Decolorize augmentation to kill gender color cue",
+      "content": "In datamodules/celebadatamodule.py, get_transforms()'s 'train' Compose, reduce ColorJitter hue from 0.2 to 0.05 and insert `transforms.RandomGrayscale(p=0.5)` immediately after the ColorJitter line (before transforms.Resize). Skin-tone/makeup color is a strong Male proxy on CelebA; the current pipeline still applies aggressive hue=0.2 jitter while leaving full color intact, so the model can lean on gender-correlated color to predict Heavy_Makeup/Wearing_Lipstick/Attractive, inflating I(pred_target; Male | true_target). Graying half the training images each epoch and tightening hue forces shape/texture features instead of color, lowering the residual conditional MI. Note: change_log_2 described this exact edit but the current datamodule file shows hue=0.2 and no RandomGrayscale (the change is absent/reverted in the live code), so applying it now is a real, currently-missing data-side intervention rather than a no-op repeat.",
+      "target_files": [
+        "datamodules/celebadatamodule.py"
+      ],
+      "confidence": 0.3
+    }
+  ],
+  "chosen_index": 2,
+  "round": 8
+}

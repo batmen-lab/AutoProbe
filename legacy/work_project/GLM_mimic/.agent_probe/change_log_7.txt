@@ -1,0 +1,56 @@
+Change log — round 7
+====================
+
+Plan applied: "pos_weight 1.7x + WEIGHT_DECAY 1e-2"
+
+Edits:
+  1. File: train.py
+     Symbol: pos_weight (in main(), line 351)
+     Before: pos_weight = torch.tensor(n_neg / n_pos, dtype=torch.float32, device=device)
+     After:  pos_weight = torch.tensor((n_neg / n_pos) * 1.7, dtype=torch.float32, device=device)
+
+  2. File: train.py
+     Symbol: WEIGHT_DECAY constant (line 60)
+     Before: WEIGHT_DECAY = 1e-4
+     After:  WEIGHT_DECAY = 1e-2
+
+Rationale (from plan):
+  - Round-6 used 2.0x pos_weight and hit train_loss=1.058 (auto-reverted: +20.9% over
+    the 0.875 baseline, max allowed +20% = 1.05). 1.7x sits below the round-6 multiplier
+    so effective pos_weight ~15.6x (vs round-6 18.4x), keeping BCE loss ~0.95-1.0,
+    safely under the 1.05 anchor floor.
+  - Round-6 failure mode was a widening recall gap in the FINAL third of training
+    (epoch 10 gap 0.041 -> epoch 17 gap 0.166) as the linear model overfit the majority
+    group's positive scores. WEIGHT_DECAY 1e-2 (100x the 1e-4 baseline) is a standard
+    strong-regularization setting for TF-IDF logistic regression that flattens late-epoch
+    score drift without disabling the discriminative signal.
+
+Expected outcome (from plan):
+  - Final-epoch gap <= 0.05 (1.7x lifts all group recalls so worst group clears 0.85,
+    while 1e-2 L2 stops the late overfit that pulled the majority recall above the rest)
+  - train_loss ~0.95-1.0 (under the 1.05 floor)
+  - val_auprc >= 0.32 (AUPRC is threshold-independent; the scalar pos weight doesn't
+    hurt ranking; L2 of 1e-2 on TF-IDF logistic regression typically preserves AUPRC
+    within a few points of the 1e-4 baseline's 0.366)
+
+Untouched (per plan + HARD RULES):
+  - prober.py
+  - record(...) and conclude(...) call sites in train.py (both thresholds intact:
+    standard_threshold=0.05, acceptable_threshold=0.10)
+  - train_one_epoch's ANCHOR loss line (loss = criterion(logits, labels))
+  - group_fairness_penalty lambda_=0.20 (still levels minority recall)
+  - group-balanced WeightedRandomSampler
+  - dataset construction (use_eth=False)
+  - user_analyze() function and its call site
+  - original_train_metric anchor markers
+  - all other hyperparameters (LR, BATCH_SIZE, NUM_EPOCHS, SEED)
+
+Discrepancies: none. The plan specified exactly these two edits; no other changes made.
+
+Integration integrity verified:
+  - prober.record(...) at line 406 with standard_threshold=0.05,
+    acceptable_threshold=0.10, original_train_metrics=[val_auprc (higher_is_better),
+    train_loss (lower_is_better)] — intact
+  - prober.conclude(standard_threshold=0.05, acceptable_threshold=0.10) at
+    line 429 — intact
+  - user_analyze(model, val_ds, device) call at line 424 — intact, ungated

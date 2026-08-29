@@ -1,0 +1,9 @@
+Iteration 1 change log
+
+Chosen item: potential_improvement_2
+
+Change applied:
+- Raised MAX_FEATURE_COLUMNS from 10 to 120 in train.py, so the model uses all shared numeric columns between application_train and application_test instead of only the first 10.
+
+Why this should move val_auprc up:
+- The first-10 slice excludes EXT_SOURCE_1, EXT_SOURCE_2, and EXT_SOURCE_3, which are the single strongest predictor block for Home Credit default risk. The current baseline is degenerate (N_ESTIMATORS=5, MAX_DEPTH=2) and at 10 features the model cannot even access the most informative signals; including EXT_SOURCE_* is the largest available AUPRC gain and is the most direct way to break out of the near-baseline regime.

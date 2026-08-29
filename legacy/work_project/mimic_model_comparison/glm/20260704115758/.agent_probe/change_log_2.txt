@@ -1,0 +1,45 @@
+Change log round 2
+==================
+
+Plan title: Add equal-opportunity fairness penalty to BCE loss
+
+Applied edit (file: train.py, symbol: train_one_epoch)
+- After `logits = model(features)` and the BCE `loss = criterion(logits, labels)`
+  (ANCHOR line preserved), inserted a soft per-group TPR variance penalty:
+    probs = torch.sigmoid(logits)
+    labels_f = labels.unsqueeze(-1)
+    group_onehot = features[:, -5:]   # ETH block is last 5 columns of features
+    pos_per_group = (labels_f * group_onehot).sum(dim=0)
+    tp_per_group  = (probs.unsqueeze(-1) * labels_f * group_onehot).sum(dim=0)
+    present = pos_per_group >= 1.0
+    tpr_g = tp_per_group / pos_per_group.clamp_min(1.0)
+    if present.any():
+        fairness_loss = tpr_g[present].var(unbiased=False)
+        loss = loss + 0.05 * fairness_loss
+- BCEWithLogitsLoss(pos_weight=...) signal and the ANCHOR comment are untouched.
+- The `loss` variable that is backpropped is BCE + 0.05 * fairness_loss.
+- optimizer.zero_grad() / loss.backward() / optimizer.step() remain unchanged.
+
+Verification of ETH block location:
+- dataset.py concatenates `self.eth[idx]` AFTER the tfidf vector, so the last
+  5 columns of `features` are the ETH one-hot block. ETH_NAMES in train.py is
+  ['white','black','hispanic','asian','other'], matching prober.py's ETH_NAMES
+  and prober's `group_idx = eth.argmax(axis=1)` convention.
+
+Discrepancies with the plan:
+- None. The plan's spec was implementable verbatim; the only deviation is
+  using `features[:, -5:]` slicing (rather than indexing by a separate `eth`
+  field) because the dataset concatenates eth into `features` and does not
+  expose `eth` per-batch. This is faithful to the plan's stated intent
+  ("the eth block is concatenated at the end of features by dataset.py").
+
+Integration integrity checks:
+- record(...) call site in main() is unmodified.
+- conclude(standard_threshold=0.05, acceptable_threshold=0.10) call is
+  unmodified; both threshold values still passed.
+- user_analyze() function and its call site are untouched.
+- ANCHOR comment on the BCE loss line is preserved; the BCE loss term itself
+  is still computed by `criterion(logits, labels)` and recorded normally.
+- Anchor risk note: fairness penalty weight 0.05 is small and BCE dominates;
+  if the AUPRC anchor degrades >20% vs round-1 baseline (val_auprc=0.3956,
+  train_loss=0.8750), the orchestrator's auto-revert will catch it.

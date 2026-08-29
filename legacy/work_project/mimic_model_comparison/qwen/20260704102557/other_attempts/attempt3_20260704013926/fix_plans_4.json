@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Aggressively increase L2 weight decay",
+      "content": "Edit the single constant WEIGHT_DECAY at train.py line 59 from `1e-4` to `5e-1`. This value is consumed only by the AdamW constructor at line 320 (`torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)`), so no other call site is affected. The model is a single `nn.Linear(input_dim, 1)` (train.py line 94) over TF-IDF features; with WEIGHT_DECAY=1e-4 the optimiser is free to grow large-magnitude coefficients on the long-tail TF-IDF dimensions that happen to be correlated with ethnicity, which is precisely the failure mode visible in probe_result_2/3 (the gap drops to 0.022 at epoch 4 while weights are still small, then climbs to 0.202 as the linear head overfits group-correlated directions). A weight-decay of 5e-2 to 5e-1 is the ridge-regression regime: it forces every weight to be justified by a large, consistent gradient contribution across many batches, which suppresses exactly the weak-ethnicity-proxies that drive the per-group TPR apart at the frozen THRESH=0.5. Keep LEARNING_RATE=1e-3, NUM_EPOCHS=20, BATCH_SIZE=256, use_eth=False on all three dataset constructors (lines 300/301/383), and the AUPRC checkpoint selector (line 346) unchanged, so both anchor metrics (val_auprc and train_loss) remain governed by the same policy. The probe gap is expected to stay near its epoch-4 floor across the full 20 epochs instead of climbing to 0.20.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.5
+    },
+    {
+      "title": "Add cosine learning-rate decay schedule",
+      "content": "Add a cosine-annealing LR schedule that shrinks the effective step size over the 20-epoch run so the model cannot take large gradient steps in late epochs that overfit the group-correlated TF-IDF tail. Concretely: (i) at train.py line 58 leave LEARNING_RATE=1e-3, but after the AdamW constructor at line 320-322 insert one line: `scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-5)`. (ii) At the end of each training epoch, immediately after the existing `train_loss = train_one_epoch(...)` call at line 333 and before `prober_record(...)` at line 344, insert `scheduler.step()` so the LR decays smoothly from 1e-3 down to 1e-5 over the 20 epochs (by epoch 8 the LR is already below 2e-4 \u2014 i.e. the model is effectively frozen around the epoch-4 sweet-spot weights that gave gap=0.022 in probe_result_2/3, so the late-epoch climb to 0.202 is prevented). (iii) Keep NUM_EPOCHS=20, WEIGHT_DECAY=1e-4, BATCH_SIZE=256, use_eth=False on all three dataset constructors, and AUPRC checkpoint selection unchanged. The cosine ramp targets the exact mechanism visible in probe_result_2/3: after epoch 4 the gap degrades because the optimiser, still at full LR, continues to update weights in directions that are consistent with a handful of group-correlated TF-IDF features \u2014 shrinking the LR removes the energy to move in those weak directions, keeping the per-group calibrated probabilities at the prober's frozen THRESH=0.5 stable across the tail and pulling tail_mean under 0.05.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.45
+    },
+    {
+      "title": "Use per-ethnicity balanced batch sampling",
+      "content": "Replace the current `shuffle=True` DataLoader at train.py line 307 with a `WeightedRandomSampler` that equalises per-ethnicity draw probabilities, so every mini-batch has a balanced ethnic mix instead of being dominated by the white majority. Concretely: (i) after `train_ds = MIMICMortalityDataset(data_path, 'train', use_eth=False)` (line 300), read `eth_idx = train_ds.eth.argmax(dim=1).long()` (shape [N]) and compute per-class counts `cnt_g = torch.bincount(eth_idx, minlength=5)`; then build `sample_weight = 1.0 / cnt_g[eth_idx]` (each white sample gets weight 1/n_white, each asian sample 1/n_asian, etc.); normalise so weights sum to 1. (ii) Replace line 307 `DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, generator=_loader_gen)` with `DataLoader(train_ds, batch_size=BATCH_SIZE, sampler=torch.utils.data.WeightedRandomSampler(weights=sample_weight, num_samples=len(train_ds), replacement=True), shuffle=False, generator=_loader_gen)`. Note: `shuffle` and `sampler` are mutually exclusive in DataLoader \u2014 `shuffle=False` is required when a sampler is given. (iii) Crucially wrap the sampler in a deterministic generator by calling `torch.Generator().manual_seed(SEED)` and passing it as the `generator` argument to `WeightedRandomSampler` (added via `torch.Generator()` kwarg), so runs stay reproducible under `_seed_all`. Keep use_eth=False on all three dataset constructors (lines 300/301/383), WEIGHT_DECAY=1e-4, LEARNING_RATE=1e-3, NUM_EPOCHS=20, and AUPRC checkpoint selection (line 346) unchanged. Why this helps: in probe_result_2/3 the gap starts near 0.10 (random init) and briefly reaches 0.022 at epoch 4 before diverging; the divergence is driven by the white-majority gradient overwhelming the sparse asian/hispanic/other positives so the single linear head's decision boundary drifts away from equitable TPR@0.5. By equalising each ethnicity's contribution to every gradient step, the head is forced to maintain comparable calibrated probabilities across all five groups, directly shrinking `max(TPR_g) - min(TPR_g)` recorded by the prober at the frozen THRESH=0.5, so the tail_mean of the last 5 epochs moves under the 0.05 standard threshold.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.72
+    }
+  ],
+  "chosen_index": 3,
+  "round": 4
+}

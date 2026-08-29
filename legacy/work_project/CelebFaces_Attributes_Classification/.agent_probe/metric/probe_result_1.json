@@ -1,0 +1,49 @@
+{
+  "metric_name": "mean_gender_conditional_leakage",
+  "standard_threshold": 0.05,
+  "acceptable_threshold": 0.15,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.16189244999008898
+    },
+    {
+      "epoch": 1,
+      "value": 0.1621511725282461
+    },
+    {
+      "epoch": 2,
+      "value": 0.15764167389968767
+    },
+    {
+      "epoch": 3,
+      "value": 0.2229069863712669
+    },
+    {
+      "epoch": 4,
+      "value": 0.17095781909359722
+    }
+  ],
+  "min": 0.15764167389968767,
+  "max": 0.2229069863712669,
+  "mean": 0.17511002037657736,
+  "std": 0.02428814429678204,
+  "first_value": 0.16189244999008898,
+  "final_value": 0.17095781909359722,
+  "delta": 0.009065369103508247,
+  "tail_mean": 0.17511002037657736,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "Mean gender-conditional leakage moved from 0.162 to 0.171 (tail-5 mean 0.175); never dipped to the 0.05 standard threshold -> FAIL.",
+  "original_train_metric_0": {
+    "name": "val/F1",
+    "value": 0.6792989373207092,
+    "direction": "higher_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "val/loss",
+    "value": 0.19777101278305054,
+    "direction": "lower_is_better"
+  }
+}

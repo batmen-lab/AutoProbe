@@ -1,0 +1,5 @@
+Chose potential_improvement_4.
+
+Change: lowered LEARNING_RATE from 0.1 to 0.05 (upper end of the comment's 0.03-0.05 range). No other code touched.
+
+Why this should lower val_rmspe: rounds 5, 6, 7 all made things worse and were reverted (comment 5 near-noise regression, comments 7 and 8 clearly worse), so per the recent-progress guidance the lever is wrong — switch to a fresh untried lever. Comment 2 is off-limits (>2000 GBDT epoch stand-in), and comment 9 (early_stopping stopping_rounds=100) is a pure no-op at N_ESTIMATORS=5. That leaves comment 4 as the only untried lever. Although the comment says to pair with more rounds, on the log1p target the residuals are small (log-scale) and each of the 127-leaf trees at LR=0.1 can overshoot per-store noise; halving LR to 0.05 shrinks each tree's contribution and may produce smoother per-store predictions that reduce the tail of large percentage errors. Chose the upper end of the comment's range (0.05, a 2x reduction — the smallest edge of Regime B's 2x-5x guidance) rather than 0.03 because prior delta was clearly negative, so incremental step preferred over aggressive one.

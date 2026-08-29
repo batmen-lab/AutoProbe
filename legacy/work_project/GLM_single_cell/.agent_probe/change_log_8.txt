@@ -1,0 +1,30 @@
+Round 8 change log
+==================
+
+Selected plan: "Set batch_balance_strength default to 1.0"
+
+Applied edit
+------------
+File: train.py
+Function: build_parser()
+Location: argparse `--batch-balance-strength` default.
+
+Before:
+    parser.add_argument("--batch-balance-strength", type=float, default=0.5)
+
+After:
+    parser.add_argument("--batch-balance-strength", type=float, default=1.0)
+
+Rationale
+---------
+Forces sample_cells() to draw a uniform 0.5/0.5 batch composition (max 8000 cells, ~4000 per batch) instead of the observed-proportion blend (~51/49). With batch_balance_strength=1.0 the encoder is trained against the same 50/50 target that kBET's null hypothesis uses (a cell's neighborhood batch composition matches the global composition), removing the ceiling that left the round-7 metric plateaued at tail_mean 0.744. ELBO anchor is unaffected — balanced subsampling does not change per-cell reconstruction difficulty.
+
+Touched only train.py, only the one default value. Did not modify prober.py, _ProbeCallback, user_analyze (stub `pass`), record()/conclude() call sites, ANCHOR markers, the SCVI constructor / plan_kwargs, or any other hyperparameter.
+
+Discrepancy
+-----------
+None. The plan's target line was found exactly as described; the default was changed from 0.5 to 1.0 verbatim.
+
+Integration integrity
+---------------------
+Re-read `record(...)` (via _ProbeCallback.on_train_epoch_end → prober_record at line 466) and `conclude(...)` (line 533: `prober_conclude(0.80, 0.55, anchors=_anchors)`). Both are present and unmodified; both `standard_threshold=0.80` and `acceptable_threshold=0.55` are still passed to `conclude`. The ANCHOR markers and `original_train_metric_0`/`original_train_metric_1` recording (lines 514-524) remain intact and accurate.

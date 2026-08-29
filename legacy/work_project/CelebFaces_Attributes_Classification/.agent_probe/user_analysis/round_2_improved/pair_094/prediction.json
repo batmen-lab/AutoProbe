@@ -1,0 +1,16 @@
+{
+  "attr": "Arched_Eyebrows",
+  "sex": "Male",
+  "true_label": 1,
+  "image": {
+    "prob": 0.911,
+    "pred": 1,
+    "correct": true
+  },
+  "flipped_image_hair_masked": {
+    "prob": 0.916,
+    "pred": 1,
+    "correct": true
+  },
+  "conclusion": "CORRECT on the original face; stays correct when the hair/gender cue is masked (robust)"
+}

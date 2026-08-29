@@ -1,0 +1,23 @@
+Plan: Drop ethnicity one-hot dummies from feature input
+
+Edit applied:
+    File: dataset.py
+    Symbol: MIMICMortalityDataset.__getitem__
+    Before:
+        if self.use_eth:
+            features = torch.cat([tfidf_vec, self.eth[idx]])
+        else:
+            features = tfidf_vec
+    After:
+        features = tfidf_vec   (always — self.eth kept on dataset for probe bucketing)
+
+Rationale: remove the direct channel that lets LogisticRegression learn per-
+ethnicity logit offsets (w_linear @ eth_onehot), forcing the model to rely on
+clinical text tokens only. input_dim shrinks from n_tfidf+5 to n_tfidf; no
+other file needs to change because train.py derives input_dim from
+train_ds[0]['features'].shape[0] at runtime.
+
+Discrepancy: none. `use_eth` arg is left in __init__ (still sets self.use_eth)
+to preserve the dataset's public signature, but it no longer affects features.
+`self.eth` tensor is preserved so the probe can still bucket per-group TPR and
+user_analyze() can still read it via val_ds.eth.

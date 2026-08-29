@@ -1,0 +1,9 @@
+Iteration 4 change log
+
+Chosen item: potential_improvement_1
+
+Change applied:
+- Lowered VALID_FRACTION from 0.15 to 0.10 in train.py. With stratified splitting (already in place from round 3) and ~8% positives, the validation set retains ~240 positives at 0.10 — still a stable AUPRC estimate — while giving the model ~5% more training rows. No other parameters touched.
+
+Why this should move val_auprc up:
+- Prior round (stratified split) produced a clearly positive delta (tail_mean 0.1886 -> 0.2006), so the model is in Regime B and an incremental, fully-applied discrete change is appropriate. At N_ESTIMATORS=5 the model is severely under-fit, so the marginal value of an extra training row is high; shrinking the validation slice from 15% to 10% gives the booster more positive examples to learn from without materially destabilizing the AUPRC estimate. This is the smallest fully-applied discrete step available in the file that has not yet been actioned.

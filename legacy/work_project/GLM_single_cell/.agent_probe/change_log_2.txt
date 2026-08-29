@@ -1,0 +1,29 @@
+Change log for round 2
+======================
+
+Plan title: Widen latent dim and hidden, drop dropout for stronger mixing
+
+Applied edit (train.py, build_parser defaults):
+  --n-latent      : 10  -> 30
+  --n-hidden      : 128 -> 256
+  --dropout-rate  : 0.1 -> 0.0
+
+Other args (train-epochs, max-cells, batch-balance-strength, accelerator,
+devices, seed, batch-size) left unchanged.
+
+Rationale (per plan): n_latent=10 / n_hidden=128 / dropout=0.1 was too
+low-capacity and over-regularized; per-batch kBET of 0.0/0.0 indicated
+the encoder was collapsing each batch into its own region. The new values
+(n_latent=30, n_hidden=256, dropout=0.0) are the canonical scVI defaults
+used in the scib-metrics PBMC benchmark and give the VAE enough capacity
+to align batch distributions, which is what scVI's batch-correction head
+relies on. With dropout removed the latent is not forced into
+batch-separating submodes.
+
+record()/conclude() call lines: untouched.
+prober.py: untouched.
+user_analysis(): untouched (still empty pass-through).
+ANCHOR markers and original_train_metric recording: untouched.
+
+Discrepancies with the plan: none. The plan named three argparse defaults
+and the corresponding symbols exist exactly as described in build_parser.

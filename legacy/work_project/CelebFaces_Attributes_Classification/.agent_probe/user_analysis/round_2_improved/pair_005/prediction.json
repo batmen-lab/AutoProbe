@@ -1,0 +1,16 @@
+{
+  "attr": "Wearing_Lipstick",
+  "sex": "Female",
+  "true_label": 0,
+  "image": {
+    "prob": 0.113,
+    "pred": 0,
+    "correct": true
+  },
+  "flipped_image_hair_masked": {
+    "prob": 0.175,
+    "pred": 0,
+    "correct": true
+  },
+  "conclusion": "CORRECT on the original face; stays correct when the hair/gender cue is masked (robust)"
+}

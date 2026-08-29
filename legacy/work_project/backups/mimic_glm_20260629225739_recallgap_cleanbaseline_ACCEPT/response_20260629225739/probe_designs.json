@@ -1,0 +1,116 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "data",
+      "probe_name": "TF-IDF vocabulary leakage and note-quantity confound",
+      "content": "Inspect whether the 10k TF-IDF vocabulary learned on the train split is stable and non-degenerate across splits, and whether per-stay note length (token count, note count, category mix) is spuriously correlated with mortality. Compute vocab overlap of train vs val/test top-features, document frequency of top tokens, and the distribution of note-blob lengths stratified by label and by ethnicity. A healthy signal: train vocab dominates with clinically meaningful tokens (diagnoses, medications), length distributions are similar across labels/ethnicities. Unhealthy: test features are mostly zeros (vocab mismatch), or note length strongly predicts mortality (a quantity confound rather than clinical signal).",
+      "possible_sources": [
+        "Clinical NLP benchmarks (i2b2, MIMIC-III BERT by Alsentzer et al. 2019)",
+        "TF-IDF + clinical text baselines (Rajkomar et al., Nature Digital Medicine 2018)",
+        "Bug et al. 2018 on text-length confounds in clinical NLP"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Train/val/test gap and overfitting curve",
+      "content": "Track per-epoch train vs val AUPRC, AUROC, and loss across the 20 epochs to verify that the chosen checkpoint (best val AUPRC) is not a noise spike and that the gap between train and val is not pathological. With ~10k features and a single linear layer, overfitting is plausible. Plot the learning curves; look for val AUPRC peaking early (epochs 1-5) while train keeps climbing, or large train-val AUPRC gap (>0.15). A healthy signal: smooth val curve, train-val gap modest, chosen epoch is a local maximum on a smooth curve. Unhealthy: best val AUPRC is a single-epoch spike, or train AUPRC ~1.0 while val stalls.",
+      "possible_sources": [
+        "Powers et al. 2020 (overfitting metrics for imbalanced clinical classifiers)",
+        "Yadav & Rahman 2022 on learning-curve diagnostics in EHR models",
+        "scikit-learn model evaluation docs on precision-recall curves"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Probability calibration and reliability diagram",
+      "content": "Compute calibration curves (reliability diagrams) and Expected Calibration Error (ECE) on val and test for the best checkpoint. With BCEWithLogitsLoss + pos_weight, the predicted probabilities are pushed toward the minority class and may be miscalibrated even if ranking is good. Bin predicted risks into deciles and compare to empirical mortality rate, overall and within each ethnicity. Healthy: reliability curve near diagonal, ECE < 0.05, calibration similar across groups. Unhealthy: systematic over/under-confidence, or large inter-group calibration drift (e.g. hispanic predicted risks systematically lower than empirical).",
+      "possible_sources": [
+        "Guo et al. 2017 (On Calibration of Modern Neural Networks)",
+        "Pleiss et al. 2017 (calibration under class imbalance)",
+        "Naeini et al. 2015 (obtaining well calibrated probabilities)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Equal-opportunity recall gap across ethnicity",
+      "content": "Fix a single shared decision threshold (default 0.5, or the threshold maximizing macro-F1 on val) and compute per-ethnicity recall (TPR/sensitivity), precision, and F1 at that threshold. Also compute the equal-opportunity difference (max - min per-group recall) and AOD (average odds difference). Per-group AUROC and per-group AUPRC should also be reported but should NOT be the headline \u2014 recall-at-threshold gaps are the operating-point behavior that matters. Healthy: per-group recall gap < 0.1, per-group precision within reasonable band. Unhealthy: large recall gap (e.g. white recall 0.6, hispanic 0.2) at the shared threshold, even if per-group AUROC looks similar.",
+      "possible_sources": [
+        "Hardt et al. 2016 (Equality of Opportunity)",
+        "Chen et al. 2023 (Fairness and Health Implications of Clinical Risk Models)",
+        "Zhang et al. Fairlearn / AIF360 documentation on equal-opportunity difference",
+        "Adam & Zmora 2022 on subgroup-specific AUROC masking"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Threshold sensitivity and operating-point stability",
+      "content": "Sweep the decision threshold over [0.05, 0.5, 0.95] and report recall, precision, F1, and the count of flagged-positive patients per threshold, overall and per ethnicity. Because the model is trained with pos_weight on a 9% prevalence target, the 0.5 threshold may sit in a low-density region and be highly sensitive. Healthy: a wide plateau where recall and precision trade off smoothly, and per-group flagging rates roughly track per-group prevalence. Unhealthy: a sharp cliff around 0.5 \u2014 tiny threshold shifts cause large recall swings \u2014 or a threshold at which one group has near-zero flags.",
+      "possible_sources": [
+        "Saito & Kihara 2015 (Precision-Recall vs ROC for imbalanced)",
+        "Fern\u00e1ndez et al. 2018 (Classification on imbalanced datasets, threshold moving)",
+        "Powers 2011 (Evaluation: from precision, recall and F-measure)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "Demographic confounding in the ethnicity one-hot",
+      "content": "Run an ablation: train two models with identical hyperparameters \u2014 one with TF-IDF + ethnicity one-hot (10,005 dims, the current setup) and one with TF-IDF only (10,000 dims). Compare test AUPRC, AUROC, recall@0.5 and per-ethnicity recall gaps. Because the model sees ethnicity as an input feature, it can use it as a shortcut (demographic prior) rather than learning clinical signal. Healthy: AUPRC difference small, recall gaps shrink without ethnicity feature. Unhealthy: removing ethnicity one-hot substantially changes AUPRC or per-group recall, indicating the model is leaning on a demographic shortcut rather than clinical text.",
+      "possible_sources": [
+        "Obermeyer et al. 2019 (Dissecting racial bias in an algorithm, health-cost proxy confound)",
+        "Rajkomar et al. 2018 (Ensuring Fairness in Machine Learning to Advance Health Equity)",
+        "Chen et al. 2021 (Ethical Machine Learning in Healthcare)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "Feature-importance sparsity and clinical plausibility",
+      "content": "Extract the top-|w| and bottom-|w| logistic-regression coefficients and map them back to TF-IDF tokens. Inspect whether the most informative tokens are clinically plausible (disease names, life-support medications, escalation notes) versus leakage tokens (date strings, header artifacts, 'discharge', 'expired', 'autopsy') or demographic proxies. Compute the fraction of nonzero weights and effective rank. Healthy: top tokens are clinically meaningful; a moderate fraction of features are active. Unhealthy: dominant tokens are note-template artifacts or direct death-label leakage ('expired', 'pronounced', 'autopsy', 'comfort measures') that should have been excluded from the 48h window but slipped in.",
+      "possible_sources": [
+        "Caruana et al. 2015 (Intelligible Models for Healthcare, risk-of-readmission features)",
+        "Ghassemi et al. 2020 (A Review of Challenges and Opportunities in Machine Learning for Health)",
+        "Weng et al. 2017 (scoring clinical notes against leakage)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Split leakage and per-group prevalence stability",
+      "content": "Verify the stratified split by mort_icu is also balanced across ethnicities and has no patient-level leakage (a patient with multiple ICU stays should not appear in two splits). Compute per-split, per-ethnicity prevalence of mort_icu, count of unique SUBJECT_IDs overlapping across splits, and admission-type distribution per split. Healthy: prevalence within \u00b11% across splits per ethnicity, zero shared SUBJECT_IDs. Unhealthy: prevalence drift across splits for a small group (e.g. hispanic), or a patient appearing in train and test, inflating val/test metrics.",
+      "possible_sources": [
+        "Wen et al. 2022 (MIMIC-III benchmark, patient-level splits)",
+        "Robinson et al. 2021 (Leakage in Clinical ML benchmarks)",
+        "McDermott et al. 2021 (reproducibility and leakage in MIMIC)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Note-category ablation and temporal leakage check",
+      "content": "Run ablations over note CATEGORY (Nursing/Other, Physician, Radiology, ECG, Echo, etc.) by re-training with one category held out and measuring \u0394AUPRC and \u0394recall@0.5. Separately, verify that no note with CHARTTIME beyond INTIME+48h is included \u2014 audit the max CHARTTIME per stay against OUTTIME/INTIME+48h boundary. Healthy: holding out any single category causes small \u0394AUPRC; the max CHARTTIME per stay is within 48h of INTIME. Unhealthy: removing 'Physician' or 'Radiology' collapses the model, indicating the signal is concentrated in a single category; or some stays include notes charted well after 48h (temporal leakage from future information).",
+      "possible_sources": [
+        "Suresh & Guttag 2019 (Understanding Potential Sources of Harm throughout the ML Pipeline, temporal leakage)",
+        "Purushotham et al. 2018 (benchmarking MIMIC-III)",
+        "Choi et al. 2018 (RAINDROP / note categories)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "Class-imbalance correction efficacy vs. naive baseline",
+      "content": "Compare the current pos_weight = neg_count/pos_count against (a) no pos_weight, (b) pos_weight = sqrt(neg/pos), (c) threshold-tuning only (no pos_weight), and (d) focal-style re-weighting emulation, on test AUPRC and per-ethnicity recall@0.5. The question is whether pos_weight actually improves minority detection or merely inflates predicted probabilities without improving recall@0.5. Healthy: pos_weight variant dominates on AUPRC and recall@0.5 with comparable calibration. Unhealthy: pos_weight hurts AUPRC, or inflates recall but destroys precision so severely that the operating point becomes unusable, indicating the imbalance handling is mis-specified.",
+      "possible_sources": [
+        "Lin et al. 2017 (Focal Loss for Dense Object Detection, reweighting on imbalance)",
+        "Johnson & Khoshgoftaar 2019 (Survey on Deep Learning with Class Imbalance)",
+        "Weiss 2004 (Mining with rarity, imbalance treatment survey)",
+        "Branco et al. 2016 (Preprocessing approaches for imbalanced distributions)"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

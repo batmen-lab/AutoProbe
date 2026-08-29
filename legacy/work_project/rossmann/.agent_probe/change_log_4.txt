@@ -1,0 +1,5 @@
+Chose potential_improvement_10.
+
+Change: added categorical_feature=["Store","StoreType","Assortment","DayOfWeek","month","StateHoliday"] to model.fit(). No other code touched.
+
+Why this should lower val_rmspe: Store has ~1115 unique IDs currently being fed as an integer column, which forces LightGBM to make ordered numeric splits (Store <= 542 vs > 542) — a meaningless ordering that fragments per-store signal across many suboptimal splits. Declaring Store (and the other low-ordinal categorical columns) as native categorical lets LightGBM use its Fisher-style category grouping, cleanly separating high- vs low-mean stores in far fewer splits. Given only 5 boosting rounds, split efficiency matters even more than usual. This is a categorical/structural toggle (always fully applied); previous positive-delta trend continues incrementally on a different lever from rounds 1-3 (features/capacity/target-transform).

@@ -1,0 +1,6 @@
+ethnicity,auroc,n,n_positive
+white,0.843485,4599,416
+black,0.828074,591,49
+hispanic,0.765820,216,13
+asian,0.884513,158,19
+other,0.848790,905,120

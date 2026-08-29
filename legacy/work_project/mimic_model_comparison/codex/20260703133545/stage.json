@@ -1,0 +1,55 @@
+{
+  "run_id": "20260703133545",
+  "workspace": "/home/xuanhe_linux_001/AutoProbe/mimic",
+  "created_at": "2026-07-03T13:35:45",
+  "stage": 4,
+  "phase": "ready",
+  "context": "This MIMIC-III ICU mortality task has a strongly imbalanced label (~9% positive / in-ICU deaths). AUROC is misleadingly optimistic under this imbalance, so the training baseline trains with class-weighted BCE and selects the checkpoint on validation AUPRC. Design a FAIRNESS probe across the 5 ethnicity groups (white, black, hispanic, asian, other; one-hot N x 5 on the validation dataset): the equal-opportunity max-min recall / true-positive-rate gap for the death class across the ethnicity groups. Do NOT use AUROC. CRITICAL PROBE-DESIGN REQUIREMENT: the operating threshold used to compute per-group TPR must be FROZEN at a fixed standard value (0.5) HARD-CODED INSIDE prober.py. Do NOT expose the threshold as a tunable constant/argument in train.py, and do NOT let it be selected or optimized at train time. The metric must measure the TPR gap at this fixed, non-tunable 0.5 operating point, so that PASSING requires genuinely reducing the per-group recall disparity at the standard threshold (via the model, features, loss weighting, or sampling) -- NOT by moving/searching the decision threshold or per-group score offsets. Note: train.py already contains a protected human-owned user_analyze() audit (per-ethnicity confusion + plots, computed at threshold 0.5) and the ANCHOR (its weighted-BCE loss + AUPRC selection metric) -- keep both intact.",
+  "probe_index": 1,
+  "plan_index": 1,
+  "iterations": [
+    {
+      "index": 1,
+      "metric_name": "max_minus_min_ethnicity_tpr_gap",
+      "metric_value": 0.3202,
+      "threshold": "0.08",
+      "acceptable_threshold": "0.12",
+      "last_epoch": 0.3202,
+      "direction": "lower_is_better",
+      "status": "FAIL",
+      "acceptable_met": false,
+      "note": "stage 3 first run",
+      "fix_plan_chosen_index": null,
+      "best_value": null
+    },
+    {
+      "index": 2,
+      "metric_name": "max_minus_min_ethnicity_tpr_gap",
+      "metric_value": 0.061,
+      "threshold": "0.08",
+      "acceptable_threshold": "0.12",
+      "last_epoch": 0.061,
+      "direction": "lower_is_better",
+      "status": "PASS",
+      "acceptable_met": true,
+      "note": null,
+      "fix_plan_chosen_index": null,
+      "best_value": null
+    }
+  ],
+  "debug_flags": {
+    "auto_research": false,
+    "threshold_override": null
+  },
+  "tried_probe_indices": [],
+  "tried_plan_indices": [],
+  "current_action": null,
+  "auto_research_target_runs": 0,
+  "auto_research_runs_completed": 0,
+  "auto_research_best_value": null,
+  "auto_research_best_direction": null,
+  "auto_research_best_max": null,
+  "auto_research_best_mean": null,
+  "fix_plan_round": null,
+  "fix_plan_index": null
+}

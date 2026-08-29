@@ -1,0 +1,5 @@
+Chose potential_improvement_1.
+
+Change: lowered VALID_FRACTION from 0.15 to 0.10 (the value the comment names), shifting ~5% of rows from the stratified validation split into training.
+
+Rationale: round 4's scale_pos_weight=28.0 (a large categorical add) produced a strongly negative delta (tail_mean 0.4039 -> 0.3355) and will be reverted, so per Regime B guidance we switch to a different lever rather than doubling down on class re-weighting or regularization. In a highly imbalanced fraud task with only N_ESTIMATORS=5 boosting rounds, giving the model more training rows is the safest, most traceable positive lever: it strictly increases the count of positives seen while the stratified split still preserves the ~1:28 class ratio in both partitions. Applied at the comment's full named value since the change is small in absolute terms and #1 specifies a single concrete target.

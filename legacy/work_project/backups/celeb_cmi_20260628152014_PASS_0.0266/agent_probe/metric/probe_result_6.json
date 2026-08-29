@@ -1,0 +1,39 @@
+{
+  "metric_name": "mean_normalized_conditional_MI",
+  "standard_threshold": 0.03,
+  "acceptable_threshold": 0.07,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.11984352748688003
+    },
+    {
+      "epoch": 1,
+      "value": 0.07877503326357889
+    },
+    {
+      "epoch": 2,
+      "value": 0.06902080180744107
+    },
+    {
+      "epoch": 3,
+      "value": 0.07831575138845548
+    },
+    {
+      "epoch": 4,
+      "value": 0.04175684913867047
+    }
+  ],
+  "min": 0.04175684913867047,
+  "max": 0.11984352748688003,
+  "mean": 0.07754239261700518,
+  "std": 0.025078780392984574,
+  "first_value": 0.11984352748688003,
+  "final_value": 0.04175684913867047,
+  "delta": -0.07808667834820956,
+  "tail_mean": 0.07754239261700518,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "mean_normalized_conditional_MI went from 0.1198 to 0.0418 (tail mean 0.0775), never crossing the 0.03 standard threshold; status FAIL."
+}

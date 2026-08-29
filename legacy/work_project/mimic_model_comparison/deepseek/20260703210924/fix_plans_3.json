@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Add fairness penalty to training loss",
+      "content": "Modify `train_one_epoch()` in `train.py` to add a fairness regularization term that directly penalizes the TPR-gap precursor (max-min gap in per-group positive prediction rates) during training. In each batch, extract the ethnicity one-hot from `features[:, -5:]` to get group membership (`group = features[:, -5:].argmax(dim=1)`). Compute per-group mean sigmoid probability: `probs = logits.sigmoid(); per_group_mean = torch.stack([probs[group == g].mean() for g in range(5) if (group == g).any()])`. Add a fairness penalty `0.3 * (per_group_mean.max() - per_group_mean.min())` to the BCE loss before `loss.backward()`. The BCEWithLogitsLoss stays at default `reduction='mean'` \u2014 the fairness term is added on top. Wrap the per-group computation in `torch.no_grad()` except for the final gap to avoid double-backprop through the mean operations. This directly targets the probe metric's mechanism: the prober measures recall (TPR) gap, which is driven by the model outputting systematically different score distributions across groups. Penalizing the per-group mean prediction gap during training pushes scores toward group-invariance, which should reduce the TPR gap at threshold 0.5.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.5
+    },
+    {
+      "title": "Lower learning rate with plateau scheduler",
+      "content": "In `train.py`, reduce `LEARNING_RATE` from `1e-3` to `3e-4` and `WEIGHT_DECAY` from `1e-4` to `1e-5`. Add `torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, min_lr=1e-5)` after the optimizer definition, and step it after each epoch with `scheduler.step(val_metrics['loss'])`. The evidence from both runs shows the TPR gap starts relatively low (0.19\u20130.21 around epoch 2\u20133) and then steadily rises as training progresses \u2014 the model drifts toward majority-group optimization. A lower initial LR (3e-4 = 0.3\u00d7 original) slows this drift so the model spends more epochs near its fairer early state, while ReduceLROnPlateau further dampens updates once validation loss plateaus, locking in the fairer parameters before the gap can widen. The reduced weight_decay (1e-5) prevents the regularizer from inadvertently suppressing the minority-group signal that class_weight is already trying to amplify.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.28
+    },
+    {
+      "title": "Train without ethnicity features in input",
+      "content": "In `main()` in `train.py`, change the dataset construction calls from `MIMICMortalityDataset(data_path, 'train')` to `MIMICMortalityDataset(data_path, 'train', use_eth=False)` and similarly for `val_ds`. The `input_dim` is set from `train_ds[0]['features'].shape[0]` so it auto-adjusts \u2014 no model dimension change needed. The `dataset.py` class already supports `use_eth=False`, which returns only the TF-IDF feature vector without appending the 5-dim ethnicity one-hot. The probe (`prober.py`) accesses `ds.eth` directly (not through batch features), so it continues to work unchanged. Rationale: the current model sees ethnicity explicitly and can learn ethnicity-correlated shortcuts \u2014 the recall gap emerges because the linear model allocates its single decision boundary to optimize AUPRC at the expense of minority recall. By blinding the model to ethnicity, all groups share the same decision function based on medical TF-IDF features alone. If the TF-IDF features capture genuine medical risk factors rather than demographic proxies, per-group recall should be more uniform. This is the conceptually simplest intervention and the opposite of the failed WeightedRandomSampler approach (which amplified ethnicity signal).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.72
+    }
+  ],
+  "chosen_index": 3,
+  "round": 3
+}

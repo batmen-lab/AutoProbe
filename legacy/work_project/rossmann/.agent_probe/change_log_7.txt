@@ -1,0 +1,5 @@
+Chose potential_improvement_8.
+
+Change: added feature_fraction=0.8, bagging_fraction=0.8, bagging_freq=1, reg_lambda=1.0, min_child_samples=20 as kwargs to lgb.LGBMRegressor(). No other code touched.
+
+Why this should lower val_rmspe: prior round's regression_l1 switch made things worse (0.4005 vs 0.3598 best), so per the guidance I switched to a different lever rather than pushing on objective/target-transform. Stochastic regularization (feature_fraction, bagging) makes each tree see a different subset of features/rows so the 127-leaf trees stop memorizing per-store noise, and reg_lambda=1.0 penalizes overconfident leaf values — both nudge predictions toward the population mean where percentage errors on validation stores are smaller. With NUM_LEAVES=127 and only 5 rounds, the trees are currently free to overfit any per-store idiosyncrasy that happens to appear in train; this is exactly the regime where light stochastic regularization tends to help. Skipped 2 (raises N_ESTIMATORS above the >2000 GBDT stand-in for the epoch cap), 4 (lower LR without more rounds starves the 5-round model further), 9 (early_stopping is a no-op at 5 rounds).

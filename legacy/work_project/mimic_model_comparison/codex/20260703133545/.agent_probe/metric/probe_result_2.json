@@ -1,0 +1,131 @@
+{
+  "metric_name": "max_minus_min_ethnicity_tpr_gap",
+  "standard_threshold": 0.08,
+  "acceptable_threshold": 0.12,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.009183673469387754
+    },
+    {
+      "epoch": 2,
+      "value": 0.02389128728414447
+    },
+    {
+      "epoch": 3,
+      "value": 0.03826530612244894
+    },
+    {
+      "epoch": 4,
+      "value": 0.031053767660910503
+    },
+    {
+      "epoch": 5,
+      "value": 0.055043171114599665
+    },
+    {
+      "epoch": 6,
+      "value": 0.04783163265306123
+    },
+    {
+      "epoch": 7,
+      "value": 0.05862441130298279
+    },
+    {
+      "epoch": 8,
+      "value": 0.05622056514913665
+    },
+    {
+      "epoch": 9,
+      "value": 0.05862441130298279
+    },
+    {
+      "epoch": 10,
+      "value": 0.05018642072213508
+    },
+    {
+      "epoch": 11,
+      "value": 0.05018642072213508
+    },
+    {
+      "epoch": 12,
+      "value": 0.05259026687598123
+    },
+    {
+      "epoch": 13,
+      "value": 0.04537872841444279
+    },
+    {
+      "epoch": 14,
+      "value": 0.04778257456828894
+    },
+    {
+      "epoch": 15,
+      "value": 0.038167189952904246
+    },
+    {
+      "epoch": 16,
+      "value": 0.04057103610675039
+    },
+    {
+      "epoch": 17,
+      "value": 0.04057103610675039
+    },
+    {
+      "epoch": 18,
+      "value": 0.04297488226059665
+    },
+    {
+      "epoch": 19,
+      "value": 0.060979199372056425
+    },
+    {
+      "epoch": 20,
+      "value": 0.060979199372056425
+    }
+  ],
+  "min": 0.009183673469387754,
+  "max": 0.060979199372056425,
+  "mean": 0.04545525902668762,
+  "std": 0.012825978811754037,
+  "first_value": 0.009183673469387754,
+  "final_value": 0.060979199372056425,
+  "delta": 0.05179552590266867,
+  "tail_mean": 0.049215070643642056,
+  "status": "PASS",
+  "acceptable_met": true,
+  "conclusion": "Validation ethnicity TPR gap moved from 0.0092 to 0.0610; the last-5-epoch mean was 0.0492, crossed the 0.08 standard threshold at epoch 1, and the final status is PASS.",
+  "operating_threshold": 0.5,
+  "crossed_standard_epoch": 1,
+  "worst_group_tpr": 0.7346938775510204,
+  "final_epoch_group_tpr": {
+    "white": 0.7956730769230769,
+    "black": 0.7346938775510204,
+    "hispanic": null,
+    "asian": null,
+    "other": 0.7916666666666666
+  },
+  "final_epoch_group_support": {
+    "white": 416,
+    "black": 49,
+    "hispanic": 13,
+    "asian": 19,
+    "other": 120
+  },
+  "insufficient_support_groups": [
+    "hispanic",
+    "asian"
+  ],
+  "alerts": [],
+  "original_train_metric_0": {
+    "name": "val_auprc",
+    "value": 0.37775179465171255,
+    "direction": "higher_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "val_loss",
+    "value": 0.9918025709115542,
+    "direction": "lower_is_better"
+  }
+}

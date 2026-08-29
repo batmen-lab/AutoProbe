@@ -1,0 +1,5 @@
+Chose potential_improvement_7.
+
+Change: added objective="regression_l1" as the first kwarg to lgb.LGBMRegressor(). No other code touched.
+
+Why this should lower val_rmspe: prior round's edit (NaN imputation) was a near no-op (0.3598 vs 0.3597), so the guidance is to try a different lever. RMSPE is a relative percentage error; even with log1p(Sales) as the target, the default L2 objective still lets a handful of high-log-Sales outliers dominate the gradient, and with only 5 boosting rounds each of those wasted splits is expensive. Switching to regression_l1 optimises median absolute error on log(Sales), which is more robust to the long-tailed distribution and better aligned with a percentage-error metric on the original scale. This is a categorical/discrete objective switch (always fully applied). Skipped 2 (raises N_ESTIMATORS above the >2000 GBDT cap that stands in for the epoch budget), 4 (lower LR without more rounds starves the 5-round model), 8 (feature/bagging/reg is risky with only 5 rounds — makes each round weaker rather than stronger), 9 (early_stopping is a no-op at 5 rounds).

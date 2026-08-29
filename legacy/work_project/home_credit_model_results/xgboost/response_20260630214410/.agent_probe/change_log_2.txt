@@ -1,0 +1,9 @@
+Iteration 2 change log
+
+Chosen item: potential_improvement_4
+
+Change applied:
+- Raised MAX_DEPTH from 2 to 5 in train.py, unlocking feature interactions among EXT_SOURCE_1/2/3 and AMT_CREDIT. Left N_ESTIMATORS=5 and LEARNING_RATE=0.1 untouched (epoch-cap rule forbids the paired 400-round / 0.03 step from comments 3 and 5 this round).
+
+Why this should move val_auprc up:
+- Prior round (MAX_FEATURE_COLUMNS 10 -> 120) produced a clearly positive delta (tail_mean 0.107 -> 0.164), so the model is in Regime B — climbing off baseline. Depth-2 stumps cannot model any interaction between the newly-included EXT_SOURCE_* columns and other numeric features; depth 5 is the comment's named target and is the smallest change that plausibly yields a meaningful AUPRC bump without overshooting. Kept incremental to preserve traceable round-on-round movement; orchestrator will revert if it overshoots.

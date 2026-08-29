@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Add group-balanced sampler for under-represented ethnicities",
+      "content": "In `train.py`, replace the current `DataLoader` shuffle with a PyTorch `WeightedRandomSampler` so that each batch contains roughly equal counts of the five ethnicity groups (white/black/hispanic/asian/other), with class-imbalance still handled by the existing `pos_weight`. Concretely: after building `train_ds`, compute `eth_idx = train_ds.eth.argmax(dim=1)`; per-sample weights `w_i = 1.0 / count(group_i)` where `count(g)` is the number of training rows whose argmax ethnicity is `g`; build `sampler = torch.utils.data.WeightedRandomSampler(weights, num_samples=len(train_ds), replacement=True)` and pass `sampler=sampler, shuffle=False` to the train `DataLoader` (keep `val_loader` exactly as-is). The seeded `_loader_gen` should be passed as the sampler's generator so runs stay reproducible. Rationale: the per-group TPR gap is driven by the model fitting the high-prevalence groups (white/other) well and the small groups (hispanic n=216, asian n=158, black n=591) poorly \u2014 a group-balanced sampler forces the linear model to see roughly equal per-group death examples per batch, which drives the per-group TPRs toward a common operating point at the frozen 0.5 threshold. Anchor guard: keep `pos_weight` so val AUPRC does not collapse.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.15
+    },
+    {
+      "title": "Drop ethnicity one-hot from model input features",
+      "content": "In `dataset.py`, change the `MIMICMortalityDataset` default so the model is trained on TF-IDF features only \u2014 ethnicity one-hot is removed from the model input. Concretely, set `use_eth=False` at the two training-side construction sites in `train.py`'s `main()` (i.e. `train_ds = MIMICMortalityDataset(data_path, 'train', use_eth=False)` and `val_ds = MIMICMortalityDataset(data_path, 'val', use_eth=False)`), leaving `user_analyze` and the prober's `_collect` untouched (they read `val_ds.eth` directly, not via `features`). Keep the test loader construction as-is to avoid changing the test split's input dim inconsistently \u2014 set `use_eth=False` there too. Rationale: with `use_eth=True`, the linear layer can absorb ethnicity directly into its decision boundary, and because ethnicity correlates with prevalence and with TF-IDF feature distribution, the model is free to set group-specific biases that maximize AUPRC at the cost of TPR parity; removing the one-hot forces the model to use only clinical features and the gap can only persist through feature correlation, which is weaker and typically shrinks the per-group TPR spread. The probe still reads `loader.dataset.eth` (independent of `use_eth`) so measurement is unaffected.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "title": "Increase weight decay and reduce LR for fairness-friendly regularization",
+      "content": "In `train.py`, change the two constants `LEARNING_RATE = 1e-3` to `LEARNING_RATE = 2e-4` and `WEIGHT_DECAY = 1e-4` to `WEIGHT_DECAY = 1e-2`, leaving everything else (epochs, pos_weight, optimizer choice, sampler) untouched. Rationale: at lr=1e-3 with weight_decay=1e-4 the 20-epoch trajectory shows the per-group TPR gap wandering upward (0.24\u21920.36) as the model overfit the majority groups; a 5x-smaller LR coupled with 100x-stronger L2 pulls the linear layer toward a smaller-norm solution where the decision boundary is less tilted toward any single ethnicity, compressing per-group TPRs toward each other. The expected effect is a tail_mean reduction while val AUPRC degradation stays within the 20% anchor guard (the model is still expressive enough on the high-dimensional TF-IDF input). This is a single self-contained constants edit (two literal values), no other code paths touched.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.55
+    }
+  ],
+  "chosen_index": 2,
+  "round": 2
+}

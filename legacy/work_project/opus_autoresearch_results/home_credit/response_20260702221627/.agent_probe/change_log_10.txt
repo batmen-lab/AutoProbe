@@ -1,0 +1,5 @@
+Chose potential_improvement_5.
+
+Change: Reduced BATCH_SIZE in train.py (line 59) from 1024 to 512, moving to the upper end of the comment's recommended 256-512 range.
+
+Rationale: Round 9's LR halving produced a negligible delta (tail_mean 0.218 vs previous best 0.2179 -- ~0.0001), and the prior edit was a small numeric bump, so per policy either push further toward a target or switch levers. With NUM_EPOCHS pinned at 3 by the epoch budget rule, batch size is the direct optimization-budget lever: halving from 1024 to 512 doubles the SGD updates per epoch, adds beneficial gradient noise for the ~8% positive class in the pos_weight-scaled BCE loss, and lands cleanly at the top of the comment's 256-512 target. Different lever from round 9, incremental 2x step for Regime B, and not a duplicate of round 4's 4096->1024 reduction.

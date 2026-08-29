@@ -1,0 +1,75 @@
+Iteration 4 — AutoProbe mimic fairness agent.
+
+Step 0 status: N=3. probe_result_3.json status=FAIL, tail_mean=0.0966
+(standard_threshold=0.05, lower_is_better). Previous tail_mean (iter 2) was
+0.2024. 0.0966 < 0.2024 → iter 3 improved the metric, no revert. Iter 3
+crossed acceptable_threshold=0.10 but not standard_threshold=0.05, so
+proceeding to a targeted change.
+
+Step 1–3 (diagnosis):
+  - Metric: equal_opportunity_difference = max per-ethnicity recall - min
+    per-ethnicity recall, at shared threshold t fixed on epoch 1 (here t=0.54).
+  - probe_result_3 per-epoch: EOD drops from 0.138 (epoch 1) to a min of
+    0.075 (epoch 12), then drifts back up to ~0.10 and plateaus. The model
+    has saturated its linear separator on the TF-IDF features.
+  - Per-group recall at epoch 20 (logs/fairness_eod.csv):
+      white   0.486
+      black   0.388  (min)
+      hispanic 0.462
+      asian   0.474
+      other   0.475
+    EOD = 0.486 - 0.388 = 0.098.
+  - Iter 2 removed eth from model input; iter 3 added a (group, label)
+    balanced sampler. Both helped (0.378 → 0.202 → 0.097). The residual gap
+    is concentrated on BLACK positives: black has both lowest recall AND
+    lowest precision (0.279), so black positives are concentrated just below
+    the shared threshold t=0.54. The balanced sampler up-samples black
+    positives but the linear separator's L2-regularized loss still pulls its
+    decision boundary toward the GLOBAL score distribution, not the per-
+    group TPR-parity objective the probe actually measures.
+  - Highest-leverage change NOT yet tried: an explicit differentiable
+    group-TPR parity regularizer during training. The metric the probe
+    rewards is per-group TPR dispersion at a shared threshold; adding a
+    penalty that approximates exactly this quantity (soft positive
+    prediction at threshold 0.5, max-min per-group TPR gap) makes the
+    optimizer minimize a direct surrogate of EOD alongside the BCE loss.
+    This is the natural next step after the data-level reweighting of iter 3
+    plateaued.
+
+Step 4 (change):
+  - File: train.py
+    * Added _group_tpr_dispersion() helper: differentiable surrogate of EOD.
+      Uses a soft positive prediction sigmoid((p - 0.5) / 0.05) so the
+      penalty has gradients on positive-sample logits and pushes each
+      group's positives above the shared threshold. Returns max-min per-
+      group TPR gap; groups with no positives are skipped. Done on GPU,
+      batch-local, so it integrates with the existing train loop.
+    * Extended train_one_epoch() to take eth_dim, fairness_weight, threshold
+      kwargs, compute the BCE loss plus fairness_weight * eod_surrogate, and
+      backprop the combined loss. eth one-hot is now read from the batch
+      dict (already provided by MIMICMortalityDataset.__getitem__).
+    * main() now calls train_one_epoch with eth_dim=len(ETH_NAMES),
+      fairness_weight=0.5, threshold=0.5. The threshold 0.5 matches the
+      shared decision boundary the probe fixes at epoch 1 (epoch-1 grid
+      picked t=0.54 in iter 3, close to 0.5). A moderate fairness_weight=0.5
+      keeps the BCE signal primary while pushing TPR parity.
+  - File: dataset.py — NOT modified; the 'eth' key in the sample dict
+    (already added in iter 3) is sufficient for the regularizer.
+
+Expected effect: each batch's loss now directly rewards pulling every
+group's positive score above the shared threshold, shrinking per-group TPR
+dispersion. Combined with the balanced sampler (which ensures each batch
+contains positives from every group), the regularizer should drive EOD
+below the 0.05 standard threshold. The dominant residual failure mode is
+if the soft-threshold temperature is too low (gradient vanishes for
+positives far from 0.5) — in that case the next iteration would tune
+temperature up or use a hinge-style fairness penalty, but those are
+speculative relative to this single high-leverage change.
+
+Step 6 (integration check):
+  - record(...) call in train.py unchanged:
+      probe_record(epoch, model, val_loader, device,
+                   standard_threshold=0.05, acceptable_threshold=0.10)
+  - conclude(...) call unchanged:
+      probe_conclude(standard_threshold=0.05, acceptable_threshold=0.10)
+  - Both arguments preserved. prober.py was not touched.

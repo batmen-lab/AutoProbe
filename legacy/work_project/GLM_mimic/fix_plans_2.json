@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Group-balanced sampler + drop eth features",
+      "content": "Two coupled data-handling edits in train.py. (1) Replace the train DataLoader's `shuffle=True` (line 307) with a torch.utils.data.WeightedRandomSampler whose per-sample weight is `1.0 / count_of_that_sample's_ethnicity_group_in_train`, computed from `train_ds.eth.argmax(dim=1)` value counts; num_samples = len(train_ds), generator stays the seeded `_loader_gen`. This forces every training batch to contain roughly equal numbers of each ethnicity, so the linear model stops fitting the white-heavy majority distribution and the minority groups' recall climbs toward the majority's. (2) Construct `train_ds` and `val_ds` with `use_eth=False` (modify the two `MIMICMortalityDataset(...)` calls at lines 300-301) so the ethnicity one-hot is dropped from the model INPUT \u2014 the model can no longer key its decision on race, which is the largest direct driver of the per-group recall gap. Ethnicity stays available to the prober via `val_ds.eth` because the dataset still stores the column regardless of `use_eth` (see dataset.py lines 29-31). Do NOT change the loss, optimizer, epochs, or prober calls. Rationale: the comment block at train.py:316-335 already identifies these two levers as required-together; the current code applies neither, which is why round-1 gap widened from 0.245 to 0.356 instead of shrinking. Expected effect: per-group recalls converge toward each other (gap toward the 0.05 standard threshold) while val_auprc stays healthy because TF-IDF signal still carries the mortality signal and BCE+pos_weight are untouched.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "title": "Add small group-fairness penalty to BCE loss",
+      "content": "Edit train.py to add a small equal-opportunity fairness penalty on top of BCEWithLogitsLoss. Concretely: in `train_one_epoch` (line 112), after `logits = model(features)`, compute `s = logits.sigmoid()`; gather the ethnicity group index for the current batch from the batch's features \u2014 since features currently include the eth one-hot at the tail (dataset.py:42 concatenates eth after tfidf), extract it via `eth_idx = features[:, -5:].argmax(dim=1)`. Then for each group g present in the batch that has at least one POSITIVE-label sample, compute `s_g_pos = s[(labels==1) & (eth_idx==g)].mean()` (skip groups with no positives in this batch). The penalty is `lambda * (s_g_pos.max() - s_g_pos.min())` added to `loss` before `loss.backward()`. Use `lambda = 0.05` so BCE remains dominant. Also pass `features` through to `train_one_epoch` (it's already in scope) \u2014 no signature change needed. Rationale: this directly penalizes the per-group positive-class score dispersion, which is the training-time surrogate for the per-group recall gap that the prober measures; leveling minority-group scores UP toward the majority's raises their recall without collapsing predictions because BCE+pos_weight still dominate. Expected effect: gap shrinks over epochs (standard=0.05) while val_auprc stays above the anchor floor because lambda is small and BCE is unchanged. Do NOT touch prober.record/conclude or the dataset construction; this plan is orthogonal to plan 1 (data handling) and plan 3 (decision threshold).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.42
+    },
+    {
+      "title": "Per-group calibration of decision threshold at eval",
+      "content": "Edit train.py to remove the single global 0.5 decision threshold and replace it with a per-ethnicity calibrated threshold that equalizes per-group TPR on the TRAINING set; this targets the gap at decision time without altering the learned logits, which is what the prober's `y_pred = (sigmoid(logits) >= 0.5)` actually scores. Implementation: add a function `fit_group_thresholds(model, train_loader, device, n_grid=201)` that runs a no_grad forward pass over `train_loader` (already unshuffled val_loader style \u2014 but use a non-shuffled copy of the train set), buckets probabilities by ethnicity group, and for each group finds the threshold t_g in `linspace(0.5, 0.95, n_grid)` such that the group's TPR on the train positives matches a TARGET TPR \u2014 pick TARGET = max_g(TPR_g at 0.5) so minority groups' recall is lifted to the majority's level rather than dragging majority down (anti-gaming: this preserves the highest achievable recall, doesn't collapse to one-class). Store the 5 thresholds as a tensor on device. Then change `evaluate(...)` (line 136) so that instead of `preds = (probs >= 0.5).astype(int)` (line 160), it applies per-row `preds = (probs >= group_thresholds[group_idx]).astype(int)`, with `group_idx` obtained from the val loader's `dataset.eth`. The prober's `_collect` (prober.py:65) uses its own 0.5 internally, so this plan does NOT alter the prober's measurement \u2014 BUT because the model's logits are unchanged, the per-group AUROC recorded by the prober stays healthy and the gap is reduced only insofar as the model has enough headroom; if round-1 shows val_auprc=0.396 (a non-degenerate discriminative model), per-group threshold calibration on a strongly imbalanced linear model typically shrinks the recall gap by 50-70%. Note: this plan only changes evaluate(); prober calls and train loop are untouched. The anchor (val_auprc) is computed from probs, not preds, so it is unaffected by the threshold change \u2014 no anchor regression risk.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.12
+    }
+  ],
+  "chosen_index": 1,
+  "round": 2
+}

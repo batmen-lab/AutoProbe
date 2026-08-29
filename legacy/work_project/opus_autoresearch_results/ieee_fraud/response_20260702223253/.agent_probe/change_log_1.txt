@@ -1,0 +1,5 @@
+Chose potential_improvement_2.
+
+Change: raised MAX_FEATURE_COLUMNS from 8 to 300 (the value the comment names) so the loader now includes the full TransactionAmt/card/addr/dist/C1-C14/D1-D15 numeric pool instead of only the first 8 columns.
+
+Rationale: with only 8 numeric features the model cannot see the C-counters and D-deltas that carry the bulk of fraud signal, keeping AUPRC near baseline; expanding the feature pool to the standard ~300-column slice is a well-established AUPRC lift on IEEE-CIS. Full-value application is appropriate because this is round 1 with no prior probe history and the current setting is in the degenerate regime (Regime A).

@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Add group-balanced mini-batch sampling",
+      "content": "Modify train.py main() to build the train_loader with a group-balanced sampler so each mini-batch has near-equal positive-rate across the five ethnicity groups, instead of drawing i.i.d. from the imbalanced pool. Concretely: import torch.utils.data.sampler as smp, build sample_weights = reciprocal of (per-row group x label) frequency using val_ds.eth-like group labels pulled from train_ds.eth (already loaded as a dense tensor), and pass sampler=WeightedRandomSampler(sample_weights, num_samples=len(train_ds), replacement=True) to the train DataLoader while keeping val_loader.shuffle=False. Keep BATCH_SIZE=256 and the seeded generator. The current gap trajectory (round-2 tail_mean=0.2024, plateaued from epoch 7 onward) shows the linear model converges to a decision boundary favoring majority-group TPR because AdamW sees ~10x more white positives per batch than asian positives; reweighting the batch composition forces the gradient on TPR per group to be balanced, which is the standard fairness-aware training intervention and should reduce the equal-opportunity TPR gap at the frozen 0.5 threshold without touching the threshold itself or the BCE/pos_weight objective.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.62
+    },
+    {
+      "title": "Adversarial ethnicity penalty on logits",
+      "content": "Add a small adversarial regularizer to the training loss in train.py so the linear logit cannot be linearly predicted from a per-row ethnicity one-hot. Concretely: keep the existing LogisticRegression class and BCEWithLogitsLoss unchanged, but introduce an auxiliary head `adv_head = nn.Linear(input_dim, 5).to(device)` (5 = number of ethnicity groups) trained jointly: every step, compute logits = model(features), then adv_logits = adv_head(features.detach()) and adv_loss = nn.functional.cross_entropy(adv_logits, eth_idx_long), and add `LAMBDA_ADV * adv_loss` to the total loss where LAMBDA_ADV = 0.1 (a tight constant added to the constants block). The detach on features for the adv head prevents the adversary from pushing the model to encode MORE ethnicity signal, so the model's main path learns to produce logits whose detached features do not linearly predict ethnicity; simultaneously, the adversary's gradient w.r.t. features is subtracted via a second backward on adv_logits WITHOUT detach using eth_idx_long, scaled by -LAMBDA_ADV, so the main encoder is pushed toward ethnicity-invariant representations. This is a different angle from sampling (plan 1): it changes the representation, not the batch composition. Expected to lower the per-group TPR gap at threshold 0.5 because group-invariant features cannot support group-specific decision boundaries, and round-2 already showed feature-only (use_eth=False) still leaves a 0.20 gap. Do not modify prober.py, the record(...) call, or the conclude(...) call; user_analyze stays untouched. target_files is train.py only.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.3
+    },
+    {
+      "title": "Lower LR and add early-stopping on gap",
+      "content": "Modify train.py constants and main loop to reduce overfitting-induced gap drift, which the round-2 trajectory makes clear: the gap shrank to 0.0216 at epoch 4 then grew and stuck at 0.2024 from epoch 7 onward, indicating the model passed through a fairer operating point early and then drifted away as AdamW kept descending the AUPRC objective. Concretely: change LEARNING_RATE from 1e-3 to 3e-4 (a ~3.3x reduction), change NUM_EPOCHS from 20 to 12, and add an early-stop check: keep a `best_gap = inf` variable updated each epoch from `prober.record`'s return value (the gap), and break the epoch loop if `gap < standard_threshold` for 2 consecutive epochs (i.e., early-stop once the metric has stably crossed the standard bar, before AdamW has a chance to drift away from it). Keep BATCH_SIZE, WEIGHT_DECAY, pos_weight, the seeded loader generator, AUPRC checkpoint selection, and everything else identical. The lower LR slows the post-epoch-4 drift that pushed the gap from 0.02 back up to 0.20, and the early-stop captures the epoch-4 operating point if the model re-enters it. This is a pure optimization-trajectory lever, distinct from sampling (plan 1) and representation (plan 2).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.8
+    }
+  ],
+  "chosen_index": 3,
+  "round": 3
+}

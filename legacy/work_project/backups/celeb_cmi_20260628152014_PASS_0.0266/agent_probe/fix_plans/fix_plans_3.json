@@ -1,0 +1,22 @@
+{
+    "fix_plans": [
+        {
+            "title": "Group-balance Male via WeightedRandomSampler",
+            "content": "In datamodules/celebadatamodule.py, change train_dataloader() to use a torch.utils.data.WeightedRandomSampler instead of shuffle=True (the two are mutually exclusive, so drop shuffle). Inside train_dataloader(), read the label matrix attr = self.train.attr (a (N,40) tensor from torchvision CelebA), resolve the Male column via {v:k for k,v in ATTRIBUTES.items()}['Male'] (import ATTRIBUTES from utils.constant), and build a per-sample group key combining Male with the six probed targets so the spurious skew is balanced: group = (attr[:, male_idx].long() << 6) | sum over the 6 target columns (Heavy_Makeup, Wearing_Lipstick, Attractive, Wavy_Hair, No_Beard, Arched_Eyebrows) each shifted into its own bit. Compute counts per observed group, set each sample weight = 1.0/count[group], and pass WeightedRandomSampler(weights, num_samples=len(self.train), replacement=True) as sampler=. This directly flattens the Male x target joint distribution the classifier currently exploits, so predictions can no longer ride the gender proxy, lowering I(pred_target; Male | true_target). This root-cause data-distribution fix is explicitly anticipated by the existing NOTE comment in train_dataloader and is a different angle from the previously-tried color augmentation (which regressed the metric) and from optimizer changes.",
+            "target_files": ["datamodules/celebadatamodule.py"],
+            "confidence": 0.0
+        },
+        {
+            "title": "Add AdamW weight decay regularization",
+            "content": "In lightningmodules/classification.py, change configure_optimizers() from torch.optim.Adam(self.net.parameters(), lr=self.lr) to torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=0.05) and add the AdamW import. Both probe runs show the metric improving through mid-training then spiking at the final epoch (run 1: 0.0610 at epoch 3 -> 0.1131 at epoch 4; run 2 stays elevated), a late-training overfitting signature where large-magnitude weights encode the Male shortcut. A decoupled L2 penalty of 0.05 (sized for ViT fine-tuning) shrinks those weights, damping the final-epoch leakage spike and pulling tail_mean (mean of last 5 epochs) down toward the 0.03 standard threshold. This is a single self-contained edit to the optimizer line and its import, and it has not been applied in any prior round.",
+            "target_files": ["lightningmodules/classification.py"],
+            "confidence": 0.0
+        },
+        {
+            "title": "Freeze ViT backbone, train head only",
+            "content": "In lightningmodules/classification.py __init__, after self.net = timm.create_model(...), freeze every parameter except the classification head: iterate self.net.named_parameters() and set p.requires_grad_(False) for any name not starting with 'head', then pass only the trainable head parameters to the optimizer by changing configure_optimizers() to Adam(filter(lambda p: p.requires_grad, self.net.parameters()), lr=self.lr). With the ImageNet-pretrained features held fixed, the network cannot re-tune its conv/attention representations to amplify the gender (Male) proxy during the short 5-epoch fine-tune; only a linear probe on frozen, attribute-agnostic features is learned, which sharply limits how much spurious conditional information the predictions can carry and lowers I(pred_target; Male | true_target). This architecture/capacity-control angle is distinct from the data-augmentation approach that regressed in round 2 and from the optimizer-hyperparameter plans.",
+            "target_files": ["lightningmodules/classification.py"],
+            "confidence": 0.0
+        }
+    ]
+}

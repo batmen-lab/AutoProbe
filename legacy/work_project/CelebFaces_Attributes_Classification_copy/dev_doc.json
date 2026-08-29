@@ -1,0 +1,88 @@
+{
+"dev_docs": [
+{
+"rank": 1,
+"title": "Mouth Delta Logit Gap Probe",
+"confidence": 0.84,
+"metric": {
+"name": "Δmouth−Δcontext",
+"definition": "Average difference between logit drop caused by masking the mouth region and masking an equally sized non-mouth context patch for Wearing_Lipstick, Smiling, and Mouth_Slightly_Open.",
+"formula": "Δmouth−Δcontext = (1/N) * Σ_i [(z_i^clean − z_i^mouth) − (z_i^clean − z_i^context)] where z are logits for the targeted attribute."
+},
+"expectation": "A well-trained model should rely on mouth evidence, so Δmouth−Δcontext ≥ 0.15 indicates stronger causal dependence on relevant pixels than on background cues.",
+"threshold": {
+"value": 0.15,
+"comparison_logic": "If metric ≥ threshold ⇒ probe passes; otherwise it signals spurious reliance on context."
+},
+"data_source": "Training/validation mini-batches already loaded during training (images, logits, mouth bounding boxes derived from facial landmarks).",
+"data_processing_steps": [
+"Run a forward pass on each batch to obtain clean logits for the three mouth-centric attributes.",
+"Apply binary occlusion to the mouth box and to a random non-mouth patch, recompute logits, and accumulate the Δmouth−Δcontext difference per sample before averaging."
+],
+"interpretation_logic": "Positive margins show mouth pixels drive predictions; negative or small margins imply contextual shortcuts and failing Lips/Smile detection.",
+"visualization_plan": "Call wrapper_plot.create_bar_plot to display attribute-wise Δmouth−Δcontext bars plus a horizontal line for the 0.15 threshold.",
+"json_output_example": {
+"metric_name": 0.22,
+"threshold": 0.15,
+"expectation": "Mouth occlusion should reduce logits at least 0.15 more than context occlusion.",
+"interpretation": "pass"
+}
+},
+{
+"rank": 2,
+"title": "Mouth Flip Rate Specificity Probe",
+"confidence": 0.78,
+"metric": {
+"name": "FlipSpecificity",
+"definition": "Ratio between the probability of a prediction flipping when the mouth is occluded and the probability of flipping when a non-mouth region is occluded.",
+"formula": "FlipSpecificity = P(pred flips | mouth mask) / P(pred flips | non-mouth mask), computed over samples where sigmoid(z) > 0.5 before occlusion."
+},
+"expectation": "For a good model, mouth occlusion should cause at least 60% more state flips than other regions (ratio ≥ 1.6).",
+"threshold": {
+"value": 1.6,
+"comparison_logic": "If ratio ≥ 1.6 ⇒ probe passes; smaller ratios suggest predictions ignore causal lip evidence."
+},
+"data_source": "Training-time inference batches with access to predicted labels and logits per attribute.",
+"data_processing_steps": [
+"Record binary predictions for target attributes, apply mouth occlusion and random non-mouth occlusion separately, and count flip events per case.",
+"Compute empirical probabilities of flips for both occlusions and form their ratio."
+],
+"interpretation_logic": "High ratios confirm mouth sensitivity specifically triggers decisions, while low ratios mean the model flips on irrelevant regions equally or more often.",
+"visualization_plan": "Use wrapper_plot.create_histogram for flip-count distributions and wrapper_plot.create_line_plot to show FlipSpecificity over training epochs.",
+"json_output_example": {
+"metric_name": 1.72,
+"threshold": 1.6,
+"expectation": "Mouth occlusion should flip predictions at least 1.6× more often than other regions.",
+"interpretation": "pass"
+}
+},
+{
+"rank": 3,
+"title": "Occlusion Strength Correlation Probe",
+"confidence": 0.71,
+"metric": {
+"name": "R_strength",
+"definition": "Spearman correlation between occlusion strength (percentage of mouth pixels masked) and the corresponding drop in logits for the three mouth-centric attributes.",
+"formula": "R_strength = SpearmanCorr({s_k}, {Δz_k}), where s_k is the occlusion strength level and Δz_k is the resulting logit drop aggregated over samples."
+},
+"expectation": "A causal model should show monotonic decline with stronger mouth masking, so correlation should exceed 0.7.",
+"threshold": {
+"value": 0.7,
+"comparison_logic": "If correlation ≥ 0.7 ⇒ probe passes; otherwise, responses to incremental occlusion are inconsistent."
+},
+"data_source": "Saved logits at multiple occlusion strengths applied during training batches (e.g., mask 25%, 50%, 75%, 100% of mouth region).",
+"data_processing_steps": [
+"Generate graded occlusion masks for each batch, run forward passes to capture logits per strength level, and compute Δz per level.",
+"Aggregate Δz across batches and compute Spearman correlation between occlusion strengths and mean Δz."
+],
+"interpretation_logic": "Strong positive correlation confirms the model’s confidence decreases smoothly as more lip evidence is removed; weak correlation signals noisy, non-causal reliance.",
+"visualization_plan": "Plot average Δz vs occlusion strength using wrapper_plot.create_line_plot and overlay correlation value in the title.",
+"json_output_example": {
+"metric_name": 0.76,
+"threshold": 0.7,
+"expectation": "Logit drop should increase monotonically with occlusion strength, yielding correlation ≥ 0.7.",
+"interpretation": "pass"
+}
+}
+]
+}

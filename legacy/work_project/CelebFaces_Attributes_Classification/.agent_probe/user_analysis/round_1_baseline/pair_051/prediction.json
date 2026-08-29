@@ -1,0 +1,16 @@
+{
+  "attr": "Wavy_Hair",
+  "sex": "Male",
+  "true_label": 1,
+  "image": {
+    "prob": 0.158,
+    "pred": 0,
+    "correct": false
+  },
+  "flipped_image_hair_masked": {
+    "prob": 0.021,
+    "pred": 0,
+    "correct": false
+  },
+  "conclusion": "WRONG on the original face; prediction unchanged when the cue is masked"
+}

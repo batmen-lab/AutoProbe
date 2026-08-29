@@ -1,0 +1,433 @@
+{
+  "metric_name": "kBET mean acceptance",
+  "standard_threshold": 0.8,
+  "acceptable_threshold": 0.55,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.318
+    },
+    {
+      "epoch": 1,
+      "value": 0.2765
+    },
+    {
+      "epoch": 2,
+      "value": 0.283
+    },
+    {
+      "epoch": 3,
+      "value": 0.262
+    },
+    {
+      "epoch": 4,
+      "value": 0.2745
+    },
+    {
+      "epoch": 5,
+      "value": 0.293
+    },
+    {
+      "epoch": 6,
+      "value": 0.313
+    },
+    {
+      "epoch": 7,
+      "value": 0.2975
+    },
+    {
+      "epoch": 8,
+      "value": 0.306
+    },
+    {
+      "epoch": 9,
+      "value": 0.3215
+    },
+    {
+      "epoch": 10,
+      "value": 0.2935
+    },
+    {
+      "epoch": 11,
+      "value": 0.3065
+    },
+    {
+      "epoch": 12,
+      "value": 0.3145
+    },
+    {
+      "epoch": 13,
+      "value": 0.3215
+    },
+    {
+      "epoch": 14,
+      "value": 0.307
+    },
+    {
+      "epoch": 15,
+      "value": 0.343
+    },
+    {
+      "epoch": 16,
+      "value": 0.319
+    },
+    {
+      "epoch": 17,
+      "value": 0.357
+    },
+    {
+      "epoch": 18,
+      "value": 0.354
+    },
+    {
+      "epoch": 19,
+      "value": 0.3605
+    },
+    {
+      "epoch": 20,
+      "value": 0.389
+    },
+    {
+      "epoch": 21,
+      "value": 0.381
+    },
+    {
+      "epoch": 22,
+      "value": 0.41
+    },
+    {
+      "epoch": 23,
+      "value": 0.403
+    },
+    {
+      "epoch": 24,
+      "value": 0.411
+    },
+    {
+      "epoch": 25,
+      "value": 0.4275
+    },
+    {
+      "epoch": 26,
+      "value": 0.4195
+    },
+    {
+      "epoch": 27,
+      "value": 0.4715
+    },
+    {
+      "epoch": 28,
+      "value": 0.4725
+    },
+    {
+      "epoch": 29,
+      "value": 0.459
+    },
+    {
+      "epoch": 30,
+      "value": 0.467
+    },
+    {
+      "epoch": 31,
+      "value": 0.492
+    },
+    {
+      "epoch": 32,
+      "value": 0.474
+    },
+    {
+      "epoch": 33,
+      "value": 0.489
+    },
+    {
+      "epoch": 34,
+      "value": 0.467
+    },
+    {
+      "epoch": 35,
+      "value": 0.5105
+    },
+    {
+      "epoch": 36,
+      "value": 0.484
+    },
+    {
+      "epoch": 37,
+      "value": 0.518
+    },
+    {
+      "epoch": 38,
+      "value": 0.5005
+    },
+    {
+      "epoch": 39,
+      "value": 0.5005
+    },
+    {
+      "epoch": 40,
+      "value": 0.5145
+    },
+    {
+      "epoch": 41,
+      "value": 0.5185
+    },
+    {
+      "epoch": 42,
+      "value": 0.5125
+    },
+    {
+      "epoch": 43,
+      "value": 0.523
+    },
+    {
+      "epoch": 44,
+      "value": 0.522
+    },
+    {
+      "epoch": 45,
+      "value": 0.5245
+    },
+    {
+      "epoch": 46,
+      "value": 0.531
+    },
+    {
+      "epoch": 47,
+      "value": 0.5535
+    },
+    {
+      "epoch": 48,
+      "value": 0.5525
+    },
+    {
+      "epoch": 49,
+      "value": 0.5375
+    },
+    {
+      "epoch": 50,
+      "value": 0.554
+    },
+    {
+      "epoch": 51,
+      "value": 0.582
+    },
+    {
+      "epoch": 52,
+      "value": 0.5415
+    },
+    {
+      "epoch": 53,
+      "value": 0.571
+    },
+    {
+      "epoch": 54,
+      "value": 0.572
+    },
+    {
+      "epoch": 55,
+      "value": 0.5585
+    },
+    {
+      "epoch": 56,
+      "value": 0.5325
+    },
+    {
+      "epoch": 57,
+      "value": 0.57
+    },
+    {
+      "epoch": 58,
+      "value": 0.575
+    },
+    {
+      "epoch": 59,
+      "value": 0.5645
+    },
+    {
+      "epoch": 60,
+      "value": 0.575
+    },
+    {
+      "epoch": 61,
+      "value": 0.5705
+    },
+    {
+      "epoch": 62,
+      "value": 0.5805
+    },
+    {
+      "epoch": 63,
+      "value": 0.562
+    },
+    {
+      "epoch": 64,
+      "value": 0.583
+    },
+    {
+      "epoch": 65,
+      "value": 0.598
+    },
+    {
+      "epoch": 66,
+      "value": 0.566
+    },
+    {
+      "epoch": 67,
+      "value": 0.5735
+    },
+    {
+      "epoch": 68,
+      "value": 0.588
+    },
+    {
+      "epoch": 69,
+      "value": 0.561
+    },
+    {
+      "epoch": 70,
+      "value": 0.5945
+    },
+    {
+      "epoch": 71,
+      "value": 0.598
+    },
+    {
+      "epoch": 72,
+      "value": 0.5685
+    },
+    {
+      "epoch": 73,
+      "value": 0.6
+    },
+    {
+      "epoch": 74,
+      "value": 0.603
+    },
+    {
+      "epoch": 75,
+      "value": 0.594
+    },
+    {
+      "epoch": 76,
+      "value": 0.5945
+    },
+    {
+      "epoch": 77,
+      "value": 0.599
+    },
+    {
+      "epoch": 78,
+      "value": 0.599
+    },
+    {
+      "epoch": 79,
+      "value": 0.6065
+    },
+    {
+      "epoch": 80,
+      "value": 0.6075
+    },
+    {
+      "epoch": 81,
+      "value": 0.589
+    },
+    {
+      "epoch": 82,
+      "value": 0.6045
+    },
+    {
+      "epoch": 83,
+      "value": 0.611
+    },
+    {
+      "epoch": 84,
+      "value": 0.6295
+    },
+    {
+      "epoch": 85,
+      "value": 0.617
+    },
+    {
+      "epoch": 86,
+      "value": 0.6295
+    },
+    {
+      "epoch": 87,
+      "value": 0.607
+    },
+    {
+      "epoch": 88,
+      "value": 0.5985
+    },
+    {
+      "epoch": 89,
+      "value": 0.6135
+    },
+    {
+      "epoch": 90,
+      "value": 0.6265
+    },
+    {
+      "epoch": 91,
+      "value": 0.614
+    },
+    {
+      "epoch": 92,
+      "value": 0.6205
+    },
+    {
+      "epoch": 93,
+      "value": 0.6355
+    },
+    {
+      "epoch": 94,
+      "value": 0.6145
+    },
+    {
+      "epoch": 95,
+      "value": 0.631
+    },
+    {
+      "epoch": 96,
+      "value": 0.6255
+    },
+    {
+      "epoch": 97,
+      "value": 0.6495
+    },
+    {
+      "epoch": 98,
+      "value": 0.62
+    },
+    {
+      "epoch": 99,
+      "value": 0.6185
+    }
+  ],
+  "min": 0.262,
+  "max": 0.6495,
+  "mean": 0.503555,
+  "std": 0.11324760251325412,
+  "first_value": 0.318,
+  "final_value": 0.6185,
+  "delta": 0.30050000000000004,
+  "tail_mean": 0.6289,
+  "status": "FAIL",
+  "acceptable_met": true,
+  "conclusion": "kBET mean acceptance went from 0.318 to 0.619 (improving), never crossing the 0.80 standard threshold; tail mean 0.629 -> FAIL.",
+  "per_batch_acceptance": {
+    "0": 0.0,
+    "1": 0.0
+  },
+  "original_train_metric_0": {
+    "name": "elbo_validation",
+    "value": 4824.00146484375,
+    "direction": "lower_is_better"
+  },
+  "original_train_metric_1": {
+    "name": "elbo_train",
+    "value": 4691.9326171875,
+    "direction": "lower_is_better"
+  }
+}

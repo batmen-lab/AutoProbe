@@ -1,0 +1,32 @@
+{
+  "fix_plans": [
+    {
+      "title": "Drop ethnicity feature from model input",
+      "content": "Edit dataset.py's __getitem__ so the returned 'features' tensor is just the TF-IDF vector \u2014 i.e. remove the `torch.cat([tfidf_vec, self.eth[idx]])` branch and always return `features = tfidf_vec`. The LogisticRegression linear layer in train.py will then train on TF-IDF only; its input_dim will automatically shrink from (tfidf_dim + 4) to tfidf_dim because `input_dim = train_ds[0]['features'].shape[0]` in main(). Leave the `self.eth` attribute intact and `use_eth` flag harmless \u2014 only the feature construction changes. Rationale: with ethnicity as an input, the linear layer absorbs the group prior difference via a per-ethnicity bias term (the last 4 weights), which directly produces the observed 0.30\u20130.40 recall gap: groups with low base-rate mortality get a negative bias and the classifier systematically under-predicts deaths for them. A TF-IDF-only model is forced to learn death-prediction from clinical text content itself, which closes the intercept-driven disparity at the cost of a small AUPRC hit. The user_analyze block and the `_probe_record`/`_probe_conclude` call lines are not touched.",
+      "target_files": [
+        "dataset.py"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "title": "Add equal-opportunity recall-parity loss penalty",
+      "content": "In train.py, after `loss = criterion(logits, labels)` inside train_one_epoch, add a per-ethnicity recall-parity regularizer and fold it into the scalar loss. Concretely: compute `probs = logits.sigmoid()`, compute per-group soft recall as `recall_g = (probs * labels * mask_g).sum() / (labels * mask_g).sum().clamp(min=1e-6)` for each of the 5 ETH_NAMES masks (the batch does not carry eth, so add an 'eth' key to the batch in the DataLoader by returning it from dataset.__getitem__: `'eth': self.eth[idx]`). Then compute `penalty = sum_{i<j} |recall_i - recall_j| / C(5,2)` (mean pairwise absolute difference of the 5 soft recalls). Update the optimizer step with `loss = loss + LAMBDA * penalty`, choosing LAMBDA = 0.25 (strong enough to move the parity knob but not enough to sink AUPRC \u2014 tune within 0.1\u20130.5 if a pilot round shows AUPRC anchor dropping >20%, which the backend would revert). This directly optimizes the probe's gap_max_min instead of only BCE, so gradient updates are biased toward closing the recall disparity between the over- and under-served ethnicities. Do not touch the `_probe_record(...)` or `_probe_conclude(...)` call lines, and do not alter the ANCHOR declarations.",
+      "target_files": [
+        "train.py",
+        "dataset.py"
+      ],
+      "confidence": 0.68
+    },
+    {
+      "title": "Stratify batches by ethnicity with balanced positives",
+      "content": "Replace the vanilla `DataLoader(train_ds, batch_size=256, shuffle=True, generator=_loader_gen)` in train.py's main() with a custom sampler that produces ethnicity-balanced batches: build 5 index pools, one per `val_ds.eth.argmax(dim=1) == g` (for training, use `train_ds.eth.argmax(dim=1)`), expose the argmax via `dataset.py` by adding a `get_eth_group(idx)` helper returning `int(self.eth[idx].argmax().item())`, then implement a `GroupBalancedBatchSampler` in train.py that each iteration draws `batch_size // 5 = 51` indices from each of the 5 pools (with replacement from smaller pools) and concatenates them. This guarantees every mini-batch contains equal representation of all 5 ethnicities regardless of training-set skew, so the BCE gradients coming from each group have equal magnitude every step \u2014 eliminating the variance-driven bias where a small-minority group (asian, hispanic) gets drowned out in 256-sample batches drawn proportional to their frequency in the population. Keep `_loader_gen.manual_seed(SEED)` and seed the sampler's own numpy RNG with SEED for reproducibility. Do not modify the `_probe_record` / `_probe_conclude` call lines or the user_analyze block. Expected effect: parity gap collapses because each group contributes equal gradient signal per step, so weights move at the same rate for all five ethnicities.",
+      "target_files": [
+        "train.py",
+        "dataset.py"
+      ],
+      "confidence": 0.45
+    }
+  ],
+  "chosen_index": 1,
+  "round": 2
+}

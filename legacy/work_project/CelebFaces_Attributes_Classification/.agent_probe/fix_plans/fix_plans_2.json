@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Group-balanced WeightedRandomSampler over the (Male x 6 target-attr) joint distribution",
+      "content": "Replace plain shuffle=True in datamodules/celebadatamodule.py::train_dataloader() with a WeightedRandomSampler over the joint group defined by (Male, Heavy_Makeup, Wearing_Lipstick, Attractive, Wavy_Hair, No_Beard, Arched_Eyebrows). Encode each sample's 7-bit joint attribute tuple as group_id in [0, 2^7) and set its weight to 1 / freq(group_id); use num_samples=len(train), replacement=True so each epoch draws an approximately uniform joint distribution over the (Male x target-attr) cells. Add module-level constants _MALE_IDX and _TARGET_ATTR_IDX plus the numpy/torch/WeightedRandomSampler imports. This removes the CelebA co-occurrence shortcut so predictions rest on per-attribute visual evidence rather than the Male proxy, lowering the normalized conditional MI I(pred_a; Male | y_a). It re-weights data (does not lower capacity), so val/F1 stays within the anchor floor. prober.py, train.py, model, optimizer, and loss are untouched.",
+      "target_files": [
+        "datamodules/celebadatamodule.py"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "title": "Add per-batch gender-conditional invariance penalty to loss",
+      "content": "Edit `lightningmodules/classification.py`. In `Classification.__init__`, add two constants: `self.PROBE_IDX = [18, 36, 2, 33, 24, 1]` (Heavy_Makeup, Wearing_Lipstick, Attractive, Wavy_Hair, No_Beard, Arched_Eyebrows) and `self.MALE_IDX = 20`, plus `self.inv_lambda = 1.0` (penalty weight). Modify `_get_preds_loss_accuracy(self, batch)` so that after computing `loss = self.loss(logits, y.float())` it also computes a differentiable gender-conditional invariance penalty on the SAME batch: `probs = torch.sigmoid(logits)`; `male = y[:, self.MALE_IDX]`; then for each `a in self.PROBE_IDX` and each `v in [0.0, 1.0]` (true attr value), build the boolean mask `m = (y[:, a] == v)` and compute `p1 = probs[m & (male==1), a].mean()`, `p0 = probs[m & (male==0), a].mean()`; skip a term when either subgroup has zero samples (use a torch.tensor(0.0, device=logits.device) fallback and check `.numel()`); accumulate `pen = pen + (p1 - p0).pow(2)`. Final loss returned: `loss + self.inv_lambda * pen`. Keep validation_step / test_step unchanged (they should not see the penalty). This is a direct proxy for the probed CMI I(pred_a; Male | y_a): making E[p_a | Male=1, y_a] equal to E[p_a | Male=0, y_a] forces mutual information toward zero without altering the data pipeline or model. Only `_get_preds_loss_accuracy` and `__init__` change; the `training_step` / `validation_step` signatures stay untouched. Use `self.inv_lambda = 1.0` as the starting value; if the utility anchor (val/F1) is at risk, a downstream tuning agent can drop it to 0.5, but 1.0 is expected to produce a large probe-metric drop given the ~0.175 tail-mean baseline.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.62
+    },
+    {
+      "title": "Freeze ViT backbone, train only head+last-block with AdamW+wd",
+      "content": "Edit `lightningmodules/classification.py` on the model-capacity / regularization axis. In `Classification.__init__`, after `self.net = timm.create_model(...)` add: `for p in self.net.parameters(): p.requires_grad = False`; then unfreeze only (a) the classifier head via `for p in self.net.get_classifier().parameters(): p.requires_grad = True` and (b) the LAST transformer block via `for p in self.net.blocks[-1].parameters(): p.requires_grad = True`. In `configure_optimizers`, replace `Adam(self.net.parameters(), lr=self.lr)` with `AdamW([p for p in self.net.parameters() if p.requires_grad], lr=self.lr, weight_decay=0.05)`. Rationale: the timm ViT-small backbone was pretrained on ImageNet where gender features are strong and readily reused as a shortcut for makeup / beard / lipstick / attractiveness; keeping the backbone frozen prevents the fine-tune from further amplifying gender-correlated features into the shared representation, while a well-regularized (weight_decay=0.05) head + last-block adapter has enough capacity to reach the same val/F1 range (~0.68 baseline) on a 6-attr, few-thousand-image fine-tune. Because gender-encoding features cannot be sharpened during training, the conditional-MI between the sigmoid predictions and Male | y_a is expected to drop substantially without any changes to the data pipeline or loss function. Do not touch `training_step`, `validation_step`, or `predict_step`. The `self.lr` and other config values remain unchanged.",
+      "target_files": [
+        "lightningmodules/classification.py"
+      ],
+      "confidence": 0.4
+    }
+  ],
+  "chosen_index": 0,
+  "round": 2
+}

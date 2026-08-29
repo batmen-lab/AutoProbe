@@ -1,0 +1,34 @@
+Plan title: Add batch decorrelation penalty to loss
+
+Applied edit:
+- File: lightningmodules/classification.py
+- Function: training_step()
+  - Before: computed single bce_loss via _get_preds_loss_accuracy(batch),
+    logged it, returned {"loss": loss, "logits": logits}.
+  - After: computes bce_loss with logits kept graph-attached
+    (_get_preds_loss_accuracy(batch, detach_logits=False)); builds
+    name_to_idx from ATTRIBUTES; locates male_idx and the six probed target
+    indices (Heavy_Makeup, Wearing_Lipstick, Attractive, Wavy_Hair, No_Beard,
+    Arched_Eyebrows). probs = torch.sigmoid(logits); p_t = probs[:, target_idx]
+    (B x 6); m = y[:, male_idx].float() (B). Both centered over the batch
+    (p_t minus per-column mean; m minus its mean). Penalty
+    pen = ((p_t_centered * m_centered.unsqueeze(1)).mean(dim=0) ** 2).mean();
+    total_loss = bce_loss + 0.5 * pen. Logs total_loss as "train/loss" and
+    returns {"loss": total_loss, "logits": logits.detach()}.
+- Function: _get_preds_loss_accuracy()
+  - Added detach_logits=True kwarg so training_step can request graph-attached
+    logits (penalty must backprop through them) while validation/test/predict
+    keep the original detached behavior.
+
+Rationale: directly penalizes the per-batch covariance between target
+predictions and the Male label — the dependence the conditional-MI probe
+measures — pushing residual I(pred_target; Male | true_target) toward zero.
+lambda = 0.5 per the plan.
+
+Discrepancy: None. Plan applied as specified. The only adjacent change is the
+detach_logits flag on _get_preds_loss_accuracy, unavoidable so the penalty can
+backpropagate (validation/test/predict callers unchanged in behavior).
+
+Integration integrity: train.py record(...) (via ProbeCallback) and
+conclude(0.03, 0.07) call sites were not touched; both threshold args still
+passed.

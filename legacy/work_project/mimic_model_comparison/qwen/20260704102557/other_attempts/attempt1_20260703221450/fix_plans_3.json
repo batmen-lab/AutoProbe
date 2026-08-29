@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Ethnicity-balanced weighted random sampler",
+      "content": "In train.py main(), replace the current `train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, generator=_loader_gen)` with a WeightedRandomSampler that equalizes per-ethnicity positive pull. Concretely: import torch.utils.data.WeightedRandomSampler; compute per-sample training weights by loading train_ds.eth and train_ds.labels, then for each sample i set w_i = (1.0 / n_pos_in_group_g) if label_i==1 else (1.0 / n_neg_in_group_g), where g = train_ds.eth[i].argmax(); instantiate `sampler = WeightedRandomSampler(weights=w, num_samples=len(w), replacement=True, generator=_loader_gen)` and pass it to the DataLoader in place of `shuffle=True` (Drop shuffle arg). Per-epoch the loader now draws a near-uniform mix of positives across the 5 groups instead of ~70% white positives, so the linear classifier receives gradient signal from asian/hispanic/others enough to move their decision boundaries. This directly attacks the max-min recall gap \u2014 round-2 trajectory shows recall_min is driven to 0 on the smallest groups (white recall ~0.20 vs minority recall ~0 at threshold 0.5); balancing per-group pull is the standard way to close that. Target files: train.py (main() only \u2014 around lines 311-313 where train_loader is built). Leave criterion, optimizer, model, prober calls, and user_analyze untouched.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "title": "Switch to focal loss for hard-minority emphasis",
+      "content": "Replace the classification objective in train.py with an inline focal-loss module so the optimizer emphasizes the rare, hard positive examples that drive minority-group recall. Add a small class near the top of train.py (after the LogisticRegression class, around line 98): `class FocalLoss(nn.Module): def __init__(self, gamma=2.0, pos_weight=None): super().__init__(); self.gamma=gamma; self.pos_weight=pos_weight; def forward(self, logits, targets): bce = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction='none', pos_weight=self.pos_weight); pt = torch.exp(-bce); return (self.pos_weight*targets + (1-targets)) * ((1-pt)**self.gamma * bce)` (use the standard Lin et al. factor with pos_weight broadcast applied per-element). Then in main() replace the existing `criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)` with `criterion = FocalLoss(gamma=2.0, pos_weight=pos_weight)`. Keep `nn.BCEWithLogitsLoss` import path intact for evaluation if referenced, but the training loss alone changes shape: the (1-pt)^2 factor suppresses the flood of easy white-majority negatives that currently drown out minority-group positives, and the anchor AUPRC metric in evaluate() is unchanged. gamma=2.0 is the canonical value from the focal-loss paper; the pos_weight tensor is passed through so overall class imbalance correction is preserved. Target files: train.py (add class + one-line replacement of criterion).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.55
+    },
+    {
+      "title": "Select checkpoint on val recall-gap parity",
+      "content": "Change checkpoint selection in train.py main() from best-val-AUPRC to best-val-recall-gap so the saved final model is the one that actually minimizes the probe metric across the 5 ethnicities. In the training loop, alongside the existing `if val_metrics['auprc'] > best_auprc:` block, add per-epoch gap computation using the already-available `val_metrics['_probs']`, `val_metrics['_labels']`, and `val_ds.eth.numpy()` (loaded on line 307). Compute per-ethnicity recall exactly as the prober does inside prober._recall_per_group (import it at the top: `from prober import _recall_per_group as _probe_recall`), then gap = max(recalls.values()) - min(recalls.values()) keeping only finite entries. Track `best_gap = float('inf')`; whenever the current epoch gap < best_gap, save `model.state_dict()` to a new path `CKPT_DIR / 'parity_best_model.pt'` and update best_gap. After the loop, change the test-eval loading line (`model.load_state_dict(torch.load(ckpt_path, ...))`) to load from `CKPT_DIR / 'parity_best_model.pt'` instead of `ckpt_path`. Keep the original AUPRC-best ckpt save intact (it's the anchor for the prober's metric-0) and keep the `best_auprc` bookkeeping so nothing in the ANCHOR/AUPRC path breaks. The two ANCHOR comment markers in evaluate() and the conclude/record call sites remain untouched. Target files: train.py (add ~8 lines in the training loop + one-line change to the post-loop load path).",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.9
+    }
+  ],
+  "chosen_index": 3,
+  "round": 3
+}

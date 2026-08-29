@@ -1,0 +1,17 @@
+Plan title: Break gender color cues in augmentation
+
+Applied edit:
+- File: datamodules/celebadatamodule.py
+- Function: get_transforms(), 'train' Compose
+- Change 1: ColorJitter hue 0.2 -> 0.05
+- Change 2: Added transforms.RandomGrayscale(p=0.5) immediately after ColorJitter
+  (before transforms.Resize)
+
+Rationale: Color is a strong gender proxy on CelebA. Randomly graying half the
+training images and reducing hue jitter forces reliance on shape/texture rather
+than gender-correlated color, reducing I(pred_target; Male | true_target).
+
+Discrepancy: None. Plan applied exactly as specified.
+
+Integration integrity: train.py record(...) and conclude(0.03, 0.07) call sites
+were not touched and remain intact.

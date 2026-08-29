@@ -1,0 +1,12 @@
+{
+  "n_pairs": 100,
+  "roles": [
+    "round_1_baseline",
+    "round_2_improved"
+  ],
+  "mask": "top 35% (hair/forehead) grayed = counterfactual gender-cue removal",
+  "note": "same images in both roles; round_1_baseline uses the frozen round-1 model (predictions wrong via the gender shortcut), round_2_improved uses the current de-biased model (predictions corrected). Each pair has image.png, flipped_image.png (hair masked) and prediction.json.",
+  "counter_stereotype": 1283,
+  "other_correction": 688,
+  "other_flip": 3278
+}

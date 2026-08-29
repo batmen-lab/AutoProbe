@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Sharpen EO regularizer: max-min penalty at alpha=10",
+      "content": "In train.py, replace the soft equal-opportunity penalty inside train_one_epoch with a direct, harder-targeted formulation that matches the probe metric: (a) raise EO_ALPHA from 0.5 to 10.0 (a 20x jump); (b) replace `tpr_per_g.var(unbiased=False)` with a differentiable soft-max-min spread proxy. Concretely keep the soft TPR surrogates `tpr_g = soft_pos_g / clamp(pos_g, eps)` but compute `eo_penalty = torch.logsumexp(tpr_per_g, dim=0, beta=20.0) - torch.logsumexp(-tpr_per_g, dim=0, beta=20.0)` using `torch.logsumexp(t, beta) = (1/beta) * logsumexp(beta*t)` (i.e., `softmax_max = (1/20) * torch.logsumexp(20 * tpr_per_g)` and `softmax_min = -(1/20) * torch.logsumexp(-20 * tpr_per_g)`), then `eo_penalty = softmax_max - softmax_min`. This is a smooth approximation of the probe's exact max_g TPR - min_g TPR with inverse-temperature 20 \u2014 far more directly aligned with the probe than population variance, which the optimizer can minimize by redistributing mass among already-equal groups instead of compressing the spread. The loss is `loss = bce_loss + 10.0 * eo_penalty`; `running_loss` still adds the pure BCE term so the ANCHOR train_loss remains comparable with prior rounds. Why this helps: with EO_ALPHA=0.5 and variance penalty the tail_mean only dropped from 0.202 to 0.192 \u2014 the penalty was both too weak and misaligned with the actual metric (variance doesn't punish a two-group spread as hard as max-min does), so a 20x stronger max-min surrogate directly chases the probe's definition.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.6
+    },
+    {
+      "title": "Group-balanced sampler for training batches",
+      "content": "In train.py main(), replace the current plain shuffled DataLoader with a WeightedRandomSampler that equalizes the expected number of positives seen per ethnicity per epoch. Concretely, after loading train_ds: read `train_ds.eth` (N,5) one-hot and `train_ds.labels` (N,); compute per-sample weight `w_i = 1 / (2 * n_pos_in_my_group)` for positive samples and `w_i = 1 / (2 * n_neg_in_my_group)` for negative samples, where `my_group = argmax(eth_i)` and `n_pos_in_my_group` / `n_neg_in_my_group` are the counts of positives / negatives in that ethnicity across the full training split. Build `sampler = torch.utils.data.WeightedRandomSampler(weights=w, num_samples=len(train_ds), replacement=True)` and pass it to `DataLoader(train_loader_ds, batch_size=BATCH_SIZE, sampler=sampler, generator=_loader_gen)` (dropping `shuffle=True` because it is incompatible with sampler). Leave everything else intact \u2014 criterion, pos_weight (still `n_neg/n_neg`), optimizer, EO regularizer, ANCHOR loss, and probe calls. Why this helps: under plain random shuffling, the 9% overall positive rate masks huge per-group variance; minority ethnicities with few positives contribute very little gradient toward pulling their positives above 0.5, which is exactly what produces the ~0.15-0.20 TPR gap at the probe's frozen threshold. A balanced sampler forces all 5 ethnicities to have equal voice in shaping the logits, directly equalizing per-group TPR.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.6
+    },
+    {
+      "title": "Per-ethnicity TF-IDF mean centering as preprocessing",
+      "content": "In train.py main(), immediately after instantiating train_ds / val_ds / test_ds (and before computing n_pos / pos_weight or wrapping train_ds with _EthWrappedDataset), fit a per-ethnicity mean vector on the training split and subtract it from every split's TF-IDF rows. Concretely: `train_eth = train_ds.eth.argmax(dim=1)` (integer group index, length N_train); `train_x = train_ds.tfidf.toarray()` (dense, shape N_train x F); compute `group_means[g] = train_x[train_eth == g].mean(axis=0)` for g in 0..4; center each row by its group: `train_x[train_eth == g] -= group_means[g]`; assign back `train_ds.tfidf = scipy.sparse.csr_matrix(train_x)`. For val and test: compute their own `val_eth = val_ds.eth.argmax(dim=1)`, then `val_x = val_ds.tfidf.toarray()`; for each g, `val_x[val_eth == g] -= group_means[g]`; assign back as csr_matrix. Do the same for test_ds. No scaler on variance \u2014 only per-ethnicity mean subtraction, so the TF-IDF magnitudes (which carry real signal) are preserved, only the ethnically-correlated mean shifts are removed. After this, the rest of the pipeline (pos_weight, AdamW, EO regularizer at alpha=0.5, probe calls) is unchanged. Why this helps: clinical notes written by different ethnic communities have systematically different vocabulary frequencies even for the same underlying severity; a linear head translates those mean shifts into different intercepts at the frozen 0.5 probe threshold, directly producing the ~0.15-0.20 TPR gap. Subtracting the per-ethnicity mean leaves the within-group severity signal intact but kills the group-offset lever, which is the single largest source of TPR dispersion at 0.5.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.55
+    }
+  ],
+  "chosen_index": 1,
+  "round": 4
+}

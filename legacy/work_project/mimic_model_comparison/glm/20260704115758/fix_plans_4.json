@@ -1,0 +1,30 @@
+{
+  "fix_plans": [
+    {
+      "title": "Mask ETH one-hot from model input",
+      "content": "Edit dataset.py's MIMICMortalityDataset.__getitem__ to drop the ethnicity one-hot block from the features tensor fed to the model, so the logistic regression cannot use group identity as an input feature. Concretely: replace `features = torch.cat([tfidf_vec, self.eth[idx]])` (and the `if self.use_eth:` branch) with `features = tfidf_vec`, leaving `self.eth` on the dataset object so prober.py's `loader.dataset.eth` access still works unchanged. Rationale: with the ETH block concatenated to every input row, the linear layer can place near-zero weight on those 5 dims only under strong regularization; in practice the model exploits group identity and the frozen THRESHOLD=0.5 then lands at group-specific TPRs differing by ~0.5 (round 2 actually worsened to ~0.48). Removing the ETH block forces the model to predict from TF-IDF only, so per-group TPRs are driven by feature overlap rather than group identity, which is the standard cause of the ~0.2 baseline gap collapsing to <0.05 in the equal-opportunity literature. Keep `self.eth` and `self.use_eth` fields intact so the probe's `loader.dataset.eth.cpu().numpy()` call in prober.py._collect still works (it indexes the dataset attribute, not the batch). This is a single self-contained edit to __getitem__; no other file touched.",
+      "target_files": [
+        "dataset.py"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "title": "Group-balanced mini-batch sampling",
+      "content": "Replace the per-sample WeightedRandomSampler added in round 3 with a group-balanced batch sampler that forces every training batch to contain a roughly equal number of positives from each ethnicity group. Concretely, in train.py main(): remove the WeightedRandomSampler block and the `_loader_gen` shuffle generator, and instead build a `BatchSampler` whose underlying index list is constructed by interleaving per-group positive-index shuffled lists: for each epoch-equivalent draw, take `BATCH_SIZE // (2 * len(ETH_NAMES)) = 25` positive indices from each of the 5 ETH groups (with replacement when a group runs out) and 25 negative indices from each group, concatenating to a 250-index batch (drop the remainder to keep batch size consistent). Pass `sampler=BatchSampler(_interleaved_index_iter, batch_size=250, drop_last=True)` to the train_loader and `shuffle=False`. Keep val_loader untouched. Rationale: round 3's sampler balanced group marginal counts but did not condition on the label, so it oversampled rare groups without oversampling their positives \u2014 the gap barely moved (0.290 vs 0.290). The actual driver of the TPR gap is per-group positive recovery; forcing each batch to contribute equal positive gradient across groups directly targets equal-opportunity without changing the loss. The 250 index (instead of 256) keeps the per-group slice integral (25 each side x 5 groups x 2 labels) so no group is short-changed by rounding. No change to model, loss, optimizer, prober, or anchors.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.55
+    },
+    {
+      "title": "Adversarial ETH-feature gradient reversal",
+      "content": "Add a small adversarial head on top of the logistic-regression hidden logit that tries to predict the ETH one-hot from the model's penultimate representation, with a gradient-reversal-style penalty so the backbone is discouraged from encoding ETH-discriminative information. Concretely, in train.py: (1) define a tiny `EthAdversary` module = `nn.Linear(input_dim, 5)` (5 ETH logits) constructed right after `model = LogisticRegression(input_dim).to(device)` and moved to `device`; (2) in train_one_epoch, after `logits = model(features)`, also compute `adv_logits = adversary(model.linear.weight @ features.T + model.linear.bias).T` \u2014 but simpler and equivalent: feed `features` directly to `adversary` as well and compute `adv_logits = adversary(features)`, with `adv_loss = nn.functional.cross_entropy(adv_logits, group_idx)` where `group_idx = features[:, -5:].argmax(dim=1)`; (3) the penalty is `-0.1 * adv_loss` added to `loss` before backward (gradient reversal of the adversary's ETH-prediction objective pushes the backbone features away from ETH-discriminative directions); (4) add a separate `torch.optim.AdamW(adversary.parameters(), lr=1e-3)` optimizer solely for the adversary, stepped on `+adv_loss` (i.e. the adversary minimizes adv_loss while the backbone maximizes it). Keep the BCE `loss = criterion(logits, labels)` term and its ANCHOR comment. Rationale: round 2's per-batch TPR variance penalty was a weak, noisy signal (variance over 5 groups in a 256-sample batch is high-variance) and the gap blew up to 0.48. A gradient-reversal adversary on the input representation directly attacks the route by which ETH identity leaks into the prediction, which is the documented cause of the 0.5 gap in this baseline. Adversary weight 0.1 is small enough that BCE/AUPRC anchor is preserved (round 1 val_auprc=0.3956) but large enough to dominate the ETH-leakage signal in a 20-epoch run. No edits to prober.py or to record/conclude call lines.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.25
+    }
+  ],
+  "chosen_index": 1,
+  "round": 4
+}

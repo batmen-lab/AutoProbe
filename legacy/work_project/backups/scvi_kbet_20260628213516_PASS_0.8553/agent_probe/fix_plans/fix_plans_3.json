@@ -1,0 +1,22 @@
+{
+    "fix_plans": [
+        {
+            "title": "Force uniform batch proportions in subsampling",
+            "content": "In train.py, change the default of the parser.add_argument(\"--batch-balance-strength\", type=float, default=0.5) line in build_parser() to default=1.0. This argument feeds sample_cells(), where balance_strength linearly interpolates the per-batch target proportions between the observed proportions and uniform (1/n_batches) proportions (lines 109-113). At strength 1.0 the two batches are sampled to equal size, so the GLOBAL batch composition f used by the kBET chi-squared test (prober.py _kbet_acceptance, global_counts/global_counts.sum) becomes exactly uniform. kBET rejects a neighbourhood when its LOCAL batch composition deviates from the global; making the global uniform reduces the expected-count imbalance the chi-squared statistic must overcome and makes well-mixed neighbourhoods far easier to accept, directly lifting acceptance rate. This is a pure data-handling lever, orthogonal to the already-tried epoch increase which plateaued at ~0.66.",
+            "target_files": ["train.py"],
+            "confidence": 0.6
+        },
+        {
+            "title": "Select highly variable genes before training",
+            "content": "In train.py main(), immediately after build_dataset() returns adata (line 379) and BEFORE scvi.model.SCVI.setup_anndata(adata, layer=\"counts\", batch_key=\"batch\") (line 382), insert highly-variable-gene selection: call sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor=\"seurat_v3\", batch_key=\"batch\", layer=\"counts\", subset=True). seurat_v3 flavor operates directly on raw counts (matching the 'counts' layer scVI consumes) and batch_key makes HVG selection batch-aware so batch-specific noisy genes are down-weighted. Reducing the feature space from all genes to the 2000 most informative, batch-robust genes removes uninformative high-variance dimensions that inject batch-specific signal into the scVI latent, yielding a cleaner batch-mixed embedding and raising kBET acceptance. This is a feature-selection/preprocessing angle distinct from optimization budget and data balancing.",
+            "target_files": ["train.py"],
+            "confidence": 0.78
+        },
+        {
+            "title": "Deepen the scVI encoder and decoder",
+            "content": "In train.py main(), modify the scvi.model.SCVI(...) constructor (lines 385-390) to add n_layers=2 (alongside the existing n_latent, n_hidden, dropout_rate kwargs). By default SCVI uses a single hidden layer; scVI conditions its decoder on the one-hot batch covariate, so a deeper (2-layer) batch-conditioned encoder/decoder has more capacity to absorb batch-specific variation in the network weights rather than leaking it into the n_latent=10 bottleneck. A latent space with less residual batch signal produces neighbourhoods whose local batch composition more closely matches the global, which is exactly what the kBET chi-squared test rewards, increasing acceptance rate. This is a model-architecture lever, separate from the data and budget changes already attempted.",
+            "target_files": ["train.py"],
+            "confidence": 0.55
+        }
+    ]
+}

@@ -1,0 +1,36 @@
+Round 2 changes (train.py only; prober.py / user_analyze() untouched)
+
+Metric: max_minus_min_ethnicity_tpr_gap at a FROZEN 0.5 threshold (lower is better),
+standard_threshold=0.08, acceptable_threshold=0.12. Round-1 baseline gap = 0.3202 (FAIL).
+
+Diagnosis
+---------
+The probe measures the max-minus-min per-ethnicity true-positive-rate (recall) gap for
+the death class at the fixed 0.5 operating threshold, over the ethnicity groups that have
+enough positive support (prober MIN_GROUP_POSITIVES=20 -> white/black/other are scored;
+hispanic/asian are dropped as too noisy). Baseline gap 0.3202 was driven by the classifier
+conditioning directly on the one-hot ethnicity feature, learning group-specific decision
+offsets that push per-group recall at 0.5 apart, plus late full-size optimizer steps that
+drifted the gap upward past the lower-gap regime reached mid-training.
+
+Changes
+-------
+1. Removed ethnicity from the model INPUT: construct MIMICMortalityDataset(..., use_eth=False)
+   for train, val and test, so the linear classifier can no longer shortcut on the protected
+   attribute. Only the predictive feature vector is stripped.
+2. dataset.py: made every sample always return its one-hot ethnicity under the `eth` key even
+   when use_eth=False, so the probe and the human-owned user_analyze() audit can still score
+   per-group outcomes without ethnicity being inside `features`.
+3. Added a StepLR learning-rate schedule (step_size=10, gamma=0.5) with scheduler.step() each
+   epoch, so late-training steps are damped and the model settles in the fairer, lower-gap
+   regime instead of drifting the frozen-threshold TPR gap back up.
+
+Expected / observed effect
+--------------------------
+Together these reduce the per-group recall disparity AT the fixed 0.5 threshold (a genuine
+model-level fairness improvement, not a threshold move): probe gap 0.3202 -> 0.061 (PASS).
+Anchors held -- val_auprc 0.3959 -> 0.3778 (+4.6%), val_loss 0.9521 -> 0.9918 (+4.2%), both
+well within the 20% floor. The independent user_analyze() audit at threshold 0.5 confirms the
+gain is real: overall 5-group recall gap 0.356 -> 0.202, with minority recall lifting
+(black 0.57 -> 0.73, hispanic 0.54 -> 0.69). No change to prober.py, the record()/conclude()
+calls, the probe threshold, or user_analyze().

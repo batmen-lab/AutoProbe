@@ -1,0 +1,5 @@
+Chose potential_improvement_9.
+
+Change: Replaced the sequential head/tail split in train.py (~line 127) with sklearn.model_selection.StratifiedShuffleSplit(n_splits=1, test_size=VALID_FRACTION, random_state=SEED); also added the StratifiedShuffleSplit import.
+
+Rationale: Round 7's AdamW switch yielded a negligible delta (tail_mean 0.2073 vs 0.2072), and the edit itself was a small categorical toggle — per policy this means "switch levers rather than keep tuning the same one". Improvement 9 targets a data-split lever untouched by any prior round: the sequential tail slice can hand val a skewed positive rate (the Home Credit application_train.csv is roughly ordered), which both biases the reported AUPRC and adds variance. Stratifying by TARGET fixes the positive-rate mismatch between train/val, giving a more reliable AUPRC signal and typically a small but genuine lift. As a categorical/structural choice, applied fully in one move per the always-fully-applied rule.

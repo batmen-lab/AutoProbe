@@ -1,0 +1,5 @@
+Iteration 4 — potential_improvement_7
+
+Change: Set class_weight="balanced_subsample" on the RandomForestClassifier so impurity splits weight the ~8% minority class proportionally per tree.
+
+Why: AUPRC has climbed steadily (0.1097 -> 0.1586 -> 0.1791 -> 0.2036) across the prior three structural fixes (feature cap, n_estimators, max_depth). With the forest now reasonably sized and deep, the next lever suppressing positive-class ranking is unweighted impurity on an ~8% positive rate. balanced_subsample is a categorical toggle fully applied in one move (Regime B, positive prior delta — prefer the smallest meaningful edit). Expect a modest positive delta this round.

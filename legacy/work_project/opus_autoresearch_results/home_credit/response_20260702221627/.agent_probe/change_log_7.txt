@@ -1,0 +1,5 @@
+Chose potential_improvement_10.
+
+Change: Swapped the optimizer in train.py (line ~145) from torch.optim.Adam(model.parameters(), lr=LEARNING_RATE) to torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4).
+
+Rationale: Round 6 (isnull indicator columns) lifted tail_mean from ~0.2008 to ~0.2072 — a clearly positive but modest delta, so per policy stay incremental in Regime B and prefer a smooth categorical switch over another structural rewrite. AdamW's decoupled weight decay directly regularizes the widened HIDDEN_DIM=128 stack (~60k params) on a moderate-sized tabular problem with newly added isnull indicator features, which can pick up noise; mild weight_decay=1e-4 is a well-established tabular-MLP AUPRC lift over plain Adam with zero regularization. Boolean/categorical-style change applied in one move per the always-fully-applied rule; no other levers touched.

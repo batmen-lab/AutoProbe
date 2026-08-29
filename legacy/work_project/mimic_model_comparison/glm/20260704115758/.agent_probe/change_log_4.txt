@@ -1,0 +1,48 @@
+Change log round 4
+==================
+
+Plan title: Mask ETH one-hot from model input
+
+Applied edit (file: dataset.py, symbol: MIMICMortalityDataset.__getitem__)
+- Removed the ethnicity one-hot block from the `features` tensor fed to the
+  model so the logistic regression can no longer use group identity as an
+  input feature.
+- Before:
+        if self.use_eth:
+            features = torch.cat([tfidf_vec, self.eth[idx]])
+        else:
+            features = tfidf_vec
+- After:
+        features = tfidf_vec
+- The `self.eth` and `self.use_eth` fields in `__init__` are preserved, so
+  prober.py's `loader.dataset.eth.cpu().numpy()` access in `_collect` and
+  user_analyze's `val_ds.eth.cpu().numpy()` access continue to work
+  unchanged (they index the dataset attribute, not the batch).
+- `self.use_eth` is now unused inside __getitem__ but is retained on the
+  dataset object so any external code that inspects it still sees the same
+  surface; the plan explicitly said to keep `self.eth` and `self.use_eth`
+  intact.
+
+Discrepancies with the plan:
+- None. The plan's spec was implementable verbatim. The edit is a single
+  self-contained change to __getitem__; no other file touched. prober.py
+  and train.py were NOT modified.
+
+Integration integrity checks:
+- record(...) call site in train.py main() is unmodified.
+- conclude(standard_threshold=0.05, acceptable_threshold=0.10) call is
+  unmodified; both threshold values still passed.
+- user_analyze() function and its call site are untouched.
+- ANCHOR comments on the BCE loss line and val AUPRC line in train.py
+  evaluate() are preserved; the BCE loss term and val AUPRC computation
+  are unchanged.
+- prober.py is NOT modified. The frozen THRESHOLD=0.5 operating point and
+  the metric definition (max-min per-group TPR gap) are untouched.
+- Anchor risk note: removing 5 ETH input dims does NOT undertrain or
+  trivialise the model — the TF-IDF block still carries the predictive
+  signal, and val_auprc / train_loss anchors should remain in the same
+  band as round 1. If AUPRC degrades >20% vs round-1 baseline
+  (val_auprc=0.3956, train_loss=0.8750), the orchestrator's auto-revert
+  will catch it. The expected effect on the probe metric is that
+  per-group TPRs are now driven by TF-IDF feature overlap rather than
+  group identity, collapsing the ~0.47 baseline gap toward <0.05.

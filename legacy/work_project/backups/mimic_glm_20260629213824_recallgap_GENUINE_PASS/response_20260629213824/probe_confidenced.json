@@ -1,0 +1,106 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "Per-ethnicity AUROC and recall gap",
+      "content": "Compute AUROC, recall (sensitivity), and specificity separately for each of the 5 ethnicity groups on the test split. A healthy signal: per-group AUROC within ~0.03 of overall AUROC and recall gap < 0.05 across groups. Unhealthy: majority group AUROC far exceeds minority groups, or recall collapses for black/hispanic patients (a known risk given the MASK_MINORITY_TFIDF path). This directly tests whether the minority-TFIDF masking during training produces equal-opportunity mortality detection.",
+      "possible_sources": [
+        "Chen et al. 2021, 'Ethical Machine Learning in Healthcare' (per-group AUROC parity)",
+        "Zietz et al. 2023, 'Racial Bias in MIMIC-derived ICU mortality models'",
+        "Mehrabi et al. 2021, 'A Survey on Bias and Fairness in Machine Learning'"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Brier score and reliability curve by group",
+      "content": "After reloading the best checkpoint, compute Brier score, expected calibration error (ECE), and plot reliability diagrams (predicted mortality probability vs. observed mortality) overall and per ethnicity. In ICU mortality, well-calibrated probabilities matter for clinical decision support. Healthy: ECE < 0.05 and reliability curve hugging the diagonal across all groups. Unhealthy: sigmoid outputs systematically over/under-confident, or calibration diverges between ethnic groups (a sign that pos_weight + masking distorted per-group probability scales).",
+      "possible_sources": [
+        "Platt 1999 / Niculescu-Mizil & Caruana 2005 (calibration of logistic regression)",
+        "Guo et al. 2017, 'On Calibration of Modern Neural Networks' (ECE)",
+        "Rajkomar et al. 2018, 'Scalable and accurate deep learning for electronic health records' (calibration in clinical models)"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Train-val-test AUROC gap and epoch curve",
+      "content": "Plot train/val AUROC per epoch (15 epochs) and record the best-val vs. test AUROC gap. With a single linear layer on 10,005 inputs, overfitting risk is bounded but SGD with lr=2.0 can still produce unstable trajectories. Healthy: train and val curves track within ~0.02, test AUROC within ~0.03 of best val. Unhealthy: large train-val gap (overfit) or test-val gap > 0.05 (distribution shift between val and test splits despite stratification).",
+      "possible_sources": [
+        "Johnson et al. 2017, 'MIMIC-III: A freely accessible critical care database' (baseline ICU mortality AUROC ~0.85)",
+        "Harutyunyan et al. 2019, 'Multitask learning and benchmarking with clinical time series databases' (train/val/test protocol)"
+      ],
+      "confidence": 0.86
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Note-text length and TF-IDF vocabulary coverage per ethnicity",
+      "content": "Inspect the preprocessing assumption that minority-group notes are shorter/more abbreviated. Compute per-ethnicity statistics on (a) total characters and token count in the 48h note blob, (b) fraction of TF-IDF vocabulary actually present in each group's notes, (c) average TF-IDF L2 norm per group. Healthy: differences < 20%, vocabulary coverage > 70% across groups. Unhealthy: minority notes 2x shorter with vocabulary coverage < 50% \u2014 this would justify or expose the masking design and explain downstream AUROC gaps.",
+      "possible_sources": [
+        "Chen et al. 2020, 'Diagnosis and medication prediction in clinical notes with TF-IDF features'",
+        "Sun et al. 2022, 'Clinical note length and outcome prediction in ICU'"
+      ],
+      "confidence": 0.55
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Sensitivity to 48h cutoff and discharge-summary leakage",
+      "content": "Verify the first-48h filter is leak-free: scan all retained notes for 'Discharge summary' category removal and for forward-looking phrases (e.g., 'expired', 'deceased', 'mortality') that may indicate post-outcome text. Then re-evaluate with 24h and 72h cutoffs. Healthy: AUROC changes smoothly (\u00b10.02) with cutoff, no leakage phrases dominate top TF-IDF features. Unhealthy: 48h AUROC >> 24h AUROC by > 0.1 (model depends on near-outcome notes) or leakage phrases appear in top-50 features.",
+      "possible_sources": [
+        "Sheikhalishahi et al. 2020, 'Natural language processing of clinical notes on surgical complications' (leakage in clinical notes)",
+        "Rajkomar et al. 2018 (time-windowed note features)"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "Optimization stability under SGD lr=2.0",
+      "content": "Log per-epoch training loss and gradient norm. SGD with lr=2.0 on a 10,005-dim linear model with BCEWithLogitsLoss + pos_weight is unusually aggressive \u2014 divergence or oscillation is plausible. Healthy: loss decreases monotonically (or with small noise) across 15 epochs; gradient norm bounded. Unhealthy: loss spikes, NaN, or AUROC oscillates between epochs \u2014 best-val checkpoint selection may be capturing a lucky epoch rather than a stable solution. Also compare against Adam lr=1e-2 as a sanity baseline.",
+      "possible_sources": [
+        "Smith 2017, 'Cyclical Learning Rates for Neural Networks' (lr stability)",
+        "Bottou 2010, 'Large-Scale Machine Learning with Stochastic Gradient Descent'"
+      ],
+      "confidence": 0.8
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "Demographic parity and equalized odds of the 0.5 threshold",
+      "content": "Although AUROC is threshold-free, the reported F1 and accuracy use threshold 0.5. Compute demographic parity (P(\u0177=1|group)) and equalized odds (TPR and FPR per group) at 0.5. Healthy: demographic parity gap < 0.05, equalized-odds differences < 0.05. Unhealthy: a single 0.5 threshold produces much higher FPR or much lower TPR for a minority group \u2014 a clinical fairness hazard even if overall AUROC looks fine. Note that pos_weight shifts the decision boundary, so 0.5 is no longer calibrated to prevalence.",
+      "possible_sources": [
+        "Hardt et al. 2016, 'Equality of Opportunity in Machine Learning' (equalized odds)",
+        "Verma & Rubin 2018, 'Fairness Definitions Explained' (demographic parity)"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Cohort inclusion and label distribution audit",
+      "content": "Audit the inclusion pipeline: count rows dropped at each filter (HAS_CHARTEVENTS_DATA, ICU LOS \u2265 48h, age < 300, adult ICU), and report mort_icu prevalence per ethnicity before and after filtering. Healthy: prevalence ratios across groups stable (< 20% relative change) and final prevalence \u2265 5% per group. Unhealthy: a filter disproportionately removes a minority group or leaves a group with < 30 positive samples \u2014 making per-group AUROC statistically meaningless.",
+      "possible_sources": [
+        "Johnson et al. 2017 (MIMIC-III cohort construction)",
+        "Suresh & Guttag 2021, 'A Framework for Understanding Sources of Harm Throughout the Machine Learning Life Cycle' (filtering-induced bias)"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Age and gender subgroup performance",
+      "content": "Beyond ethnicity, evaluate test AUROC stratified by age buckets (<40, 40-65, 65-80, >80) and gender. ICU mortality risk and note-writing patterns differ strongly by age and sex. Healthy: AUROC spread < 0.05 across age buckets and between genders. Unhealthy: AUROC collapses for the youngest or oldest bucket (small sample + different note vocabulary), or a large gender gap \u2014 signals the model is leveraging demographic-correlated artifacts rather than clinical signal.",
+      "possible_sources": [
+        "Lipton et al. 2018, 'Does Mitigating ML's Impact on Disparity Require Debiasing the Underlying Classifier?'",
+        "Obermeyer et al. 2019, 'Dissecting racial bias in an algorithm used to manage the health of populations' (subgroup bias in clinical risk models)"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "probe_type": "interpretability",
+      "probe_name": "Top TF-IDF feature weights and ethnicity-feature interaction",
+      "content": "Extract the top-50 positive and top-50 negative logistic-regression weights, mapping indices back to the TF-IDF vocabulary. Then check whether any ethnicity one-hot dimension has a large-magnitude weight (|w| > 0.5) \u2014 which would mean the model is using ethnicity as a direct predictor rather than letting text drive predictions. Healthy: top features are clinically plausible terms (e.g., 'sepsis', 'intubated', 'code', 'comfort'); ethnicity weights near zero. Unhealthy: ethnicity one-hots dominate, or top features are administrative artifacts (e.g., unit names, dates).",
+      "possible_sources": [
+        "Ribeiro et al. 2016, 'Why Should I Trust You?: Explaining the Predictions of Any Classifier' (LIME for linear models)",
+        "Caruana et al. 2015, 'Intelligible Models for Healthcare: Predicting Pneumonia Risk and Hospital 30-day Readmission' (interpretable clinical models)"
+      ],
+      "confidence": 0.85
+    }
+  ]
+}

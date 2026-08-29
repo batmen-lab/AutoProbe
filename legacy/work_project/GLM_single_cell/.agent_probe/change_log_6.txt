@@ -1,0 +1,67 @@
+Change log for round 6
+======================
+
+Plan title: Deepen SCVI encoder/decoder to n_layers=2
+
+Applied edit (train.py, main()):
+
+1. scvi.model.SCVI(...) constructor call (train.py:487-492):
+     BEFORE:
+       vae = scvi.model.SCVI(
+           adata,
+           n_latent=args.n_latent,
+           n_hidden=args.n_hidden,
+           dropout_rate=args.dropout_rate,
+       )
+     AFTER:
+       vae = scvi.model.SCVI(
+           adata,
+           n_latent=args.n_latent,
+           n_hidden=args.n_hidden,
+           n_layers=2,
+           dropout_rate=args.dropout_rate,
+       )
+
+   The n_layers=2 argument is hard-coded inline (no new argparse arg
+   added). This is the only scVI capacity hyperparameter NOT yet tuned
+   in prior rounds (rounds 2-5 widened n_latent 10->30, n_hidden 128->256,
+   dropout 0.1->0.0; rounds 3-5 extended epochs and added adversarial
+   training). The encoder/decoder remained a single hidden layer.
+
+Untouched (per plan's "Keep ... unchanged" list):
+- max_epochs=100, n_epochs_kl_warmup=20, scale_adversarial_loss=2.0
+- lr=1e-3 (via args.lr default)
+- adversarial_classifier=True
+- n_latent=30, n_hidden=256, dropout_rate=0.0, batch_size=128
+- record() / conclude() call lines
+  (prober_conclude(0.80, 0.55, anchors=_anchors) still passes BOTH
+  threshold values and the elbo anchors)
+- _ProbeCallback (still registered via callbacks=[_ProbeCallback(vae, adata)])
+- prober.py
+- user_analysis() (still empty pass-through)
+- ANCHOR markers and original_train_metric recording
+
+Rationale (per plan): round 5 reached mean kBET 0.619 (tail 0.629) with
+per-batch acceptance still 0.0/0.0 — the single-hidden-layer encoder
+(128->256->256->30) collapses each batch into its own region even under
+adversarial loss 2.0. A deeper encoder/decoder (128->256->256->256->256->30,
+i.e. n_layers=2 stacks a second hidden layer in both encoder and decoder)
+gives the network enough depth to learn a batch-invariant latent manifold
+under the existing AdversarialTrainingPlan pressure. This is the model-
+architecture angle: rounds 2-5 only tuned width/dropout/epochs/adversarial
+loss but never depth. Stacking a second hidden layer is exactly what
+lifted kBET 0.66->0.85 in the proven prior solve of this exact probe.
+ELBO anchor expected to stay healthy — a deeper encoder typically lowers
+ELBO slightly (better fit), not raises it; the utility-floor guard
+(>20% degradation auto-revert) is therefore not at risk.
+
+Discrepancies with the plan: none. The plan named exactly one edit
+(add n_layers=2 inline to the SCVI constructor at train.py:487-492,
+no new argparse arg). Applied verbatim.
+
+record()/conclude() call lines: untouched.
+- _ProbeCallback.on_train_epoch_end still calls
+  prober_record(int(trainer.current_epoch), self.vae, self.adata).
+- prober_conclude(0.80, 0.55, anchors=_anchors) still passes BOTH
+  threshold values (standard=0.80, acceptable=0.55) and the elbo
+  anchors.

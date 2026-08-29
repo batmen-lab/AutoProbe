@@ -1,0 +1,114 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "data",
+      "probe_name": "Raw-count integrity & preprocessing validity",
+      "content": "Verify that .X and .layers['counts'] actually contain non-negative integer-like raw UMI counts (not log-normalized or scaled values), since scVI's negative-binomial/ZINB likelihood assumes raw counts. Check: min value >=0, values are whole numbers, library sizes (n_counts) span a plausible range, and no accidental double-normalization. Also confirm the gene inner-join across batches didn't collapse the feature space to too few genes and that no all-zero genes/cells survive. Healthy: integer counts, thousands of shared genes, reasonable per-cell depth distribution. Unhealthy: fractional/negative values, very few intersecting genes, many empty cells/genes \u2014 these silently break the likelihood and integration.",
+      "possible_sources": [
+        "Lopez et al. 2018, 'Deep generative modeling for single-cell transcriptomics' (Nature Methods)",
+        "scvi-tools documentation (setup_anndata raw-count requirement)",
+        "Luecken & Theis 2019, 'Current best practices in single-cell RNA-seq analysis'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "convergence",
+      "probe_name": "ELBO / reconstruction loss convergence over epochs",
+      "content": "The script reports no numerical metric and trains only 10 epochs. Probe the training/validation ELBO, reconstruction loss, and KL term per epoch (vae.history). Check whether the loss has plateaued or is still steeply decreasing at epoch 10 (under-training), and whether train vs validation ELBO diverge (over-fitting). Healthy: monotonically decreasing ELBO that flattens near the end, train/val curves tracking closely. Unhealthy: still-falling loss at the final epoch (needs more epochs), or validation ELBO rising while train falls.",
+      "possible_sources": [
+        "Lopez et al. 2018 (Nature Methods)",
+        "scvi-tools train/history API and tutorials",
+        "Kingma & Welling 2014, 'Auto-Encoding Variational Bayes'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "integration",
+      "probe_name": "Quantitative batch mixing (kBET / iLISI / batch ASW)",
+      "content": "Replace the purely visual UMAP judgement with quantitative batch-mixing metrics computed on the 10-d latent space: kBET acceptance rate, integration LISI (iLISI), and batch silhouette width (ASW_batch). These measure whether the two PBMC batches are well intermixed after integration. Healthy: high iLISI / high kBET acceptance / batch ASW near 0, indicating batches overlap. Unhealthy: low mixing scores, meaning residual batch effect remains and integration failed.",
+      "possible_sources": [
+        "Buttner et al. 2019, 'kBET' (Nature Methods)",
+        "Korsunsky et al. 2019, 'Harmony' (LISI metric)",
+        "Luecken et al. 2022, 'Benchmarking atlas-level data integration' (scIB)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Biological signal conservation (cell-type ASW / NMI / ARI)",
+      "content": "Integration must remove batch effect WITHOUT erasing biology. Using the cell-type labels (held out from training), compute cell-type silhouette width, and cluster the latent space (Leiden) then score NMI/ARI against true cell types. Optionally compute kNN label-transfer accuracy in latent space. Healthy: distinct cell types remain separated (high cell-type ASW, high NMI/ARI), so the bio-conservation vs batch-removal trade-off is balanced. Unhealthy: cell types collapse/merge (over-integration) \u2014 batches mix but biology is destroyed.",
+      "possible_sources": [
+        "Luecken et al. 2022, scIB benchmark (Nature Methods)",
+        "Tran et al. 2020, 'A benchmark of batch-effect correction methods'",
+        "scvi-tools integration tutorial"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Latent-space stability across seeds",
+      "content": "Both the stratified subsampling (RNG seed 42) and VAE initialization are stochastic. Re-run training with several seeds and measure stability of the latent embedding and downstream clustering (e.g., ARI between Leiden partitions across seeds, Procrustes/CCA alignment of latent spaces). Healthy: consistent cluster structure and metrics across seeds. Unhealthy: large run-to-run variance, indicating the result is seed-dependent and not reliable given only 8000 cells and 10 epochs.",
+      "possible_sources": [
+        "scvi-tools reproducibility guidance (scvi.settings.seed)",
+        "Luecken et al. 2022, scIB",
+        "Kingma & Welling 2014"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Subsampling representativeness & class balance",
+      "content": "The balanced subsample (max_cells=8000, batch_balance_strength=0.5, >=1 cell/type/batch) can distort the true cell-type composition and may give rare types too few cells to model. Compare cell-type and batch proportions before vs after sampling, and count cells per (batch, cell type) cell. Healthy: major populations retained with enough cells per type per batch, rare types represented but not wildly over-weighted. Unhealthy: rare cell types reduced to 1-2 cells (under-powered), or sampling that creates artificial composition shifts confounding integration assessment.",
+      "possible_sources": [
+        "Luecken & Theis 2019, 'Current best practices in single-cell RNA-seq analysis'",
+        "scIB benchmark cell-type handling",
+        "Hie et al. 2019, Scanorama (rare-population sensitivity)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "capacity",
+      "probe_name": "Latent dimensionality & posterior collapse",
+      "content": "n_latent=10 with n_hidden=128: probe whether all latent dimensions are actively used or whether some collapse to the prior (KL per-dimension ~0 = posterior collapse / wasted capacity). Inspect per-dimension KL divergence and variance of latent means across cells. Optionally sweep n_latent to see if reconstruction/integration metrics saturate. Healthy: most dimensions carry meaningful variance with non-trivial KL. Unhealthy: many collapsed dimensions (model under-using capacity) or saturated reconstruction suggesting too few/too many latents.",
+      "possible_sources": [
+        "Lopez et al. 2018 (Nature Methods)",
+        "Bowman et al. 2016, 'Generating Sentences from a Continuous Space' (posterior collapse)",
+        "Higgins et al. 2017, beta-VAE"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Generative fit / posterior predictive check",
+      "content": "Assess whether the learned NB/ZINB likelihood actually fits the count data via posterior predictive checks: sample from the model's posterior predictive and compare per-gene mean, variance, and dropout (fraction-zero) against observed data; check the gene-likelihood choice is appropriate (NB vs ZINB) since it is left to scvi-tools defaults. Healthy: simulated mean-variance and zero-inflation curves match observed across the gene-expression range. Unhealthy: systematic over/under-dispersion or mismatched dropout, indicating wrong likelihood or poor fit.",
+      "possible_sources": [
+        "Lopez et al. 2018 (Nature Methods)",
+        "Svensson 2020, 'Droplet scRNA-seq is not zero-inflated' (NB vs ZINB)",
+        "Gayoso et al. 2022, 'A Python library for probabilistic single-cell omics' (scvi-tools)"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "bias",
+      "probe_name": "Residual technical-covariate leakage in latent space",
+      "content": "Even after batch integration, technical covariates like library size (n_counts) or total genes detected can leak into the latent representation and masquerade as biology. Regress/correlate each latent dimension against n_counts and per-cell detected-gene count, and color UMAP by n_counts. Healthy: no single latent axis strongly tracks sequencing depth; depth gradients are diffuse. Unhealthy: a latent dimension strongly correlates with library size, meaning depth confounding wasn't absorbed by the model's size factor.",
+      "possible_sources": [
+        "Lopez et al. 2018 (Nature Methods)",
+        "Luecken & Theis 2019, best-practices review",
+        "Cole et al. 2019, 'Performance assessment of normalization (scone)'"
+      ],
+      "confidence": 0.0
+    },
+    {
+      "probe_type": "baseline",
+      "probe_name": "Comparison against unintegrated and alternative-method baselines",
+      "content": "The single before/after UMAP gives no reference point. Benchmark scVI's latent metrics against (a) an unintegrated baseline (PCA on log-normalized counts) and (b) at least one alternative integration method (Harmony, Scanorama, or scANVI). Compute the same batch-mixing and bio-conservation metrics for each and place scVI on the trade-off plot. Healthy: scVI clearly improves batch mixing over PCA while matching/beating peers on bio-conservation. Unhealthy: scVI no better than the unintegrated baseline or strictly dominated by a simpler/faster method.",
+      "possible_sources": [
+        "Luecken et al. 2022, scIB benchmark (Nature Methods)",
+        "Korsunsky et al. 2019, Harmony (Nature Methods)",
+        "Tran et al. 2020, batch-correction benchmark (Genome Biology)"
+      ],
+      "confidence": 0.0
+    }
+  ]
+}

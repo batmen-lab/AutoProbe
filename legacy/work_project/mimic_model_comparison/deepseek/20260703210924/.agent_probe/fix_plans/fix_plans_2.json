@@ -1,0 +1,22 @@
+{
+    "fix_plans": [
+        {
+            "title": "Upweight black group in training loss",
+            "content": "Modify `train_one_epoch()` in `train.py` to apply per-sample loss weights that upweight the black ethnicity group (index 1). The ethnicity one-hot is the last 5 dimensions of each feature vector. Extract them via `features[:, -5:]`, compute group index with `argmax(dim=1)`, and create a per-sample weight tensor where group==1 (black) gets weight 3.0 and all other groups get weight 1.0. Switch the BCEWithLogitsLoss criterion to `reduction='none'`, multiply each sample's loss by its weight, and return `weighted_loss.mean()`. The evaluate() function is untouched and continues to use the stock criterion, so validation metrics remain comparable. Expected effect: the model is penalized more for misclassifying black patients, incentivizing it to maintain black recall instead of sacrificing it as training progresses.",
+            "target_files": ["train.py"],
+            "confidence": 0.75
+        },
+        {
+            "title": "Replace linear model with 2-layer MLP",
+            "content": "Replace the `LogisticRegression` class in `train.py` with a 2-layer MLP that has more capacity to learn group-specific decision boundaries. New architecture: `Linear(input_dim, 64)` → `ReLU` → `Dropout(0.3)` → `Linear(64, 1)`. Keep the forward method returning `squeeze(-1)` logits so the rest of the pipeline (BCEWithLogitsLoss, evaluate, prober) works unchanged. The ReLU nonlinearity lets the model learn interactions between TF-IDF features and ethnicity indicators, while dropout regularizes against overfitting the majority. No other hyperparameters change (LR=1e-3, weight_decay=1e-4, 20 epochs, class-weighted BCE). Expected effect: the added capacity allows the model to fit minority-group patterns without solely relying on majority-group signal, reducing the TPR gap.",
+            "target_files": ["train.py"],
+            "confidence": 0.30
+        },
+        {
+            "title": "Oversample minority groups via WeightedRandomSampler",
+            "content": "In `main()` in `train.py`, after creating `train_ds`, compute the ethnicity group index for every training sample from the dataset's `eth` tensor (`train_ds.eth.argmax(dim=1)`). Build per-sample weights inversely proportional to group frequency: `weight[group] = total_samples / (num_groups * count[group])`, so smaller groups get higher weight. Create a `WeightedRandomSampler` with these weights and `replacement=True` using `num_samples=len(train_ds)`, and pass it to the training DataLoader as `sampler=sampler` (removing `shuffle=True` which is incompatible with `sampler`). The validation and test loaders remain unchanged. Expected effect: each training epoch exposes the model to a more balanced distribution across ethnic groups, preventing the optimizer from drifting toward majority-group performance at the expense of minority recall.",
+            "target_files": ["train.py"],
+            "confidence": 0.85
+        }
+    ]
+}

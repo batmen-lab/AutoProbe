@@ -1,0 +1,5 @@
+Chose potential_improvement_5.
+
+Change: Reduced BATCH_SIZE from 4096 to 1024 in train.py (line 58).
+
+Rationale: With NUM_EPOCHS pinned at 3, per-epoch gradient-update count is the effective training-budget lever. Cutting batch size 4x quadruples the number of SGD steps per epoch, giving more chances for the pos_weight-scaled BCE loss to push the decision boundary and adding beneficial gradient noise on the ~8% positive class. Prior delta was clearly positive (Regime B, refinement mode), so I took a moderate 4x step rather than jumping straight to the comment's 256-512 target to keep the trajectory smooth and traceable.

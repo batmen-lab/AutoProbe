@@ -1,0 +1,9 @@
+Iteration 7 change log
+
+Chosen item: potential_improvement_4 (further actioned)
+
+Change applied:
+- Raised MAX_DEPTH from 5 to 6 in train.py, moving to the upper end of the comment's named "depth 4-6" range. No other parameters touched (VALID_FRACTION=0.10, N_ESTIMATORS=5, LEARNING_RATE=0.1, MAX_FEATURE_COLUMNS=120, all XGB hyperparameters from round 6 unchanged).
+
+Why this should move val_auprc up:
+- Prior round (round 6, XGB hyperparameters via #9) produced a negligible delta (tail_mean 0.1981 -> 0.2010, ~+1.4%) from a structural edit, so per the recent-progress rule the lever was wrong rather than the magnitude — switch levers rather than doubling down on #9's settings. #3/#5 are blocked by the epoch-cap rule, #10 is a functional no-op at N_ESTIMATORS=5 (patience 40 > 5 total rounds), and #7 is moot at MAX_FEATURE_COLUMNS=120. MAX_DEPTH was the highest-delta lever in the entire history (round 2: 2 -> 5 gave tail_mean 0.1643 -> 0.1886) and its comment explicitly names depth 4-6 as the effective range, so 5 -> 6 is the smallest traceable step on a known-good lever that plausibly yields a meaningful AUPRC bump by unlocking one additional layer of EXT_SOURCE_* × AMT_CREDIT interactions within the existing 5-round budget.

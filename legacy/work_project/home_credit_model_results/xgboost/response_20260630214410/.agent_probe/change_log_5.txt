@@ -1,0 +1,9 @@
+Iteration 5 change log
+
+Chosen item: potential_improvement_6
+
+Change applied:
+- Added `numeric = numeric.fillna(numeric.median())` inside `_numeric_features` in train.py so NaNs are median-imputed before the train/valid split. No other parameters touched (VALID_FRACTION=0.15, N_ESTIMATORS=5, MAX_DEPTH=5, LEARNING_RATE=0.1, MAX_FEATURE_COLUMNS=120 all unchanged).
+
+Why this should move val_auprc up:
+- Prior round (VALID_FRACTION 0.15 -> 0.10) produced a negative delta (tail_mean 0.2006 -> 0.1931) from a small edit, so the lever was wrong rather than the magnitude; switching to a different comment is the right move. With N_ESTIMATORS=5 and MAX_DEPTH=5 the booster is severely under-fit and XGBoost's native NaN handling routes missing-value rows down a single missing branch per node — at this low capacity that branch barely participates, so EXT_SOURCE_* gaps contribute little. Median fill converts those gaps into usable numeric splits at depth 5, letting the small ensemble extract more signal from the strongest predictor block within the existing epoch budget. This is a fully-applied discrete change (the comment names a specific pattern), applied in full rather than partially.

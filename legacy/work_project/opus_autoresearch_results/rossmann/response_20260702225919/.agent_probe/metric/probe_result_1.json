@@ -1,0 +1,38 @@
+{
+  "metric_name": "val_rmspe",
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.533
+    },
+    {
+      "epoch": 2,
+      "value": 0.5239
+    },
+    {
+      "epoch": 3,
+      "value": 0.5161
+    },
+    {
+      "epoch": 4,
+      "value": 0.5094
+    },
+    {
+      "epoch": 5,
+      "value": 0.5036
+    }
+  ],
+  "min": 0.5036,
+  "max": 0.533,
+  "mean": 0.5172,
+  "std": 0.0104,
+  "first_value": 0.533,
+  "final_value": 0.5036,
+  "delta": -0.0294,
+  "tail_mean": 0.5172,
+  "conclusion": "Validation RMSPE fell from 0.533019 to 0.503594 across 5 boosting rounds (min 0.503594, max 0.533019).",
+  "previous_best_last_epoch": 0.5332,
+  "previous_best_max": 0.5417,
+  "previous_best_mean": 0.5376
+}

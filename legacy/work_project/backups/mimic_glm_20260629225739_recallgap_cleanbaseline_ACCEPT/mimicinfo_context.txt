@@ -1,0 +1,92 @@
+============================================================
+MIMIC — Project Information
+============================================================
+------------------------------------------------------------
+1. PROCEDURE (end to end)
+------------------------------------------------------------
+Task: Predict ICU mortality (binary classification) from a patient's
+early-stay clinical notes plus demographics. Two scripts: preprocess.py
+builds features, train.py trains and evaluates.
+
+A) PREPROCESSING  (preprocess.py, run: `python preprocess.py --data_path <mimic_csv_dir>`)
+   1. Load raw MIMIC-III CSV/CSV.GZ tables: ADMISSIONS, ICUSTAYS,
+      PATIENTS (SUBJECT_ID, GENDER, DOB), NOTEEVENTS (SUBJECT_ID, HADM_ID,
+      CHARTTIME, CATEGORY, TEXT).
+   2. Build demographics: join icustays + admissions + patients; keep rows
+      with HAS_CHARTEVENTS_DATA == 1; parse datetimes; compute length-of-stay
+      (hospital/ICU, in days and hours) and age from DOB.
+   3. Compute mortality flags: mort_hosp, mort_icu, mort_oneyr; compute stay
+      sequencing (first_hosp_stay / first_icu_stay, etc.).
+   4. Inclusion criteria: ICU LOS >= 48h; age < 300; adult ICU only
+      (exclude PICU/NICU).
+   5. Encode categoricals: gender M=1/F=0; ethnicity collapsed by regex into
+      5 groups (white/black/hispanic/asian/other) then one-hot; admission
+      type one-hot.
+   6. Clinical notes (first 48h): drop "Discharge summary" and null CHARTTIME;
+      keep notes charted within INTIME .. INTIME+48h; concatenate all notes
+      per ICU stay into one text blob.
+   7. Inner-join demographics with notes -> one row per ICU stay.
+   8. Stratified split 50/25/25 (train/val/test), stratified by mort_icu,
+      seed 42.
+   9. TF-IDF: fit TfidfVectorizer on TRAIN text only (max_features=10,000,
+      English stop words); transform all splits.
+  10. Save artifacts per split: {split}_tfidf.npz (sparse CSR),
+      {split}_meta.npz (keys "eth", "labels"); plus tfidf_vectorizer.pkl.
+
+B) TRAINING  (train.py, run: `python train.py`  [optional --data_dir])
+   - Load precomputed train/val features; each sample = TF-IDF vector (10,000)
+     concatenated with the 5-dim ethnicity one-hot => input dim 10,005.
+   - Model: LogisticRegression = a single nn.Linear(10005 -> 1) producing
+     logits (PyTorch).
+   - Loss: BCEWithLogitsLoss with pos_weight = neg_count / pos_count (class
+     imbalance correction).
+   - Optimizer: AdamW, learning rate = 1e-3, weight_decay = 1e-4. Batch
+     size = 256. Epochs = 20. Seed = 42.
+   - Per epoch: train one pass, evaluate on val; track best validation AUPRC
+     (average precision) and save the best model to checkpoint/best_model.pt.
+   - At the end: reload best checkpoint, evaluate on the test split.
+
+C) EVALUATION / OUTPUT / CONCLUSION
+   - Metrics computed: AUPRC / average precision (primary), recall@0.5,
+     precision@0.5, F1@0.5, AUROC (secondary diagnostic), accuracy, loss.
+   - Model selection: best validation AUPRC.
+   - Final printed line: "Done. Best val AUPRC: <x> | Test AUPRC: <y> |
+     Test recall: <r> | Test AUROC: <z>".
+   - Artifacts: checkpoint/best_model.pt; the preprocessing .npz/.pkl files.
+   - No inference-on-new-data stage; the script's result is the reported
+     val/test AUPRC.
+
+------------------------------------------------------------
+2. DATA
+------------------------------------------------------------
+- Dataset: MIMIC-III (intensive-care EHR). Source not cited in code; inferred
+  from the table names (ADMISSIONS/ICUSTAYS/PATIENTS/NOTEEVENTS).
+- What the original code reads: the four CSV tables above (preprocess.py),
+  then the derived .npz feature files (train.py).
+- Features actually used by the model: 10,000 TF-IDF text features (from the
+  first-48h concatenated notes) + 5 ethnicity one-hot dims = 10,005. (Other
+  engineered columns — insurance, admission type, gender, the other mortality
+  flags — are produced in preprocessing but the trained model input is only
+  TF-IDF + ethnicity.)
+- Label / target: mort_icu (death between ICU INTIME and OUTTIME), binary,
+  and STRONGLY IMBALANCED — only ~9% of ICU stays end in death (positives are
+  the rare class). Group sizes and death counts are also very uneven across
+  ethnicities (e.g. hispanic has ~216 val stays / ~13 deaths).
+- IMPORTANT metric caveat (imbalanced data): AUROC is prevalence-independent
+  and is misleading on this label — a model can post a high AUROC (~0.85) while
+  still missing most actual deaths at any usable decision threshold, and
+  per-group AUROC can look "fair" even when the operating-point behaviour is
+  not. For both the headline objective and any fairness/subgroup analysis,
+  prefer threshold-aware and minority-sensitive metrics — AUPRC / average
+  precision, recall (TPR / sensitivity) at a shared operating threshold,
+  precision, and equal-opportunity (per-group recall) gaps — rather than AUROC.
+- Connection to the result: subgroup behaviour depends on (a) the first-48h
+  note text captured as TF-IDF, (b) the pos_weight imbalance handling, (c) the
+  ethnicity one-hot the model also sees, and (d) the stratified split. Because
+  deaths are rare and group sizes uneven, a single aggregate score (especially
+  AUROC) can hide large disparities in who actually gets flagged.
+------------------------------------------------------------
+3. NOTE
+------------------------------------------------------------
+notbynow
+

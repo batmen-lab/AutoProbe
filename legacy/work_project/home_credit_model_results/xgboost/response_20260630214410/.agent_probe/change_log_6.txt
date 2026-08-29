@@ -1,0 +1,9 @@
+Iteration 6 change log
+
+Chosen item: potential_improvement_9
+
+Change applied:
+- Added `min_child_weight=5`, `subsample=0.8`, `colsample_bytree=0.8`, and `scale_pos_weight=(num_neg/num_pos)` (computed from y_train just above the constructor) to the XGBClassifier constructor in train.py. No other parameters touched (VALID_FRACTION=0.10, N_ESTIMATORS=5, MAX_DEPTH=5, LEARNING_RATE=0.1, MAX_FEATURE_COLUMNS=120 all unchanged).
+
+Why this should move val_auprc up:
+- Prior round (median imputation) produced a small positive delta (tail_mean 0.1931 -> 0.1981), so the model is in Regime B and an incremental, fully-applied discrete change is appropriate. At ~8% prevalence the logloss objective under-rewards the minority class, so weighting positives ~11x via scale_pos_weight better aligns the booster's split choices with AUPRC; min_child_weight=5 plus row/column subsampling caps per-leaf overfitting to rare positives. These are discrete, fully-applied settings (the comment names exact values), applied in full rather than partially. This is the only untried viable lever: #3, #5, #10 are blocked by the epoch-cap rule; #7 is moot at MAX_FEATURE_COLUMNS=120.

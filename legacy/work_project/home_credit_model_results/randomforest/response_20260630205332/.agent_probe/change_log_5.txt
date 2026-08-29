@@ -1,0 +1,5 @@
+Iteration 5 — potential_improvement_4
+
+Change: Replaced the tail-slice validation split with StratifiedShuffleSplit(n_splits=1, test_size=VALID_FRACTION, random_state=SEED), so the validation set preserves the global ~8% positive-class fraction instead of using the last 15% by row.
+
+Why: Prior round (class_weight=balanced_subsample) regressed tail_mean 0.2036 -> 0.1974 — a small categorical toggle that didn't help, so per the recent-progress check the lever was wrong, not the magnitude. Switching to a different comment. The tail slice's positive-class fraction drifts far from the global prior and biases AUPRC downward; stratified sampling is a categorical fix applied in one move that should remove that bias and let the trained model's AUPRC reflect its actual ranking quality.

@@ -1,0 +1,22 @@
+{
+    "fix_plans": [
+        {
+            "title": "Add weight decay via AdamW",
+            "content": "In lightningmodules/classification.py, change configure_optimizers() to use torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=0.05) instead of the current plain Adam (which has weight_decay=0). The probe trajectory improves monotonically to 0.0610 at epoch 3 then sharply spikes to 0.1131 at epoch 4 — a classic late-training overfitting pattern where the model latches onto the spurious gender (Male) shortcut. L2 regularization of 0.05 penalizes the large-magnitude weights that encode the shortcut, flattening the epoch-4 spike and pulling the tail_mean down toward the 0.03 standard threshold. This is a single self-contained edit to the optimizer line and its import.",
+            "target_files": ["lightningmodules/classification.py"],
+            "confidence": 0.68
+        },
+        {
+            "title": "Add cosine LR decay schedule",
+            "content": "In lightningmodules/classification.py, modify configure_optimizers() to return both the Adam optimizer and a torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=5, eta_min=1e-6) by returning {'optimizer': optimizer, 'lr_scheduler': scheduler}, where T_max=5 matches hparams.max_epochs. The metric degrades from 0.0610 (epoch 3) to 0.1131 (epoch 4) because the constant lr=5e-5 keeps taking large gradient steps in late training that overfit the gender shortcut. Annealing the learning rate to near-zero over the 5 epochs shrinks late-epoch updates, stabilizing the tail and preventing the final-epoch leakage spike, which lowers tail_mean. This is a single coherent change to the optimizer-configuration method.",
+            "target_files": ["lightningmodules/classification.py"],
+            "confidence": 0.6
+        },
+        {
+            "title": "Break gender color cues in augmentation",
+            "content": "In datamodules/celebadatamodule.py, in get_transforms()'s 'train' Compose, add transforms.RandomGrayscale(p=0.5) immediately after the existing ColorJitter and reduce ColorJitter hue from 0.2 to 0.05. Color is a strong proxy for gender on CelebA (makeup/lipstick hue, skin-tone correlates), and the model exploits it as the spurious Male shortcut that the conditional-MI probe measures. Randomly graying half the training images forces the network to rely on attribute-intrinsic shape/texture features rather than gender-correlated color, directly reducing I(pred_target; Male | true_target) and lowering the metric. This is a single self-contained edit to the train transform pipeline.",
+            "target_files": ["datamodules/celebadatamodule.py"],
+            "confidence": 0.82
+        }
+    ]
+}

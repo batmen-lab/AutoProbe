@@ -1,0 +1,104 @@
+{
+  "probe_designs": [
+    {
+      "probe_type": "fairness",
+      "probe_name": "Equal-opportunity recall gap at frozen 0.5",
+      "content": "Compute per-ethnicity TPR (recall) for the death class at a threshold HARD-CODED at 0.5 inside prober.py. Report max(TPR) - min(TPR) across the 5 groups. A healthy signal is a small gap (e.g. < 0.10) with all groups' TPRs close to the global TPR at the same threshold. An unhealthy signal is any group whose recall is dramatically lower than another's (e.g. minority groups showing recall < half of the majority group), indicating the model systematically misses deaths in that demographic. The threshold must NOT move with the fix loop and must NOT be a tunable arg in train.py, otherwise a 'fix' could simply shift the threshold rather than reducing true disparity.",
+      "possible_sources": [
+        "Hardt, Price, Srebro - 'Equality of Opportunity in Supervised Learning' (NeurIPS 2016)",
+        "Johnson et al. - 'Disparities in mortality across race/ethnicity in the MIMIC-III database'"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Per-ethnicity AUROC preservation under AUPRC-selected anchor",
+      "content": "Even though AUROC is explicitly discouraged as the headline metric (due to severe imbalance), per-group AUROC still reveals whether the model's ranking of deaths vs survivors degrades unevenly across ethnicities. Compute AUROC per ethnicity and report the spread. A healthy model shows AUROC within ~0.05-0.10 of the overall AUROC for every group; an unhealthy model shows one or more groups collapsing toward 0.5, signalling that the weighted-BCE or sampling strategy has effectively discarded signal for that group. This is complementary to the recall probe: it separates 'can the model rank deaths at all in this group?' from 'does the frozen 0.5 threshold catch them?'",
+      "possible_sources": [
+        "Saito, Rehmsmeier - 'The Precision-Recall Plot Is More Informative than the ROC Plot' (PLOS ONE 2015)",
+        "MIMIC-III fairness audits in Chen et al. 'Latent Peril'"
+      ],
+      "confidence": 0.7
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "Predictive value parity (PPV/NPV) across ethnicities",
+      "content": "At the frozen 0.5 threshold, compute PPV (positive predictive value) and NPV per ethnicity. If PPV varies wildly across groups, the model is issuing over-/under-confident death predictions depending on ethnicity, even when it says 'death likely'. For mortality triage this matters because a low-PPV group generates more false alarms (alarm fatigue) while a low-NPV group has more missed deaths going undetected. Healthy signal: PPV and NPV within a small band across groups. Unhealthy: e.g. PPV for 'other' ethnicity at 0.05 while 'white' is at 0.35, indicating score-scale mismatch.",
+      "possible_sources": [
+        "Chouldechova - 'Fair prediction with disparate impact' (FAT* 2017)",
+        "Kleinberg, Mullainathan, Raghavan - 'Inherent Trade-Offs in the Fair Determination of Risk Scores' (ITS 2017)"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "probe_type": "calibration",
+      "probe_name": "Per-ethnicity calibration slope and intercept",
+      "content": "Fit a Platt / logistic recalibration of raw logits against observed death frequency within each ethnicity (on validation). Report slope and intercept per group. A well-calibrated model across groups has slopes close to 1.0 and intercepts close to 0.0 uniformly. Divergent slopes indicate the magnitude of the model's confidence has group-dependent meaning; divergent intercepts indicate an additive group bias in the predicted probability scale. This is distinct from the recall probe (which only looks at 0.5 threshold) and reveals whether the underlying score is interpretable the same way across groups, which is a precondition for any single threshold to be fair.",
+      "possible_sources": [
+        "Guo et al. 'On Calibration of Modern Neural Networks' (ICML 2017)",
+        "Pfohl et al. 'Equitable prediction in health' (NEJM AI)"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "fairness",
+      "probe_name": "False-negative cost asymmetry by ethnicity",
+      "content": "In ICU mortality, a false negative (predicted survive, actually dies) is a particularly harmful error. Compute per-ethnicity FN rate = 1 - TPR and the ratio of FN cost per ethnic group relative to its share of actual deaths (weighted FN cost share). A healthy signal is proportional FN cost shares (groups bear missed-death risk proportional to their size); an unhealthy signal is one ethnicity absorbing a disproportionate share of missed deaths beyond its prevalence, e.g. 'black' group accounts for 8% of positives but carries 30% of missed-death errors. This complements the raw TPR probe by normalizing for group size in the imbalance setting.",
+      "possible_sources": [
+        "Obermeyer et al. - 'Dissecting racial bias in an algorithm used to manage the health of populations' (Science 2019)",
+        "MIMIC-IV fairness audits (Johnson & Pollard, 2023)"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "probe_type": "data",
+      "probe_name": "Minority-group sample reliability and influence",
+      "content": "The 'asian' and 'other' ethnicity groups in MIMIC-III are typically much smaller than 'white'. Report per-group sample counts and effective training contribution after class-weighting. With tiny effective n, per-ethnicity recall estimates become noisy and gradient signal for that group is dominated by a handful of high-influence samples. A healthy signal is that small groups still carry enough weighted signal (via up-weighting / focal adjustment) that their TPR estimate on validation has a tight bootstrap CI (e.g. 95% CI width < 0.15). An unhealthy signal is either (a) minority group samples are effectively drowned out by class-weighted majority samples, or (b) recall estimates swing wildly across random seeds.",
+      "possible_sources": [
+        "Buolamwini & Gebru - 'Gender Shades' (FAT* 2018)",
+        "Feldman et al. 'Fighting biases with dynamic sampling' (NeurIPS 2024)"
+      ],
+      "confidence": 0.5
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Fixed-threshold score-distribution separation by ethnicity",
+      "content": "Inspect the distribution of raw predicted probabilities for the death class, stratified by ethnicity and label. At threshold 0.5, the model's decision boundary cuts through these distributions; if the distributions are shifted across groups (e.g. 'black' deaths have mean score 0.15 while 'white' deaths have mean 0.45), the same threshold inherently yields different recalls. Healthy signal: score distributions for the positive class overlap heavily across ethnicities, so a shared threshold is a fair operating point. Unhealthy signal: systematic separation of score distributions by ethnicity for positives, indicating a feature/embedding that encodes ethnicity-correlated signal unrelated to true mortality risk.",
+      "possible_sources": [
+        "Dwork et al. - 'Decoupled Classifiers for Fair Learning' (ITCS 2018)",
+        "Koh et al. - 'On the Pitfalls of Bias in Medical Imaging' (Nat. Med.)"
+      ],
+      "confidence": 0.7
+    },
+    {
+      "probe_type": "robustness",
+      "probe_name": "Cross-split fairness stability",
+      "content": "The equal-opportunity gap should not be a lucky artefact of one validation random seed. Hold the model fixed and resample (or refit on multiple train/val splits with the same hyperparameters) to compute a distribution of per-ethnicity TPR gaps. Healthy signal: narrow spread of the gap across splits (e.g. std < 0.03), indicating the fairness property is a stable property of the training procedure, not of data shuffling. Unhealthy signal: the gap swings wildly across splits (e.g. sometimes 0.05, sometimes 0.25), meaning the fix-loop is optimizing a noisy quantity. This guards against fixes that only look fair under one particular split.",
+      "possible_sources": [
+        "Santurkar et al. - 'Whose opinions do language models reflect?' (ICML 2023)",
+        "MIMIC benchmark stability studies, PhysioNet Challenges"
+      ],
+      "confidence": 0.5
+    },
+    {
+      "probe_type": "generalization",
+      "probe_name": "Feature representation gap via learned embedding parity",
+      "content": "If train.py produces learned representations (e.g. penultimate-layer embeddings before the BCE head), project them to 2-D (UMAP/t-SNE) or compute a simple linear ethnicity classifier on top of them. A representation that cleanly separates ethnicities indicates the model has learned ethnicity-correlated structure, which is a precondition for ethnicity-specific recall disparity. Healthy signal: linear ethnicity classifier accuracy near chance (1/5 for 5-way) on the embedding, indicating no demographic embedding; unhealthy signal: high ethnicity-classification accuracy, indicating the model's representations carry demographic information that likely leaks into mortality predictions.",
+      "possible_sources": [
+        "Zhao et al. - 'Men Also Like Shopping...' (EMNLP 2017) embedding-debias",
+        "Ojala et al. - 'Fair representations in ICU prediction' (ML4H 2023)"
+      ],
+      "confidence": 0.55
+    },
+    {
+      "probe_type": "efficiency",
+      "probe_name": "Anchor preservation: global AUPRC + weighted-BCE loss",
+      "content": "Because AUROC is misleading under severe imbalance, the anchor (weighted-BCE loss on training + validation AUPRC selection) is the legitimate utility target. Any fairness fix must NOT collapse the anchor: report the final weighted-BCE training loss and validation AUPRC alongside the per-group recall gap. Healthy signal: validation AUPRC stays within a small margin (e.g. +0 / -5%) of the baseline's best-AUPRC checkpoint while the fairness gap shrinks; weighted-BCE loss does not inflate. Unhealthy signal: AUPRC collapses toward the base-rate prior or weighted loss balloons, indicating the 'fix' gamed the fairness probe by discarding the model's ability to discriminate at all (which the anchor guard is supposed to catch).",
+      "possible_sources": [
+        "AutoProbe anchor-guard mechanism (project-internal)",
+        "Saito & Rehmsmeier 2015; Davis & Goadrich 2006 'The Relationship Between Precision-Recall and ROC Curves'"
+      ],
+      "confidence": 0.85
+    }
+  ]
+}

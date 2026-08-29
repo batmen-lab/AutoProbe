@@ -1,0 +1,26 @@
+Plan title: Add cosine LR schedule to stabilize tail
+
+Applied edit:
+- File: lightningmodules/classification.py
+- Function: configure_optimizers()
+  - Before: optimizer = AdamW(...); return optimizer
+  - After:  optimizer = AdamW(...) unchanged; added
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15, eta_min=1e-6);
+    return {"optimizer": optimizer, "lr_scheduler": scheduler}
+
+Rationale: Latest trajectory (probe_result_7) is converged-but-noisy in the
+tail: epochs 11-14 sit at 0.0279/0.0276/0.0332/0.0273 but epoch 10 spiked to
+0.0524, and that variance pushes tail_mean (last-5 average) to 0.0337, above
+the 0.03 standard threshold (FAIL). Decaying the constant 5e-5 LR toward
+eta_min=1e-6 across the 15-epoch run (T_max=15 = Hparams.max_epochs) shrinks
+late-epoch weight updates, damping per-epoch oscillation so tail epochs settle
+near their 0.027 floor and the last-5 mean drops below 0.03. Fresh angle (LR
+scheduling) untouched by change_logs 2-7 (augmentation, sampling, weight decay,
+dropout, loss penalty, epoch count).
+
+Discrepancy: None. Plan applied exactly as specified. torch is already imported
+at module top, so no new import was needed.
+
+Integration integrity: train.py record(...) (via ProbeCallback) and
+conclude(0.03, 0.07) call sites were not touched; both threshold args still
+passed.

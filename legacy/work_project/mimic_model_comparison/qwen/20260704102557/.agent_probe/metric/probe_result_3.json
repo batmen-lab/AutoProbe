@@ -1,0 +1,103 @@
+{
+  "metric_name": "max_per_group_recall_gap_at_fixed_0p5",
+  "standard_threshold": 0.1,
+  "acceptable_threshold": 0.18,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.0
+    },
+    {
+      "epoch": 2,
+      "value": 0.0
+    },
+    {
+      "epoch": 3,
+      "value": 0.0
+    },
+    {
+      "epoch": 4,
+      "value": 0.0
+    },
+    {
+      "epoch": 5,
+      "value": 0.0
+    },
+    {
+      "epoch": 6,
+      "value": 0.0
+    },
+    {
+      "epoch": 7,
+      "value": 0.0
+    },
+    {
+      "epoch": 8,
+      "value": 0.0
+    },
+    {
+      "epoch": 9,
+      "value": 0.0
+    },
+    {
+      "epoch": 10,
+      "value": 0.0
+    },
+    {
+      "epoch": 11,
+      "value": 0.0
+    },
+    {
+      "epoch": 12,
+      "value": 0.0
+    },
+    {
+      "epoch": 13,
+      "value": 0.0
+    },
+    {
+      "epoch": 14,
+      "value": 0.0
+    },
+    {
+      "epoch": 15,
+      "value": 0.0
+    },
+    {
+      "epoch": 16,
+      "value": 0.0
+    },
+    {
+      "epoch": 17,
+      "value": 0.0
+    },
+    {
+      "epoch": 18,
+      "value": 0.0024038461538461453
+    },
+    {
+      "epoch": 19,
+      "value": 0.0024038461538461453
+    },
+    {
+      "epoch": 20,
+      "value": 0.0024038461538461453
+    }
+  ],
+  "min": 0.0,
+  "max": 0.0024038461538461453,
+  "mean": 0.0003605769230769218,
+  "std": 0.0008583447630460126,
+  "first_value": 0.0,
+  "final_value": 0.0024038461538461453,
+  "delta": 0.0024038461538461453,
+  "tail_mean": 0.0014423076923076872,
+  "status": "PASS",
+  "acceptable_met": true,
+  "conclusion": "Max per-group recall gap at threshold 0.5 went from 0.0000 to 0.0024 over 20 epochs, first reaching the 0.1 standard threshold at epoch 1; tail_mean=0.0014 -> PASS (acceptable_met=True).",
+  "original_train_metric": {
+    "val_loss": 1.6255629933797395,
+    "val_auprc": 0.3527352716525533
+  }
+}

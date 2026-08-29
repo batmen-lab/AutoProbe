@@ -1,0 +1,23 @@
+{
+  "model": "glm",
+  "round": "2",
+  "ckpt": "ethnic_auroc/ckpt_snapshots/glm_round2.pt",
+  "input_dim": 10000,
+  "use_eth": false,
+  "ppr_quantile": 0.8,
+  "shared_threshold": 0.5561630493805636,
+  "overall_auroc": 0.8449202422588075,
+  "overall_auprc": 0.3880433312600992,
+  "overall_recall": 0.6450567260940032,
+  "recall_white": 0.6514423076923077,
+  "recall_minority_pool": 0.6129032258064516,
+  "gap_white_minority": 0.038539081885856086,
+  "eod_maxmin": 0.14574898785425106,
+  "per_group_recall": {
+    "white": 0.6514423076923077,
+    "black": 0.6326530612244898,
+    "hispanic": 0.5384615384615384,
+    "asian": 0.6842105263157895,
+    "other": 0.6333333333333333
+  }
+}

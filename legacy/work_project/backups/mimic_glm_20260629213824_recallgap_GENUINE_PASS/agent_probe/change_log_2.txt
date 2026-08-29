@@ -1,0 +1,28 @@
+Change log #2
+==============
+
+Plan title: Drop ethnicity one-hot from features
+
+Applied edit:
+  File: train.py
+  Symbol: main() — train_ds / val_ds construction
+  Before:
+    train_ds = MIMICMortalityDataset(data_path, 'train')
+    val_ds = MIMICMortalityDataset(data_path, 'val')
+  After:
+    train_ds = MIMICMortalityDataset(data_path, 'train', use_eth=False)
+    val_ds = MIMICMortalityDataset(data_path, 'val', use_eth=False)
+
+Notes / discrepancies:
+- The plan's target symbol MIMICMortalityDataset.__init__ already supports the
+  use_eth flag (dataset.py:25), and __getitem__ (dataset.py:36-45) returns only
+  the TF-IDF vector when use_eth=False. No changes to dataset.py were needed.
+- The test dataset construction at train.py:280 (MIMICMortalityDataset(data_path,
+  'test')) was intentionally left unmodified per the plan's scope (plan only
+  names the train and val calls). Note: the test_ds is used only for the final
+  evaluate() call, not for probe.record() — the probe records on val_loader
+  both during training (train.py:266) and at the conclude step (train.py:278).
+  So the probe metric trajectory is governed entirely by val_ds, which now has
+  use_eth=False as specified.
+- record(...) at train.py:266 and train.py:278 unmodified; conclude(0.08, 0.15)
+  at train.py:287 unmodified — both threshold values passed through.

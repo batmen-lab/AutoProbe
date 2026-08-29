@@ -1,0 +1,10 @@
+{
+  "metric_name": "auprc",
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.2363556502519573
+    }
+  ]
+}

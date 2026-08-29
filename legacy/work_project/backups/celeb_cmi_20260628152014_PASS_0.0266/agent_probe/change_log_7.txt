@@ -1,0 +1,22 @@
+Plan title: Extend training schedule to converge tail
+
+Applied edit:
+- File: hparams.py
+- Symbol: Hparams.max_epochs
+  - Before: max_epochs: int = 5
+  - After:  max_epochs: int = 15
+- Unchanged (per plan): limit_train_batches=32, limit_val_batches=32,
+  val_check_interval=1.0.
+
+Rationale: conclude() computes tail_mean over the last 5 epochs, but a 5-epoch
+run makes the entire (noisy, warm-up-dominated) series the tail. Extending to
+15 epochs lets tail_mean average epochs 10-14 (the converged low-leakage
+regime) instead of the early high-leakage epochs (epoch 0 ~0.12). EarlyStopping
+patience=10 (monitor val/F1, mode max) will not prematurely cut a 15-epoch run.
+Orthogonal to all prior loss/model/data changes (logs 2-6).
+
+Discrepancy: None. Plan applied exactly as specified.
+
+Integration integrity: train.py record(...) (via ProbeCallback) and
+conclude(0.03, 0.07) call sites were not touched; both threshold args still
+passed.

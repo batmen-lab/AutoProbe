@@ -1,0 +1,19 @@
+Plan title: Add weight decay via AdamW optimizer
+
+Applied edit:
+- File: lightningmodules/classification.py
+- Import: `from torch.optim import Adam` -> `from torch.optim import AdamW`
+- Function: configure_optimizers()
+  - Before: optimizer = Adam(self.net.parameters(), lr=self.lr)
+  - After:  optimizer = AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-2)
+
+Rationale: The previous Adam optimizer applied zero weight decay, letting the ViT
+fit the Male x target co-occurrence shortcut with large, sharply-tuned weights.
+Decoupled L2 (AdamW, weight_decay=1e-2, standard ViT fine-tuning value) pulls
+weights toward zero, discouraging memorization of the spurious gender->attribute
+correlation and reducing residual I(pred_target; Male | true_target).
+
+Discrepancy: None. Plan applied exactly as specified.
+
+Integration integrity: train.py record(...) and conclude(0.03, 0.07) call sites
+were not touched and remain intact; both threshold args still passed.

@@ -1,0 +1,5 @@
+Iteration 1 — potential_improvement_1
+
+Change: Raised MAX_FEATURE_COLUMNS from 10 to 120 so the feature selector retains EXT_SOURCE_1/2/3 (and the rest of the numeric application columns) instead of truncating after the first 10 columns.
+
+Why: EXT_SOURCE_* are the strongest predictors of default on this dataset; the first-10 cap currently drops them entirely, which is the dominant reason AUPRC is degenerate. Including them should move AUPRC off the random-baseline regime.

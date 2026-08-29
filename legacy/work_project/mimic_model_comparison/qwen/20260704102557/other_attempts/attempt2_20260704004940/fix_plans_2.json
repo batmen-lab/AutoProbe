@@ -1,0 +1,32 @@
+{
+  "fix_plans": [
+    {
+      "title": "Per-group fairness sample reweighting",
+      "content": "In train.py, compute per-positive-sample inverse-frequency weights across the 5 ethnicity groups so that each group's positive cohort contributes equally to the BCEWithLogitsLoss gradient. Concretely, after loading `train_ds`, compute `eth_group = train_ds.eth.argmax(dim=1).numpy()` and `pos_mask = train_ds.labels.numpy() == 1`. For each group g, let n_g = (pos_mask & (eth_group == g)).sum(). Build a per-sample weight array `w = np.ones(len(train_ds))`; for positives in group g, set `w[pos_mask & (eth_group == g)] = 1.0 / max(n_g, 1)`. Normalize `w` so its positive sub-array sums to `n_pos` (preserves the effective overall positive scale relative to pos_weight). Convert to a torch.FloatTensor and pass it through the DataLoader by having `MIMICMortalityDataset.__getitem__` (in dataset.py) return `\"weight\": w[idx]` as an additional key \u2014 i.e. attach the precomputed array to the dataset instance and index it in `__getitem__`. In `train_one_epoch` (train.py), read `batch['weight']`, move it to device, and call `nn.BCEWithLogitsLoss(reduction='none')` followed by `(loss * batch['weight']).mean()` (still multiplied by the existing scalar pos_weight). Rationale: the recall gap is driven by small groups (asian/hispanic/other) contributing very few positives per batch, so their gradients are noisy and their TPR diverges from white/black; equalising positive influence across groups shrinks the max-min TPR spread without changing the model or the 0.5 threshold.",
+      "target_files": [
+        "train.py",
+        "dataset.py"
+      ],
+      "confidence": 0.6
+    },
+    {
+      "title": "Cap pos_weight and add LR cosine decay",
+      "content": "In train.py, the current class-weight `pos_weight = n_neg / n_pos` is ~11x on this ~9% prevalence dataset, which pushes logits uniformly upward and magnifies any per-group feature correlation into wildly different TPRs at the frozen 0.5 threshold. Replace the pos_weight construction (around lines 309\u2013311) with `pos_weight = torch.tensor(min(n_neg / n_pos, 3.0), dtype=torch.float32, device=device)` \u2014 i.e. hard-cap the imbalance ratio at 3.0. Simultaneously replace the optimizer with `torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)` (unchanged) and wrap it in a `torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-5)` scheduler, calling `scheduler.step()` once per epoch after `train_one_epoch` returns (right after the existing `train_loss = train_one_epoch(...)` line, before `val_metrics = evaluate(...)`). The gentler loss slope combined with cosine decay keeps the model from over-committing to the majority group's feature distribution, pulling the per-group TPRs closer together and reducing the max-min gap toward the 0.05 target.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.5
+    },
+    {
+      "title": "Stronger L2 + remove ethnicity shortcut feature",
+      "content": "Two coupled edits. (1) In train.py, raise `WEIGHT_DECAY` from `1e-4` to `5e-3` (line 59) \u2014 an ~50x stronger L2 penalty that shrinks the logistic-regression coefficients toward zero, reducing the model's ability to amplify TF-IDF directions that are spuriously correlated with specific ethnicities. (2) In dataset.py's `__getitem__`, change the `use_eth` branch so the one-hot ethnicity encoding is no longer concatenated onto the feature vector: replace `features = torch.cat([tfidf_vec, self.eth[idx]])` with `features = tfidf_vec` (i.e. always use the TF-IDF-only branch). Keep the `eth` tensor on the dataset because `prober.py` reads `loader.dataset.eth` for the per-group audit \u2014 that read path stays intact. Rationale: when ethnicity is an input feature the linear head can learn group-specific coefficient projections that directly produce different TPRs at threshold 0.5; removing it forces the model to rely solely on clinical content, while stronger weight_decay regularises any remaining group-correlated TF-IDF directions. Both edits are coherent (they serve the same goal of decorrelating the linear decision from the eth label) and together are expected to cut the recall gap markedly.",
+      "target_files": [
+        "train.py",
+        "dataset.py"
+      ],
+      "confidence": 0.75
+    }
+  ],
+  "chosen_index": 3,
+  "round": 2
+}

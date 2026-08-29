@@ -1,0 +1,919 @@
+{
+  "stage": "vs round-1 baseline",
+  "n_val": 8000,
+  "cmi_current": 0.0213,
+  "cmi_per_target": {
+    "Arched_Eyebrows": 0.0275,
+    "Attractive": 0.0067,
+    "Heavy_Makeup": 0.0589,
+    "No_Beard": 0.0085,
+    "Wavy_Hair": 0.0011,
+    "Wearing_Lipstick": 0.0254
+  },
+  "n_counter_stereotype": 1292,
+  "n_other_correction": 556,
+  "n_other_flip": 3215,
+  "n_shown": 100,
+  "picks": [
+    {
+      "fname": "169922.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.902,
+      "p_cur": 0.088,
+      "improve": 0.814
+    },
+    {
+      "fname": "170644.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.923,
+      "p_cur": 0.111,
+      "improve": 0.812
+    },
+    {
+      "fname": "168796.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.102,
+      "p_cur": 0.898,
+      "improve": 0.796
+    },
+    {
+      "fname": "169893.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.861,
+      "p_cur": 0.073,
+      "improve": 0.788
+    },
+    {
+      "fname": "170238.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.952,
+      "p_cur": 0.164,
+      "improve": 0.788
+    },
+    {
+      "fname": "163931.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.93,
+      "p_cur": 0.143,
+      "improve": 0.787
+    },
+    {
+      "fname": "163057.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.897,
+      "p_cur": 0.128,
+      "improve": 0.769
+    },
+    {
+      "fname": "167027.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.195,
+      "p_cur": 0.95,
+      "improve": 0.755
+    },
+    {
+      "fname": "169275.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.119,
+      "p_cur": 0.863,
+      "improve": 0.744
+    },
+    {
+      "fname": "163567.jpg",
+      "attr": "Wavy_Hair",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.135,
+      "p_cur": 0.875,
+      "improve": 0.741
+    },
+    {
+      "fname": "163740.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.036,
+      "p_cur": 0.773,
+      "improve": 0.737
+    },
+    {
+      "fname": "167511.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.922,
+      "p_cur": 0.188,
+      "improve": 0.735
+    },
+    {
+      "fname": "168089.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.904,
+      "p_cur": 0.168,
+      "improve": 0.735
+    },
+    {
+      "fname": "167791.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.078,
+      "p_cur": 0.801,
+      "improve": 0.723
+    },
+    {
+      "fname": "166862.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.83,
+      "p_cur": 0.111,
+      "improve": 0.719
+    },
+    {
+      "fname": "167322.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.91,
+      "p_cur": 0.192,
+      "improve": 0.719
+    },
+    {
+      "fname": "167872.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.829,
+      "p_cur": 0.11,
+      "improve": 0.719
+    },
+    {
+      "fname": "165436.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.903,
+      "p_cur": 0.187,
+      "improve": 0.716
+    },
+    {
+      "fname": "163439.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.856,
+      "p_cur": 0.141,
+      "improve": 0.715
+    },
+    {
+      "fname": "170473.jpg",
+      "attr": "No_Beard",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.22,
+      "p_cur": 0.926,
+      "improve": 0.706
+    },
+    {
+      "fname": "170358.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.818,
+      "p_cur": 0.114,
+      "improve": 0.705
+    },
+    {
+      "fname": "167507.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.053,
+      "p_cur": 0.756,
+      "improve": 0.702
+    },
+    {
+      "fname": "168743.jpg",
+      "attr": "Wavy_Hair",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.065,
+      "p_cur": 0.765,
+      "improve": 0.7
+    },
+    {
+      "fname": "164759.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.88,
+      "p_cur": 0.182,
+      "improve": 0.698
+    },
+    {
+      "fname": "167884.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.813,
+      "p_cur": 0.116,
+      "improve": 0.697
+    },
+    {
+      "fname": "167120.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.096,
+      "p_cur": 0.788,
+      "improve": 0.692
+    },
+    {
+      "fname": "164076.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.988,
+      "p_cur": 0.299,
+      "improve": 0.69
+    },
+    {
+      "fname": "169412.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.879,
+      "p_cur": 0.189,
+      "improve": 0.69
+    },
+    {
+      "fname": "167777.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.798,
+      "p_cur": 0.111,
+      "improve": 0.687
+    },
+    {
+      "fname": "164330.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.897,
+      "p_cur": 0.21,
+      "improve": 0.687
+    },
+    {
+      "fname": "167119.jpg",
+      "attr": "Wavy_Hair",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.138,
+      "p_cur": 0.824,
+      "improve": 0.686
+    },
+    {
+      "fname": "169152.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.929,
+      "p_cur": 0.243,
+      "improve": 0.686
+    },
+    {
+      "fname": "164480.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.851,
+      "p_cur": 0.168,
+      "improve": 0.683
+    },
+    {
+      "fname": "166047.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.729,
+      "p_cur": 0.049,
+      "improve": 0.681
+    },
+    {
+      "fname": "166814.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.781,
+      "p_cur": 0.101,
+      "improve": 0.681
+    },
+    {
+      "fname": "165499.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.83,
+      "p_cur": 0.15,
+      "improve": 0.68
+    },
+    {
+      "fname": "168679.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.9,
+      "p_cur": 0.22,
+      "improve": 0.68
+    },
+    {
+      "fname": "169056.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.801,
+      "p_cur": 0.122,
+      "improve": 0.679
+    },
+    {
+      "fname": "164395.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.934,
+      "p_cur": 0.255,
+      "improve": 0.679
+    },
+    {
+      "fname": "170099.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.838,
+      "p_cur": 0.159,
+      "improve": 0.679
+    },
+    {
+      "fname": "164264.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.948,
+      "p_cur": 0.272,
+      "improve": 0.676
+    },
+    {
+      "fname": "167526.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.758,
+      "p_cur": 0.083,
+      "improve": 0.675
+    },
+    {
+      "fname": "167687.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.79,
+      "p_cur": 0.115,
+      "improve": 0.675
+    },
+    {
+      "fname": "168939.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.142,
+      "p_cur": 0.816,
+      "improve": 0.674
+    },
+    {
+      "fname": "164326.jpg",
+      "attr": "Wavy_Hair",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.241,
+      "p_cur": 0.913,
+      "improve": 0.673
+    },
+    {
+      "fname": "170341.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.901,
+      "p_cur": 0.228,
+      "improve": 0.673
+    },
+    {
+      "fname": "166320.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.753,
+      "p_cur": 0.083,
+      "improve": 0.67
+    },
+    {
+      "fname": "170660.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.861,
+      "p_cur": 0.193,
+      "improve": 0.668
+    },
+    {
+      "fname": "168070.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.104,
+      "p_cur": 0.769,
+      "improve": 0.665
+    },
+    {
+      "fname": "167618.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.929,
+      "p_cur": 0.266,
+      "improve": 0.663
+    },
+    {
+      "fname": "164836.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.78,
+      "p_cur": 0.12,
+      "improve": 0.66
+    },
+    {
+      "fname": "167460.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.899,
+      "p_cur": 0.239,
+      "improve": 0.66
+    },
+    {
+      "fname": "164655.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.89,
+      "p_cur": 0.231,
+      "improve": 0.659
+    },
+    {
+      "fname": "167828.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.807,
+      "p_cur": 0.148,
+      "improve": 0.659
+    },
+    {
+      "fname": "163314.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.814,
+      "p_cur": 0.156,
+      "improve": 0.658
+    },
+    {
+      "fname": "163255.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.843,
+      "p_cur": 0.187,
+      "improve": 0.656
+    },
+    {
+      "fname": "165851.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.945,
+      "p_cur": 0.289,
+      "improve": 0.656
+    },
+    {
+      "fname": "164199.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.927,
+      "p_cur": 0.273,
+      "improve": 0.654
+    },
+    {
+      "fname": "163887.jpg",
+      "attr": "Wavy_Hair",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.208,
+      "p_cur": 0.86,
+      "improve": 0.652
+    },
+    {
+      "fname": "166562.jpg",
+      "attr": "Wavy_Hair",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.106,
+      "p_cur": 0.75,
+      "improve": 0.644
+    },
+    {
+      "fname": "168167.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.063,
+      "p_cur": 0.702,
+      "improve": 0.639
+    },
+    {
+      "fname": "169016.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.207,
+      "p_cur": 0.844,
+      "improve": 0.637
+    },
+    {
+      "fname": "166404.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.848,
+      "p_cur": 0.213,
+      "improve": 0.635
+    },
+    {
+      "fname": "170296.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.797,
+      "p_cur": 0.162,
+      "improve": 0.635
+    },
+    {
+      "fname": "169386.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.892,
+      "p_cur": 0.258,
+      "improve": 0.634
+    },
+    {
+      "fname": "164453.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.962,
+      "p_cur": 0.329,
+      "improve": 0.633
+    },
+    {
+      "fname": "164340.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.725,
+      "p_cur": 0.094,
+      "improve": 0.631
+    },
+    {
+      "fname": "166943.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.841,
+      "p_cur": 0.211,
+      "improve": 0.63
+    },
+    {
+      "fname": "170610.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.902,
+      "p_cur": 0.274,
+      "improve": 0.628
+    },
+    {
+      "fname": "164541.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.133,
+      "p_cur": 0.761,
+      "improve": 0.627
+    },
+    {
+      "fname": "168924.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.019,
+      "p_cur": 0.645,
+      "improve": 0.627
+    },
+    {
+      "fname": "165679.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.954,
+      "p_cur": 0.328,
+      "improve": 0.626
+    },
+    {
+      "fname": "165742.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.699,
+      "p_cur": 0.073,
+      "improve": 0.626
+    },
+    {
+      "fname": "163364.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.959,
+      "p_cur": 0.335,
+      "improve": 0.625
+    },
+    {
+      "fname": "168970.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.221,
+      "p_cur": 0.844,
+      "improve": 0.623
+    },
+    {
+      "fname": "163366.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.723,
+      "p_cur": 0.1,
+      "improve": 0.623
+    },
+    {
+      "fname": "170120.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.901,
+      "p_cur": 0.281,
+      "improve": 0.62
+    },
+    {
+      "fname": "164202.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.936,
+      "p_cur": 0.317,
+      "improve": 0.619
+    },
+    {
+      "fname": "169849.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.889,
+      "p_cur": 0.27,
+      "improve": 0.619
+    },
+    {
+      "fname": "170060.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.887,
+      "p_cur": 0.268,
+      "improve": 0.619
+    },
+    {
+      "fname": "170508.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.892,
+      "p_cur": 0.274,
+      "improve": 0.618
+    },
+    {
+      "fname": "167184.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.9,
+      "p_cur": 0.283,
+      "improve": 0.616
+    },
+    {
+      "fname": "170036.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.697,
+      "p_cur": 0.083,
+      "improve": 0.614
+    },
+    {
+      "fname": "168075.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.886,
+      "p_cur": 0.276,
+      "improve": 0.61
+    },
+    {
+      "fname": "167049.jpg",
+      "attr": "Attractive",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.791,
+      "p_cur": 0.182,
+      "improve": 0.609
+    },
+    {
+      "fname": "167707.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.92,
+      "p_cur": 0.311,
+      "improve": 0.609
+    },
+    {
+      "fname": "167143.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.191,
+      "p_cur": 0.799,
+      "improve": 0.608
+    },
+    {
+      "fname": "168224.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.704,
+      "p_cur": 0.096,
+      "improve": 0.608
+    },
+    {
+      "fname": "169441.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.922,
+      "p_cur": 0.314,
+      "improve": 0.608
+    },
+    {
+      "fname": "169009.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.85,
+      "p_cur": 0.244,
+      "improve": 0.606
+    },
+    {
+      "fname": "169647.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.104,
+      "p_cur": 0.709,
+      "improve": 0.605
+    },
+    {
+      "fname": "164142.jpg",
+      "attr": "Attractive",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.812,
+      "p_cur": 0.207,
+      "improve": 0.605
+    },
+    {
+      "fname": "170516.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.888,
+      "p_cur": 0.283,
+      "improve": 0.605
+    },
+    {
+      "fname": "166229.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.092,
+      "p_cur": 0.697,
+      "improve": 0.605
+    },
+    {
+      "fname": "166952.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.747,
+      "p_cur": 0.143,
+      "improve": 0.605
+    },
+    {
+      "fname": "163342.jpg",
+      "attr": "Arched_Eyebrows",
+      "male": 1,
+      "true": 1,
+      "p_base": 0.066,
+      "p_cur": 0.67,
+      "improve": 0.604
+    },
+    {
+      "fname": "163485.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.846,
+      "p_cur": 0.243,
+      "improve": 0.603
+    },
+    {
+      "fname": "163478.jpg",
+      "attr": "Heavy_Makeup",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.885,
+      "p_cur": 0.283,
+      "improve": 0.602
+    },
+    {
+      "fname": "167638.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.865,
+      "p_cur": 0.264,
+      "improve": 0.602
+    },
+    {
+      "fname": "169232.jpg",
+      "attr": "Wearing_Lipstick",
+      "male": 0,
+      "true": 0,
+      "p_base": 0.769,
+      "p_cur": 0.167,
+      "improve": 0.602
+    }
+  ]
+}

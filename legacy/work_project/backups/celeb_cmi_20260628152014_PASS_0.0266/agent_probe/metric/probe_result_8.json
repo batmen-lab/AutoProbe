@@ -1,0 +1,79 @@
+{
+  "metric_name": "mean_normalized_conditional_MI",
+  "standard_threshold": 0.03,
+  "acceptable_threshold": 0.07,
+  "direction": "lower_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.07597768851931704
+    },
+    {
+      "epoch": 1,
+      "value": 0.0661217486665761
+    },
+    {
+      "epoch": 2,
+      "value": 0.05164719135334019
+    },
+    {
+      "epoch": 3,
+      "value": 0.055235882372044715
+    },
+    {
+      "epoch": 4,
+      "value": 0.06402548603066661
+    },
+    {
+      "epoch": 5,
+      "value": 0.05019011029336128
+    },
+    {
+      "epoch": 6,
+      "value": 0.04844502300733857
+    },
+    {
+      "epoch": 7,
+      "value": 0.03553711431764442
+    },
+    {
+      "epoch": 8,
+      "value": 0.03974473577792122
+    },
+    {
+      "epoch": 9,
+      "value": 0.0466714444011476
+    },
+    {
+      "epoch": 10,
+      "value": 0.0481593406323959
+    },
+    {
+      "epoch": 11,
+      "value": 0.0375473888181187
+    },
+    {
+      "epoch": 12,
+      "value": 0.043805568585969186
+    },
+    {
+      "epoch": 13,
+      "value": 0.039947039325295336
+    },
+    {
+      "epoch": 14,
+      "value": 0.04102086148497702
+    }
+  ],
+  "min": 0.03553711431764442,
+  "max": 0.07597768851931704,
+  "mean": 0.049605108239074255,
+  "std": 0.011152417717145426,
+  "first_value": 0.07597768851931704,
+  "final_value": 0.04102086148497702,
+  "delta": -0.03495682703434001,
+  "tail_mean": 0.04209603976935123,
+  "status": "FAIL",
+  "acceptable_met": true,
+  "conclusion": "mean_normalized_conditional_MI went from 0.0760 to 0.0410 (tail mean 0.0421), never crossing the 0.03 standard threshold; status FAIL."
+}

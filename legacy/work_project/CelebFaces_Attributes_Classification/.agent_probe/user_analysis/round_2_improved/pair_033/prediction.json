@@ -1,0 +1,16 @@
+{
+  "attr": "Wavy_Hair",
+  "sex": "Male",
+  "true_label": 1,
+  "image": {
+    "prob": 0.942,
+    "pred": 1,
+    "correct": true
+  },
+  "flipped_image_hair_masked": {
+    "prob": 0.413,
+    "pred": 0,
+    "correct": false
+  },
+  "conclusion": "CORRECT on the original face; but FLIPS to wrong once the hair/gender cue is masked (still leans on the cue)"
+}

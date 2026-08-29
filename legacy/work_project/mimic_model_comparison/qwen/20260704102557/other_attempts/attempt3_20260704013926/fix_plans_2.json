@@ -1,0 +1,32 @@
+{
+  "fix_plans": [
+    {
+      "title": "Drop ethnicity as a direct input feature",
+      "content": "The current train.py instantiates MIMICMortalityDataset(data_path, 'train') and MIMICMortalityDataset(data_path, 'val') at lines 300-301 using the constructor's default use_eth=True. That flag (dataset.py __getitem__, lines 41-44) concatenates the 5-dim one-hot ethnicity vector onto the TF-IDF features, giving the linear head a direct channel to learn group-specific offsets on the logits, which is exactly what drives the per-ethnicity recall divergence at the prober's frozen THRESH=0.5. Change the three dataset construction calls in main() (train/val at lines 300-301 and the test set at line 383) to pass use_eth=False: e.g. `train_ds = MIMICMortalityDataset(data_path, 'train', use_eth=False)`. input_dim at line 317 is derived from train_ds[0]['features'].shape[0] so it will auto-shrink by 5 and no other shape changes are needed. Why this helps: with no direct ethnicity channel, the model can only pick up any residual correlation through TF-IDF content, which is far weaker; per-group TPR@0.5 therefore collapses toward a common value driven by the shared calibration of the positive class, and the prober's max-min gap drops sharply. The class-weighted BCE still corrects for overall prevalence, so overall AUPRC (the anchor) is preserved.",
+      "target_files": [
+        "train.py"
+      ],
+      "confidence": 0.82
+    },
+    {
+      "title": "Replace linear model with adversarial debiasing head",
+      "content": "Replace LogisticRegression in train.py (lines 89-97) with a small 2-layer MLP that simultaneously predicts mortality and an adversary that predicts ethnicity from the shared hidden representation, using a gradient-reversal layer so the main loss actively removes ethnicity information. Concretely: add a hidden Linear(input_dim, 64) with ReLU, a scalar prediction head Linear(64, 1), an ethnicity head Linear(64, 5), and a GRL module whose forward multiplies inputs by -alpha (alpha=1.0 forward, but implemented via a custom autorch.autograd.Function that flips the sign in backward). In train_one_epoch (lines 111-132) compute loss = BCEWithLogitsLoss(pred_logit, label, pos_weight=...) - 1.0 * CrossEntropyLoss(eth_pred, eth_target), where eth_target is the argmax of batch['eth'] (read from the dataset by extending __getitem__ to also return the raw eth one-hot, OR read via loader.dataset.eth[idx]). Keep the prober and user_analyze untouched \u2014 they only use the final logits. Why this helps: the GRL forces the 64-dim representation to carry mortality-discriminative signal while being invariant to ethnicity, so per-group calibrated probabilities at THRESH=0.5 converge, shrinking the max-min TPR gap recorded by the prober. Use lr=1e-3 AdamW, weight_decay=1e-4 (unchanged), adversarial lambda=1.0. Save best model on val AUPRC as before.",
+      "target_files": [
+        "train.py",
+        "dataset.py"
+      ],
+      "confidence": 0.42
+    },
+    {
+      "title": "Apply per-(ethnicity, label) balanced sample weights",
+      "content": "Current train.py uses a single scalar pos_weight = n_neg / n_pos (lines 311-313) for BCEWithLogitsLoss, which corrects overall prevalence but ignores that small ethnicity groups (asian, hispanic, other) contribute very few positives \u2014 letting the majority (white) dominate gradient updates and pushing per-group TPR@0.5 apart. Replace the single scalar with a per-sample weight tensor: before the training loop compute, for each of the 5 ethnicity groups g and each label y in {0,1}, the cell count N_gy; then build a weight vector w[i] = N_total / (5 * 2 * N_{g(i),y(i)}) (the classic balanced-weighting formula, generalised to the 2-D (ethnicity, label) cell). Apply it by multiplying the unreduced BCE per-sample: in train_one_epoch (lines 111-132) replace `criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)` with `criterion = nn.BCEWithLogitsLoss(reduction='none')`, then `loss = (criterion(logits, labels) * batch_weights).mean()`. Retrieve per-sample ethnicity from loader.dataset.eth[idx] by extending __getitem__ to also return the argmax group id (or index the tensor directly via the batch's position in the dataloader \u2014 simplest is to have the dataset return a third field `eth_group`: int). Why this helps: equalising the effective gradient contribution across all 10 (ethnicity x label) cells forces the model to fit each group's positives with equal intensity, which directly reduces the per-group TPR divergence measured by the prober at THRESH=0.5. Keep batch_size=256, lr=1e-3, weight_decay=1e-4, checkpoint still selected on val AUPRC.",
+      "target_files": [
+        "train.py",
+        "dataset.py"
+      ],
+      "confidence": 0.48
+    }
+  ],
+  "chosen_index": 1,
+  "round": 2
+}

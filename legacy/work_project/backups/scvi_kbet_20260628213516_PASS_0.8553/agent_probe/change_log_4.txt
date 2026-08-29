@@ -1,0 +1,20 @@
+Plan: Deepen and widen the scVI encoder
+
+Edits applied (file: train.py):
+- build_parser(): --n-latent default 10 -> 20
+- build_parser(): --n-hidden default 128 -> 256
+- build_parser(): added new argument parser.add_argument("--n-layers", type=int, default=2)
+- main(), scvi.model.SCVI(...) constructor: added n_layers=args.n_layers
+
+Rationale: probe_result_3 tail mean 0.594 (FAIL, below 0.75 standard). The current
+single-layer, 10-dim, 128-hidden VAE is the smallest standard scVI config and plateaus
+on kBET acceptance. A two-layer encoder/decoder with 20-dim latent and 256 hidden units
+gives the model capacity to disentangle shared biological structure from batch-specific
+nuisance variation (which scVI conditions out via the batch covariate), aiming for more
+batch-homogeneous latent neighbourhoods and higher kBET acceptance.
+
+Discrepancy: none. Pure architecture-capacity change, exactly as specified.
+
+Integration check: record(int(trainer.current_epoch), vae, adata) and conclude(0.75, 0.55)
+call sites in train.py remain present and unmodified; both threshold values still passed
+to conclude. record() args still resolve to existing variables with correct types.

@@ -1,0 +1,30 @@
+Plan title: Group-balance Male via WeightedRandomSampler
+
+Applied edit:
+- File: datamodules/celebadatamodule.py
+- Import: added WeightedRandomSampler to torch.utils.data import; added
+  `from utils.constant import ATTRIBUTES`.
+- Function: train_dataloader()
+  - Before: DataLoader(self.train, ..., shuffle=True)
+  - After: dropped shuffle=True (mutually exclusive with sampler). Built a
+    per-sample group key from self.train.attr: group =
+    (attr[:, male_idx] << 6) | OR over the six probed target columns
+    (Heavy_Makeup, Wearing_Lipstick, Attractive, Wavy_Hair, No_Beard,
+    Arched_Eyebrows) each shifted into its own bit 0..5. Used torch.unique
+    with return_inverse/return_counts to get observed-group counts, set each
+    sample weight = 1.0 / count[group], and passed
+    WeightedRandomSampler(weights, num_samples=len(self.train),
+    replacement=True) as sampler=.
+
+Rationale: flattens the Male x target joint distribution the classifier was
+exploiting as a gender shortcut, lowering I(pred_target; Male | true_target).
+
+Discrepancy: Plan described summing target columns "each shifted into its own
+bit"; implemented via bitwise-OR of per-bit shifts, which is the faithful
+group-key encoding (binary attrs => OR == sum, no carry collisions). Counts
+computed over observed groups via torch.unique rather than a fixed-size table,
+matching "Compute counts per observed group". `import torch` placed inside the
+method to avoid adding a module-level dependency to this file.
+
+Integration integrity: train.py record(...) and conclude(0.03, 0.07) call sites
+were not touched and remain intact; both threshold args still passed.

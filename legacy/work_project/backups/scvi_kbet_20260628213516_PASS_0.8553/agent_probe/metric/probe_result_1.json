@@ -1,0 +1,59 @@
+{
+  "metric_name": "kBET acceptance rate",
+  "standard_threshold": 0.75,
+  "acceptable_threshold": 0.55,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 0,
+      "value": 0.342
+    },
+    {
+      "epoch": 1,
+      "value": 0.32
+    },
+    {
+      "epoch": 2,
+      "value": 0.35200000000000004
+    },
+    {
+      "epoch": 3,
+      "value": 0.36066666666666664
+    },
+    {
+      "epoch": 4,
+      "value": 0.342
+    },
+    {
+      "epoch": 5,
+      "value": 0.38599999999999995
+    },
+    {
+      "epoch": 6,
+      "value": 0.40199999999999997
+    },
+    {
+      "epoch": 7,
+      "value": 0.37733333333333335
+    },
+    {
+      "epoch": 8,
+      "value": 0.426
+    },
+    {
+      "epoch": 9,
+      "value": 0.44799999999999995
+    }
+  ],
+  "min": 0.32,
+  "max": 0.44799999999999995,
+  "mean": 0.37560000000000004,
+  "std": 0.038365725444579925,
+  "first_value": 0.342,
+  "final_value": 0.44799999999999995,
+  "delta": 0.10599999999999993,
+  "tail_mean": 0.4078666666666667,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "kBET acceptance rate went from 0.342 to 0.448 (improving), never crossing the 0.75 standard threshold; tail mean 0.408 -> FAIL."
+}

@@ -1,0 +1,132 @@
+from pytorch_lightning import LightningDataModule
+from torch.utils.data import DataLoader, WeightedRandomSampler
+from torchvision import transforms
+
+from datasets.celeba import MyCelebA
+from datasets.inference_dataset import CustomImageDataset
+from utils.constant import ATTRIBUTES
+
+class CelebADataModule(LightningDataModule):
+    def __init__(self, config):
+        super().__init__()
+
+        self.root = config.root_dataset
+        self.batch_size = config.batch_size
+        self.transform = self.get_transforms(config.input_size)
+        self.num_workers = config.num_workers
+
+        self.attr_dict = None
+
+    def get_transforms(self, input_size):
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+        return {
+            "train": transforms.Compose(
+                [
+                    transforms.RandomVerticalFlip(p=0.4),
+                    transforms.RandomHorizontalFlip(p=0.4),
+                    transforms.ColorJitter(
+                        brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2),
+                    transforms.Resize(input_size),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std),
+                ]
+            ),
+            "val/test/pred": transforms.Compose(
+                [
+                    transforms.Resize(input_size),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std),
+                ]
+            ),
+        }
+
+    def setup(self, stage=None):
+        # transforms
+        # split dataset
+        if stage in (None, "fit"):
+            self.train = MyCelebA(
+                self.root, split="train", transform=self.transform["train"]
+            )
+            self.val = MyCelebA(
+                self.root,
+                split="valid",
+                transform=self.transform["val/test/pred"],
+            )
+
+        if stage == "test":
+            self.test = MyCelebA(
+                self.root,
+                split="test",
+                transform=self.transform["val/test/pred"],
+            )
+        if stage == "predict":
+            self.predict = CustomImageDataset(
+                self.root,
+                transform=self.transform["val/test/pred"],
+            )
+
+    def train_dataloader(self):
+        # NOTE: plain `shuffle=True` preserves CelebA's natural attribute co-occurrence
+        # (e.g. Male x Wearing_Lipstick / Heavy_Makeup) at its real skew, which the
+        # classifier readily exploits as a shortcut -> inflated conditional MI between its
+        # predictions and the correlated attribute. Re-balancing the joint distribution of
+        # those spurious pairs with a WeightedRandomSampler over self.train.attr
+        # (group-balanced sampling, inverse group-frequency weights) removes the skew so
+        # predictions rest on per-attribute visual evidence rather than the proxy.
+        import torch
+
+        name_to_idx = {v: k for k, v in ATTRIBUTES.items()}
+        male_idx = name_to_idx["Male"]
+        target_attrs = [
+            "Heavy_Makeup",
+            "Wearing_Lipstick",
+            "Attractive",
+            "Wavy_Hair",
+            "No_Beard",
+            "Arched_Eyebrows",
+        ]
+
+        attr = self.train.attr
+        group = attr[:, male_idx].long() << 6
+        for bit, name in enumerate(target_attrs):
+            group = group | (attr[:, name_to_idx[name]].long() << bit)
+
+        unique, inverse, counts = torch.unique(
+            group, return_inverse=True, return_counts=True)
+        weights = (1.0 / counts.double())[inverse]
+
+        sampler = WeightedRandomSampler(
+            weights, num_samples=len(self.train), replacement=True)
+
+        train = DataLoader(
+            self.train,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            sampler=sampler,
+        )
+        return train
+
+    def val_dataloader(self):
+        val = DataLoader(
+            self.val,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+        )
+        return val
+
+    def test_dataloader(self):
+        test = DataLoader(
+            self.test,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+        )
+        return test
+
+    def predict_dataloader(self):
+        predict = DataLoader(
+            self.predict,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+        )
+        return predict

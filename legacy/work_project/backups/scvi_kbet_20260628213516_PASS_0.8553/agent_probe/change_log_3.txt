@@ -1,0 +1,20 @@
+Plan: Select highly variable genes before training
+
+Edit applied:
+- File: train.py
+- Location: main(), immediately after `adata = build_dataset(args)` (was line 379)
+  and before `scvi.model.SCVI.setup_anndata(adata, layer="counts", batch_key="batch")`.
+- Inserted: sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat_v3",
+  batch_key="batch", layer="counts", subset=True)
+
+Rationale: probe_result_2 tail mean 0.660 (FAIL, below 0.75 standard). Reducing the
+feature space to the 2000 most informative, batch-robust genes (seurat_v3 operates on
+raw counts matching the 'counts' layer scVI consumes; batch_key makes selection
+batch-aware) removes uninformative high-variance dimensions that inject batch-specific
+signal into the scVI latent, aiming for a cleaner batch-mixed embedding and higher kBET.
+
+Discrepancy: none. Inserted exactly as specified.
+
+Integration check: record(...) and conclude(0.75, 0.55) call sites in train.py remain
+present and unmodified; both threshold values still passed to conclude. record() still
+receives (int(trainer.current_epoch), vae, adata) with correct types.
