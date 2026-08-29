@@ -64,6 +64,7 @@ CelebFaces_Attributes_Classification/*
 dummy_project/*
 !dummy_project/.gitkeep
 response_codex/
+legacy/
 
 # local virtualenv (untracked)
 venv/
