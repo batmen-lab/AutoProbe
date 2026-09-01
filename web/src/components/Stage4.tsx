@@ -789,8 +789,10 @@ const MIN_ROWS_FOR_TRD = 4;
 function computeTrd(rows: IterationRow[]): number | null {
   if (rows.length < MIN_ROWS_FOR_TRD) return null;
   const last = rows[rows.length - 1];
+  // Decision value = tail_mean (mirrors the backend's _trd_signed). Falls back
+  // to last_epoch only for pre-tail_mean runs stored on disk.
   const tm = (r: IterationRow): number | null =>
-    r.last_epoch != null ? r.last_epoch : (r.tail_mean ?? r.metric_value);
+    r.tail_mean != null ? r.tail_mean : (r.last_epoch ?? r.metric_value);
   const latest = tm(last);
   if (latest == null) return null;
   const ref = rows[rows.length - MIN_ROWS_FOR_TRD];
@@ -806,7 +808,7 @@ function isImproving(rows: IterationRow[]): boolean {
   const trd = computeTrd(rows);
   if (trd == null) return false;
   const last = rows[rows.length - 1];
-  const ref = last.last_epoch ?? last.tail_mean ?? last.metric_value ?? 1;
+  const ref = last.tail_mean ?? last.last_epoch ?? last.metric_value ?? 1;
   const noise = Math.max(0.01 * Math.abs(ref), 1e-6);
   return trd > noise;
 }

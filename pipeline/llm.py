@@ -21,6 +21,8 @@ import threading
 import time
 from pathlib import Path
 
+from . import router
+
 NLP_MODEL = "opus"
 AGENT_MODEL = "opus"
 AGENT_MAX_RETRIES = 2          # extra attempts after the first (3 total)
@@ -164,6 +166,7 @@ def _stream_claude(
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,  # line-buffered so we get events as they arrive
+        env=router.subprocess_env(),  # ccr gateway wiring (see pipeline/router.py)
     )
     _register(p)
 
@@ -443,6 +446,7 @@ def agent_call(
             full_cmd, cwd=str(cwd),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, bufsize=1,
+            env=router.subprocess_env(),  # ccr gateway wiring (see pipeline/router.py)
         )
         _register(p)
         f = _open_log(log_path)

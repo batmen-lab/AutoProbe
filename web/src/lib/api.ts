@@ -30,10 +30,13 @@ export type IterationRow = {
   // with older runs. The acceptable threshold is the looser bar.
   threshold: string | null;
   acceptable_threshold: string | null;
-  // Last-epoch metric value — the actual end-of-training number that drives
-  // keep/revert, PASS/FAIL and TRD. (Replaces the old `tail_mean` smoothing.)
+  // Decision value: mean of the last 5 recorded epochs. Drives keep/revert,
+  // PASS/FAIL and TRD. Smooths the epoch-to-epoch jitter that makes a
+  // min-over-groups metric (e.g. worst-group accuracy) unreliable round to
+  // round. Absent on pre-tail_mean runs — fall back to last_epoch there.
+  tail_mean?: number | null;
+  // Actual end-of-training number. Audit / display only; decides nothing.
   last_epoch: number | null;
-  tail_mean?: number | null; // deprecated: present only on older runs
   direction: "higher_is_better" | "lower_is_better" | null;
   status: string | null;
   acceptable_met: boolean | null;

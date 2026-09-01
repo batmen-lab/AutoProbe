@@ -80,16 +80,26 @@ class IterationRecord:
     threshold: str | None = None
     acceptable_threshold: str | None = None
     # last_epoch is the final recorded epoch's metric value — the actual
-    # end-of-training number (the model you'd deploy). It drives PASS/FAIL,
-    # keep/revert, best-tracking and TRD. Replaces the old `tail_mean`
-    # (mean of last 5 epochs), which understated still-rising short runs.
+    # end-of-training number (the model you'd deploy). Recorded for audit and
+    # display ONLY; it no longer drives any decision.
+    # # DISABLED (last-epoch mechanism): "It drives PASS/FAIL, keep/revert,
+    # # best-tracking and TRD. Replaces the old `tail_mean` (mean of last 5
+    # # epochs), which understated still-rising short runs."
     last_epoch: float | None = None
+    # tail_mean is the DECISION VALUE: mean of the last TAIL_MEAN_WINDOW (5)
+    # recorded epochs, computed by the orchestrator (not trusted from the
+    # prober). It drives PASS/FAIL, acceptable_met, keep/revert, best-tracking
+    # and TRD. Chosen over last_epoch because keep/revert compares two rounds
+    # on the SAME validation set, where common-mode sampling error cancels and
+    # only epoch-to-epoch jitter remains — which averaging suppresses. Matters
+    # most for min-over-groups metrics (worst-group accuracy) on small groups.
+    tail_mean: float | None = None
     # Direction of improvement for this iteration's metric. Needed at the
     # iteration-record level so TRD/AT logic on the frontend doesn't have to
     # re-read the JSON file.
     direction: str | None = None
     status: str | None = None  # "PASS"/"FAIL"
-    # True iff last_epoch satisfies the acceptable_threshold condition.
+    # True iff tail_mean satisfies the acceptable_threshold condition.
     acceptable_met: bool | None = None
     note: str | None = None
     # When this iteration came from the fix-plan flow, the 1-based index of
@@ -135,7 +145,7 @@ class StageRecord:
     auto_research_best_value: float | None = None
     auto_research_best_direction: str | None = None
     # Full characterisation of the running-best iteration (the one we compare
-    # against). best_value is its last_epoch (the decision driver); _max / _mean
+    # against). best_value is its tail_mean (the decision driver); _max / _mean
     # are that same iteration's max-over-epochs and mean, surfaced into each
     # round's metric artifact as previous_best_{last_epoch,max,mean}.
     auto_research_best_max: float | None = None

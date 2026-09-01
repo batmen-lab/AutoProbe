@@ -1,0 +1,18 @@
+# MIMICNotes case — extra Python dependencies.
+#
+# The runtime training stack (torch, torchvision, numpy, pandas, scikit-learn,
+# scipy, transformers<5, timm, netcal, pillow) is NOT repeated here: AutoProbe
+# runs `train.py` with the repo venv, so those live in ../../requirements.txt
+# and are installed by `make setup` at the repo root.
+#
+# This file was originally SubpopBench's full 2022 pin set (torch==1.13.0,
+# scikit-learn==0.24.1, pandas==1.3.2, vissl, wilds, robustness, ...). None of
+# those pins build on Python 3.12, and most were for benchmark machinery the
+# case workspace never touches — the case only imports hparams_registry,
+# dataset.datasets, dataset.fast_dataloader, learning.algorithms,
+# utils.eval_helper and models.networks. Replaced with the actual delta.
+
+# Only needed to REGENERATE the dataset from a local MIMIC-III postgres
+# instance (subpopbench/scripts/preprocess_mimic_notes.py). Not needed to
+# train once $SUBPOP_DATA_DIR/mimic_notes/ is populated.
+psycopg2-binary

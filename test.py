@@ -5,6 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+from pipeline import router
+
+# Same environment pipeline/llm.py hands its `claude` subprocesses, so this
+# smoke test exercises the real routed path (ccr gateway + routed model) and
+# not whatever ambient Anthropic auth happens to be set.
+ENV = router.subprocess_env()
+
 NLP_MODEL = "opus"
 AGENT_MODEL = "opus"
 # Run the agent test from dummy_project/ if it has content, otherwise fall back
@@ -22,6 +29,7 @@ def test_nlp():
         ["claude", "-p", "--model", NLP_MODEL, "--tools", "", "--no-session-persistence", prompt],
         capture_output=True,
         text=True,
+        env=ENV,
     )
     if result.returncode != 0:
         print(f"  FAIL — exit code {result.returncode}")
@@ -39,6 +47,7 @@ def test_agent():
         cwd=WORKING_SPACE,
         capture_output=True,
         text=True,
+        env=ENV,
     )
     if result.returncode != 0:
         print(f"  FAIL — exit code {result.returncode}")
@@ -50,7 +59,17 @@ def test_agent():
 
 
 def test_web_search():
-    print("── Web search (NLP, CRWV stock price) ─────────────")
+    """Informational only when routed through ccr.
+
+    `WebSearch` is Anthropic's *server-side* search. Routed to a third-party
+    provider it executes but comes back empty, so pipeline/llm.py deliberately
+    keeps it out of NLP_TOOLS (WebFetch + Grep/Glob/Read cover the grounding
+    the prompts actually need). A failure here is expected on a routed setup
+    and is not a reason to stop.
+    """
+    routed = ENV.get("ANTHROPIC_BASE_URL", "").startswith("http://127.0.0.1")
+    label = "informational — routed" if routed else "NLP, CRWV stock price"
+    print(f"── Web search ({label}) ─────────────")
     prompt = (
         "Use WebSearch to find the current stock price of CRWV right now. "
         "Your entire response must be one single JSON object and absolutely nothing else — "
@@ -62,6 +81,7 @@ def test_web_search():
          "--no-session-persistence", prompt],
         capture_output=True,
         text=True,
+        env=ENV,
     )
     if result.returncode != 0:
         print(f"  FAIL — exit code {result.returncode}")
@@ -76,6 +96,9 @@ def test_web_search():
 
 
 if __name__ == "__main__":
+    print(router.describe())
+    print()
+
     try:
         test_nlp()
     except Exception as e:

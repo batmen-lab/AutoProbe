@@ -30,12 +30,12 @@ points](#other-entry-points) at the bottom if you ever need them.)
 
 ## Demo videos
 
-Two end-to-end screen recordings of the web UI live in [`video_demo/`](video_demo/):
+Two end-to-end screen recordings of the web UI live in [`utilities/video_demo/`](utilities/video_demo/):
 
-- **[`video_demo/mimic_run.mp4`](video_demo/mimic_run.mp4)** — full normal-mode
+- **[`utilities/video_demo/mimic_run.mp4`](utilities/video_demo/mimic_run.mp4)** — full normal-mode
   pipeline run on the MIMIC workspace: Probe Design → Dev Plan → Implementation
   → Probe Fixing, including the PASS / FAIL dialogs at the end of a round.
-- **[`video_demo/autoresearch.mp4`](video_demo/autoresearch.mp4)** —
+- **[`utilities/video_demo/autoresearch.mp4`](utilities/video_demo/autoresearch.mp4)** —
   auto-research mode: toggle on at Stage 1, agent writes `prober.py` and
   seeds the 10 `# potential_improvement_*` markers, then a batch of rounds
   runs with the orchestrator-level revert-on-regression and the monotonic
@@ -177,9 +177,13 @@ workspace and recent-workspace history (VS Code-style).
 
 You need three things on the box:
 
-1. **Python 3.10+**
+1. **Python 3.12.** Not 3.13+: the SubpopBench case stack (`torch`,
+   `torchvision`, `timm`, `netcal`) has no wheels for it yet. If the system
+   python is newer, `make setup` uses [`uv`](https://docs.astral.sh/uv/) to
+   fetch a 3.12 for the venv — nothing is installed system-wide.
 2. **Node.js 18+**
-3. The **`claude` CLI** (`@anthropic-ai/claude-code`), authenticated.
+3. The **`claude` CLI** (`@anthropic-ai/claude-code`), authenticated — or
+   [claude-code-router](#model-routing-claude-code-router) in front of it.
 
 ### 1. Clone
 
@@ -191,21 +195,29 @@ cd AutoProbe
 ### 2. Python environment
 
 ```bash
-python3 --version          # must be 3.10+
-
-python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-
-pip install -r requirements.txt
+uv venv --python 3.12 venv
+uv pip install --python venv/bin/python torch torchvision \
+    --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python venv/bin/python -r requirements.txt
 ```
 
-`requirements.txt` covers both the API server (`fastapi`, `uvicorn`,
-`pydantic`) and the training stack the agent will lean on inside your project
-workspaces (`torch`, `numpy`, `pandas`, `scikit-learn`, `scipy`, `tqdm`,
-`transformers`, `plotly`, `kaleido`).
+torch and torchvision come from the **CPU** wheel index — the PyPI default
+drags in ~2.5GB of CUDA libraries that a CPU box never loads. On a GPU box,
+swap the index (`.../whl/cu126`) or let `make setup` do it:
+`make setup PYTORCH_INDEX=https://download.pytorch.org/whl/cu126`.
+
+`requirements.txt` covers the API server (`fastapi`, `uvicorn`, `pydantic`),
+the training stack the agent leans on inside your project workspaces
+(`numpy`, `pandas`, `scikit-learn`, `scipy`, `tqdm`, `transformers`, `plotly`,
+`kaleido`, `matplotlib`) and the SubpopBench case stack (`timm`, `netcal`,
+`pillow`).
 
 > If your project workspace needs additional packages, install them in the
-> **same** venv. The pipeline runs `python train.py` from the venv.
+> **same** venv. `pipeline/stages.py` runs `train.py` with `venv/bin/python`
+> explicitly — it resolves that path from the repo root rather than sniffing
+> `PATH`, so it holds however you launched the server. Override it per-case
+> with `AUTOPROBE_TRAIN_PYTHON=/path/to/other/venv/bin/python` when a
+> workspace needs a stack that conflicts with the repo venv.
 
 ### 3. Node + web dependencies
 
@@ -241,32 +253,87 @@ claude
 
 Both NLP calls and agent calls use the same auth.
 
-### 5. (Optional) Smoke test
+### 5. Model routing (claude-code-router)
+
+<a id="model-routing-claude-code-router"></a>
+
+Every NLP and agent call is a `claude` subprocess, and the pipeline makes a
+*lot* of them. [claude-code-router](https://github.com/musistudio/claude-code-router)
+("ccr") puts a local gateway in front of the CLI that speaks the Anthropic
+Messages API and forwards to a cheaper provider — this repo is currently
+pointed at DeepSeek via OpenRouter. It is **optional**: skip this section and
+the CLI talks to Anthropic with the auth from step 4.
 
 ```bash
-python test.py
+npm install -g @musistudio/claude-code-router
+ccr start --no-open
+ccr ui                     # providers, models, routes, gateway key
 ```
 
-Expected output (all three should print `PASS`):
+In the UI, add a provider (OpenRouter, an OpenAI-compatible endpoint, …) with
+the models you want, then set the **default** and **background** routes.
+`make ccr-up` from then on just ensures the gateway is serving.
+
+**How the wiring works.** `pipeline/router.py` reads ccr's config
+(`~/.claude-code-router/config.sqlite`) and injects `ANTHROPIC_BASE_URL`,
+`ANTHROPIC_AUTH_TOKEN` and the model aliases into every `claude` subprocess
+`pipeline/llm.py` spawns. `llm.py` asks for `--model opus`; the CLI resolves
+that alias against `ANTHROPIC_DEFAULT_OPUS_MODEL` *before* the request leaves
+the box, so the gateway only ever sees a model your provider actually lists.
+That last part matters — the ccr gateway does **not** alias `claude-*` names
+onto your route, it 400s with *"Model … is not configured for target
+provider"*.
+
+Anything you export yourself wins over what `router.py` reads from the DB, and
+`AUTOPROBE_ROUTER=off` disables the injection entirely:
+
+```bash
+AUTOPROBE_ROUTER=off make api      # straight to Anthropic
+```
+
+Setup details, the config schema, a headless configuration recipe and a
+troubleshooting table live in **[CCR_and_openRouter.md](CCR_and_openRouter.md)**.
+
+### 6. (Optional) Smoke test
+
+```bash
+venv/bin/python test.py
+```
+
+It prints the resolved routing first, then runs the same three call shapes the
+pipeline uses — through the **same environment** `pipeline/llm.py` gives its
+subprocesses, so it tests the routed path rather than ambient Anthropic auth.
 
 ```
+router: ccr http://127.0.0.1:3456 default=<your model> small=<your model>
+
 ── NLP model (Claude, no tools) ────────
   PASS — got: {'status': 'ok', 'model': 'nlp'}
 ── Agent (Claude, full tools) ──────────
   PASS — got: 'PONG'
-── Web search (NLP, CRWV stock price) ──
-  PASS — CRWV price: 123.45 (source: ...)
+── Web search (informational — routed) ──
+  FAIL — ...
 ```
 
-Failures here mean the env isn't ready — fix this before running the pipeline.
+The first two must pass — a failure there means the env isn't ready, fix it
+before running the pipeline. The third is **informational**: `WebSearch` is
+Anthropic's server-side search and returns nothing through a third-party
+provider, which is exactly why `pipeline/llm.py` leaves it out of `NLP_TOOLS`
+(`WebFetch` plus the local `Grep`/`Glob`/`Read` tools do the grounding the
+prompts need). Expect it to fail on a routed setup.
 
 ### One-command setup (Makefile)
 
 If you're on Linux/macOS and have `make`:
 
 ```bash
-make setup        # creates venv, installs requirements.txt, runs npm install
+make setup        # uv venv on python 3.12, CPU torch, requirements.txt, npm install
+make doctor       # verify python / node / claude / ccr wiring in one shot
 ```
+
+`make doctor` prints the interpreter that will run `train.py`, the resolved ccr
+gateway and routed models, and the installed torch/transformers versions. Run
+it first whenever something looks wrong.
 
 ---
 
@@ -334,10 +401,17 @@ A "workspace" = any directory containing a `train.py` that:
 Everything else (data loaders, preprocessing, helpers) lives alongside
 `train.py` in that folder. The agent reads existing files before editing.
 
-The repo ships with empty placeholder folders for several Kaggle/MIMIC-style
-projects (`mimic/`, `home_credit/`, `m5_forecast/`, etc.). They're empty in git
-and will be populated locally when you put your project in them — the
-`.gitignore` keeps generated files out.
+The repo ships 16 ready-made workspaces under [`cases/`](cases/), one per
+SubpopBench subpopulation-shift case (`MIMICNotes`, `Waterbirds`, `CelebA`,
+`CivilCommentsFine`, …). Each is standalone — it carries its own deep copy of
+`subpopbench/`, so an agent editing one case cannot affect another — and each
+has a `CASE.md` describing the shift type, the metric the probe should track,
+the data setup, and where the paper's thresholds come from. Datasets are *not*
+duplicated per case; every case reads one shared root via `SUBPOP_DATA_DIR`
+(default `/mnt/workplace_autoprobe/data`).
+
+`legacy/` holds the pre-`cases/` Kaggle/MIMIC workspaces and the notes from
+past runs, kept for reference only.
 
 ---
 
@@ -348,15 +422,19 @@ AutoProbe/
 ├── main.py                         # optional CLI driver (same pipeline as the web UI)
 ├── test.py                         # claude-CLI smoke test
 ├── Questions.py                    # user-facing prompt strings (CLI)
-├── requirements.txt                # Python deps (API + training stack)
-├── Makefile                        # setup / api / web (cli is optional)
+├── requirements.txt                # Python deps (API + training + case stack)
+├── Makefile                        # setup / doctor / api / web / ccr-up (cli is optional)
+├── venv/                           # python 3.12 venv (gitignored) — runs the API *and* train.py
 │
 ├── pipeline/                       # The actual pipeline
 │   ├── __init__.py
-│   ├── stages.py                   # generate_probes, select_probe, implement, iterate_once, …
+│   ├── stages.py                   # generate_probes, select_probe, implement, fix-plan flow, …
 │   ├── state.py                    # RunState — stage.json, snapshots, revert
+│   ├── snapshot_git.py             # git-backed snapshots of the workspace
 │   ├── workspace.py                # open / list workspaces (VS Code-style recent list)
-│   └── llm.py                      # nlp_call / agent_call (subprocess + stream-json + cancel)
+│   ├── router.py                   # ccr v3 wiring — reads config.sqlite, builds the subprocess env
+│   ├── llm.py                      # nlp_call / agent_call (subprocess + stream-json + cancel)
+│   └── llm_codex.py                # same two entry points against the `codex` CLI (LLM_BACKEND=codex)
 │
 ├── server/                         # FastAPI front-of-pipeline
 │   └── app.py                      # /api/runs/<id>/stageN/..., SSE log, live metric, cancel
@@ -383,26 +461,33 @@ AutoProbe/
 │   ├── agent_improve_commentor.py  # PROMPT_SIX   — annotate train.py with 10 markers
 │   ├── agent_iterat_improver.py    # PROMPT_SEVEN — iterate (normal mode)
 │   ├── agent_exception_catcher.py  # PROMPT_EIGHT — fix crashed train.py
+│   ├── agent_fix_plan_gen.py       # PROMPT_NINE / PROMPT_TEN — candidate fix plans + scoring
+│   ├── agent_fix_plan_apply.py     # apply the selected fix plan
 │   └── auto_research_prompt_patch.py
 │                                   # Auto-research prompts: setup (write prober + pick metric)
 │                                   # + iteration (one targeted change per round, epoch budget,
 │                                   # smooth-progress heuristics; orchestrator handles revert).
 │
-├── video_demo/                     # End-to-end UI screen recordings
+├── cases/                          # Workspaces — one folder per SubpopBench case
+│   └── MIMICNotes/                 # CASE.md, train.py, requirements.txt, vendored subpopbench/
+│       ├── CASE.md                 # shift type, metric guidance, data setup, thresholds
+│       └── train.py                # `python train.py`, no args — the workspace contract
+│
+├── projectinfo/                    # One-paragraph project descriptions (Stage-1 input)
+├── utilities/video_demo/           # End-to-end UI screen recordings
 │   ├── mimic_run.mp4               # Normal-mode pipeline on the MIMIC workspace
 │   └── autoresearch.mp4            # Auto-research mode batch run
+├── legacy/                         # Archived pre-`cases/` workspaces and past run notes
 │
-├── response/                       # Per-run metadata (gitignored)
-│   ├── _app_state.json             # current + recent workspaces
-│   └── <YYYYMMDDHHMMSS>/
-│       ├── stage.json              # run state — single source of truth
-│       ├── agent.log               # streamed transcript of all calls
-│       ├── probe_designs.json
-│       ├── probe_confidenced.json
-│       ├── dev_doc.json
-│       └── dev_doc_confidenced.json
-│
-└── mimic/  home_credit/  m5_forecast/  …   # empty placeholders for project workspaces
+└── response/                       # Per-run metadata (gitignored)
+    ├── _app_state.json             # current + recent workspaces
+    └── <YYYYMMDDHHMMSS>/
+        ├── stage.json              # run state — single source of truth
+        ├── agent.log               # streamed transcript of all calls
+        ├── probe_designs.json
+        ├── probe_confidenced.json
+        ├── dev_doc.json
+        └── dev_doc_confidenced.json
 ```
 
 ---
@@ -484,7 +569,10 @@ should print `PASS`.
 | Symptom | Probable cause |
 |---|---|
 | `claude: command not found` | Step 4 wasn't done. Re-run `npm install -g @anthropic-ai/claude-code`. |
-| `test.py` agent test fails with auth error | `ANTHROPIC_API_KEY` not set, or OAuth wasn't completed. Run `claude` once. |
+| `test.py` agent test fails with auth error | `ANTHROPIC_API_KEY` not set, or OAuth wasn't completed. Run `claude` once. Routing through ccr? Run `make doctor` — if it says `router: UNAVAILABLE` the gateway key or default route is missing (`ccr ui`). |
+| `Model "claude-…" is not configured for target provider` | A `claude-*` model name reached the ccr gateway. v3 does not alias those onto your route — check `make doctor` shows a routed model, and don't export `ANTHROPIC_MODEL` by hand. |
+| `ccr status` prints `Profile "status" was not found` | v1 muscle memory. v3 has no `status`/`restart`/`activate`. Use `make ccr-up` (it probes `/health`) and `ccr ui`. |
+| `ModuleNotFoundError` the moment `train.py` starts | `train.py` ran under the wrong interpreter. `make doctor` prints the one that will be used; install the missing package into that venv, or set `AUTOPROBE_TRAIN_PYTHON`. |
 | API returns 409 on stage call | Another stage is already running. Wait, or hit `/api/cancel`. |
 | `Workspace missing train.py` | The folder you opened doesn't have a `train.py`. |
 | Live chart stays empty during Stage 3/4 | `prober.py` isn't writing `.agent_probe/live/probe_live.json` — the chart will fill in once the run completes from `probe_result_N.json`. |

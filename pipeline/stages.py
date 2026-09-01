@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 from hard_prompt.nlp_prober_gen import PROMPT_ONE
@@ -282,6 +285,11 @@ def _round_post_tag(n: int) -> str:
 # and we auto-revert any round that degrades an anchor by more than this fraction
 # from the round-1 baseline — regardless of what the probe metric did.
 ANCHOR_MAX_SACRIFICE = 0.20  # accept at most a 20% degradation of any anchor
+
+# Number of trailing epochs averaged into the DECISION VALUE (tail_mean) that
+# drives PASS/FAIL, keep/revert, best-tracking and TRD. Raising it smooths more
+# epoch-to-epoch jitter but lags harder on a still-rising run.
+TAIL_MEAN_WINDOW = 5
 _ANCHOR_KEY_RE = re.compile(r"^original_train_metric(?:_\d+)?$")
 _ANCHOR_WARNING_REL = Path(".agent_probe") / ".anchor_warning.txt"
 
@@ -390,7 +398,7 @@ def _consume_anchor_warning(workspace: Path) -> str | None:
 
 
 def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
-    """If round `round_idx`'s last_epoch is worse than round `round_idx - 1`'s,
+    """If round `round_idx`'s tail_mean is worse than round `round_idx - 1`'s,
     restore train.py from `round-{N-1}-post` and return a note string. Else
     commit the kept train.py as `round-N-post` and return None.
 
@@ -400,8 +408,12 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
     """
     iters = state.record.iterations
     cur_snap = _read_latest_metric(state.workspace)
-    # last-epoch value (metric_value in the snapshot is values[-1]).
-    cur_tm = (cur_snap or {}).get("metric_value")
+    # DECISION VALUE = tail_mean (mean of the last TAIL_MEAN_WINDOW epochs).
+    # # DISABLED (last-epoch mechanism): metric_value in the snapshot is values[-1].
+    # cur_tm = (cur_snap or {}).get("metric_value")
+    cur_tm = (cur_snap or {}).get("tail_mean")
+    if cur_tm is None:  # no per-epoch series at all
+        cur_tm = (cur_snap or {}).get("metric_value")
     direction = (cur_snap or {}).get("direction") or "higher_is_better"
     tag_n = _round_post_tag(round_idx)
     prev_tag = _round_post_tag(round_idx - 1)
@@ -418,7 +430,11 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
     # No prior round → nothing to compare; just keep.
     prev_tm: float | None = None
     if len(iters) >= 1:
-        prev_tm = iters[-1].get("last_epoch")
+        prev_tm = iters[-1].get("tail_mean")
+        # # DISABLED (last-epoch mechanism):
+        # prev_tm = iters[-1].get("last_epoch")
+        if prev_tm is None:  # pre-tail_mean run on disk
+            prev_tm = iters[-1].get("last_epoch")
         if prev_tm is None:
             prev_tm = iters[-1].get("metric_value")
     if prev_tm is None:
@@ -505,6 +521,45 @@ def _epoch_stats(probe_result: dict) -> tuple[float | None, float | None, float 
             fb = probe_result.get("tail_mean")
         return (_round4(fb), _round4(fb), _round4(fb))
     return (_round4(raw[-1]), _round4(max(raw)), _round4(sum(raw) / len(raw)))
+
+
+def _tail_mean_stat(probe_result: dict, k: int = TAIL_MEAN_WINDOW) -> float | None:
+    """Mean of the last `k` recorded epoch values, rounded to 4 decimals.
+
+    This is the DECISION VALUE: PASS/FAIL, keep/revert, best-tracking and TRD
+    all key on it. Computed here rather than trusted from the prober's own
+    `tail_mean` field so the orchestrator stays the single source of truth —
+    a prober that omits or miscomputes the field cannot skew a decision.
+    Falls back to the prober's `tail_mean`, then the scalar `metric_value`,
+    when no per-epoch series exists.
+
+    Why tail-mean and not last-epoch for keep/revert: the comparison is round
+    N vs round N-1 on the SAME validation set, so the finite-sample error of
+    any given group is largely common-mode and cancels in the difference.
+    What remains is epoch-to-epoch optimisation jitter, which averaging over
+    the tail does suppress. That matters most for min-over-groups metrics
+    (e.g. worst-group accuracy), where a small minority group makes any single
+    epoch's reading very noisy. The trade-off is lag: on a run whose metric is
+    still climbing at the end, tail_mean understates the shipped model.
+    """
+    raw = []
+    for v in (probe_result.get("values") or []):
+        x = v.get("value") if isinstance(v, dict) else v
+        if x is None:
+            continue
+        try:
+            xf = float(x)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(xf):
+            raw.append(xf)
+    if raw:
+        tail = raw[-k:] if len(raw) >= k else raw
+        return _round4(sum(tail) / len(tail))
+    fb = probe_result.get("tail_mean")
+    if fb is None:
+        fb = probe_result.get("metric_value")
+    return _round4(fb)
 
 
 def _render_group_count_barchart(per_group_json: Path, out_path: Path) -> None:
@@ -624,13 +679,22 @@ def _coerce_float(v) -> float | None:
     return xf if math.isfinite(xf) else None
 
 
-def _status_from_last_epoch(
-    last_epoch: float | None, std_th, acc_th, direction: str | None,
+def _status_from_tail_mean(
+    tail_mean: float | None, std_th, acc_th, direction: str | None,
 ) -> tuple[str | None, bool | None]:
-    """Recompute PASS/FAIL + acceptable_met from the LAST-EPOCH value vs the
-    thresholds — the backend source of truth (overrides the prober's
-    tail_mean-based status so PASS/FAIL is last-epoch everywhere)."""
-    if last_epoch is None:
+    """Recompute PASS/FAIL + acceptable_met from the TAIL-MEAN value vs the
+    thresholds — the backend source of truth (overrides whatever status the
+    prober wrote, so every decision in the run keys on one statistic).
+
+    Caveat worth knowing: unlike keep/revert, PASS/FAIL compares against an
+    EXTERNAL threshold (a published baseline), so the finite-sample error of a
+    small group does NOT cancel and tail averaging does not remove it. A
+    minority group of ~50 validation samples carries roughly +/-6pp at 95%
+    confidence. Set thresholds with that band in mind rather than treating
+    them as sharp. Averaging is applied here anyway so a round can never be
+    kept on one statistic and FAILed on another.
+    """
+    if tail_mean is None:
         return (None, None)
     lower = direction == "lower_is_better"
 
@@ -638,32 +702,68 @@ def _status_from_last_epoch(
         t = _coerce_float(th)
         if t is None:
             return None
-        return (last_epoch <= t) if lower else (last_epoch >= t)
+        return (tail_mean <= t) if lower else (tail_mean >= t)
 
     s = meets(std_th)
     status = None if s is None else ("PASS" if s else "FAIL")
     return (status, meets(acc_th))
 
 
+# ── DISABLED: last-epoch decision mechanism ──────────────────────────────────
+# Superseded by _status_from_tail_mean above. Kept verbatim for quick revert.
+# def _status_from_last_epoch(
+#     last_epoch: float | None, std_th, acc_th, direction: str | None,
+# ) -> tuple[str | None, bool | None]:
+#     """Recompute PASS/FAIL + acceptable_met from the LAST-EPOCH value vs the
+#     thresholds — the backend source of truth (overrides the prober's
+#     tail_mean-based status so PASS/FAIL is last-epoch everywhere)."""
+#     if last_epoch is None:
+#         return (None, None)
+#     lower = direction == "lower_is_better"
+#
+#     def meets(th):
+#         t = _coerce_float(th)
+#         if t is None:
+#             return None
+#         return (last_epoch <= t) if lower else (last_epoch >= t)
+#
+#     s = meets(std_th)
+#     status = None if s is None else ("PASS" if s else "FAIL")
+#     return (status, meets(acc_th))
+
+
 def _iteration_record_from_snapshot(snapshot: dict, *, note: str | None = None, best_value: float | None = None) -> IterationRecord:
     def _as_str(v):
         return str(v) if v is not None else None
     raw = snapshot.get("raw", {}) or {}
+    # last_epoch is still recorded (audit / display) but no longer decides.
     last_epoch, _max_e, _mean_e = _epoch_stats(raw)
     if last_epoch is None:
         last_epoch = snapshot.get("metric_value")
-    # Recompute status from last_epoch (don't trust the prober's tail_mean status).
-    status, acceptable_met = _status_from_last_epoch(
-        last_epoch, snapshot.get("threshold"),
+    # DECISION VALUE = tail_mean over the last TAIL_MEAN_WINDOW epochs.
+    tail_mean = snapshot.get("tail_mean")
+    if tail_mean is None:
+        tail_mean = _tail_mean_stat(raw)
+    if tail_mean is None:
+        tail_mean = last_epoch
+    # Recompute status from tail_mean (the orchestrator, not the prober, decides).
+    status, acceptable_met = _status_from_tail_mean(
+        tail_mean, snapshot.get("threshold"),
         snapshot.get("acceptable_threshold"), snapshot.get("direction"),
     )
+    # # DISABLED (last-epoch mechanism):
+    # status, acceptable_met = _status_from_last_epoch(
+    #     last_epoch, snapshot.get("threshold"),
+    #     snapshot.get("acceptable_threshold"), snapshot.get("direction"),
+    # )
     return IterationRecord(
         index=snapshot["index"],
         metric_name=snapshot.get("metric_name"),
-        metric_value=last_epoch,
+        metric_value=tail_mean,
         threshold=_as_str(snapshot.get("threshold")),
         acceptable_threshold=_as_str(snapshot.get("acceptable_threshold")),
         last_epoch=last_epoch,
+        tail_mean=tail_mean,
         direction=snapshot.get("direction"),
         status=status,
         acceptable_met=acceptable_met,
@@ -838,7 +938,11 @@ def _trd_signed(iters: list) -> float | None:
     last = iters[-1]
     ref = iters[-4]
     def _tm(r: dict):
-        tm = r.get("last_epoch")
+        tm = r.get("tail_mean")
+        # # DISABLED (last-epoch mechanism):
+        # tm = r.get("last_epoch")
+        if tm is None:  # pre-tail_mean run on disk
+            tm = r.get("last_epoch")
         return tm if tm is not None else r.get("metric_value")
     latest = _tm(last)
     refv = _tm(ref)
@@ -870,7 +974,11 @@ def _at_terminal_state(state: RunState) -> bool:
     if len(iters) < 4:
         return False  # not enough rows yet — keep iterating
     trd = _trd_signed(iters)
-    last_tm = last.get("last_epoch")
+    last_tm = last.get("tail_mean")
+    # # DISABLED (last-epoch mechanism):
+    # last_tm = last.get("last_epoch")
+    if last_tm is None:
+        last_tm = last.get("last_epoch")
     if last_tm is None:
         last_tm = last.get("metric_value") or 1.0
     noise = max(0.01 * abs(last_tm or 1.0), 1e-6)
@@ -1312,10 +1420,6 @@ def probe_passed(state: RunState) -> bool:
 
 
 # ── exception-catching training loop ─────────────────────────────────────────
-import shutil
-import subprocess
-
-
 def run_training_with_autofix(state: RunState, expected_index: int) -> None:
     """Run python train.py; on failure, ask agent to fix; retry up to MAX_FIX_RETRIES.
 
@@ -1340,6 +1444,37 @@ def run_training_with_autofix(state: RunState, expected_index: int) -> None:
         success, err = _run_training(state, expected_index)
 
 
+# Repo root — `pipeline/` sits directly under it.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _train_interpreter() -> str:
+    """The interpreter used to run a workspace's `train.py`.
+
+    Resolution order:
+
+    1. ``AUTOPROBE_TRAIN_PYTHON`` — explicit override. Point it at a per-case
+       venv when a case needs a stack that conflicts with the repo venv.
+    2. ``<repo>/venv/bin/python`` — where ``make setup`` installs the training
+       stack. Used regardless of how the server itself was launched.
+    3. ``python`` / ``python3`` on PATH.
+
+    Deliberately *not* a bare ``shutil.which("python")``: the repo venv is not
+    on PATH under ``make api`` (the Makefile calls ``venv/bin/python``
+    directly, it does not activate), so PATH resolution silently lands on the
+    system interpreter — which has none of the training deps. The resulting
+    ImportError then reads like a bug in the agent's edit rather than the
+    setup problem it actually is.
+    """
+    override = os.environ.get("AUTOPROBE_TRAIN_PYTHON")
+    if override:
+        return override
+    venv_python = _REPO_ROOT / "venv" / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    return shutil.which("python") or shutil.which("python3") or "python3"
+
+
 def _run_training(state: RunState, expected_index: int) -> tuple[bool, str]:
     metric_dir = state.workspace / ".agent_probe" / "metric"
     plot_dir = state.workspace / ".agent_probe" / "plot"
@@ -1355,10 +1490,7 @@ def _run_training(state: RunState, expected_index: int) -> tuple[bool, str]:
 
     log_path = state.log_path
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    # Prefer `python` if it exists (user may have set it up), otherwise fall back to
-    # `python3` — the one we know is on the box. Don't use sys.executable: that's
-    # the venv interpreter, which doesn't have the user's training-stack packages.
-    interpreter = shutil.which("python") or shutil.which("python3") or "python3"
+    interpreter = _train_interpreter()
     with log_path.open("ab") as f:
         f.write(f"\n--- {interpreter} train.py ---\n".encode())
         f.flush()
@@ -1490,7 +1622,7 @@ def _read_latest_metric(workspace: Path) -> dict | None:
         "metric_value": last_value,
         "threshold": std_th,
         "acceptable_threshold": acc_th,
-        "tail_mean": data.get("tail_mean"),
+        "tail_mean": _tail_mean_stat(data),
         "direction": data.get("direction"),
         "status": data.get("status"),
         "acceptable_met": data.get("acceptable_met"),

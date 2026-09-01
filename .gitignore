@@ -80,3 +80,6 @@ wandb/
 # Datasets / run outputs (kept local, not pushed)
 data/
 result/
+
+# Local CCR/deepseek wiring (contains gateway key)
+.claude/settings.local.json

@@ -1,6 +1,10 @@
 # Single source of truth for the project's Python dependencies.
 # Used by both the FastAPI backend (server/app.py) and the agent-driven
 # training pipeline (project workspaces' train.py / prober.py).
+#
+# Install with `make setup`, which creates venv/ on Python 3.12 and installs
+# torch/torchvision from the CPU wheel index first. Python 3.13+ is not usable
+# yet — the case stack below has no wheels for it.
 
 # ── API / pipeline ──────────────────────────────────────────────────────────
 fastapi
@@ -8,19 +12,25 @@ uvicorn[standard]
 pydantic
 
 # ── Training stack (per imports across project workspaces) ──────────────────
-torch
+# torch and torchvision are installed separately by `make setup` so they come
+# from the right wheel index (CPU by default) — listing them here too would
+# pull the CUDA build from PyPI.
 numpy
 pandas
 scikit-learn
 scipy
 tqdm
-transformers
 plotly
 kaleido
 matplotlib
 
-# ── Auxiliary scripts (claude_harness.py, codex_harness.py) ─────────────────
-# Not used by the main pipeline — only by the standalone SDK harnesses shipped
-# in the repo root. Safe to drop if you're not using them.
-anthropic
-openai
+# transformers 5.x dropped `AdamW` and several tokenizer aliases that the
+# SubpopBench case sources import. Pin below 5 until those are ported.
+transformers<5
+
+# ── SubpopBench case stack (cases/*/subpopbench) ────────────────────────────
+# Imported at module load by the case sources, so they're needed even for the
+# tabular cases (MIMICNotes) that never touch a vision or BERT backbone.
+timm
+netcal
+pillow
