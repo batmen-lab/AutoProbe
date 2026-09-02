@@ -21,7 +21,7 @@ each case is standalone, so an agent editing this case cannot affect any other.
 Datasets are **not** duplicated per case. Point every case at one shared root:
 
 ```bash
-export SUBPOP_DATA_DIR=/mnt/workplace_autoprobe/data
+export SUBPOP_DATA_DIR=/mnt/workspace/data
 python -m subpopbench.scripts.download --data_path $SUBPOP_DATA_DIR --download
 ```
 

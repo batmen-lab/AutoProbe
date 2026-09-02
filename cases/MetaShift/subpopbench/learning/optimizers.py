@@ -1,5 +1,10 @@
 import torch
-from transformers import AdamW
+
+# `transformers.AdamW` was deprecated in transformers 4.x and removed in 4.5x/5.x.
+# `torch.optim.AdamW` is the same algorithm — HF's version was a copy whose
+# `correct_bias=True` default is exactly torch's behaviour — so this is a
+# faithful drop-in, not a semantic change.
+from torch.optim import AdamW
 
 
 def get_bert_optim(network, lr, weight_decay):

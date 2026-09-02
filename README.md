@@ -408,7 +408,7 @@ SubpopBench subpopulation-shift case (`MIMICNotes`, `Waterbirds`, `CelebA`,
 has a `CASE.md` describing the shift type, the metric the probe should track,
 the data setup, and where the paper's thresholds come from. Datasets are *not*
 duplicated per case; every case reads one shared root via `SUBPOP_DATA_DIR`
-(default `/mnt/workplace_autoprobe/data`).
+(default `/mnt/workspace/data`).
 
 `legacy/` holds the pre-`cases/` Kaggle/MIMIC workspaces and the notes from
 past runs, kept for reference only.

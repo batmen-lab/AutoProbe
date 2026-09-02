@@ -63,7 +63,7 @@ MAX_EPOCHS = None
 # Shared data root for every case — the 16 case folders duplicate the source
 # code, not the datasets. Populate it with
 #   python -m subpopbench.scripts.download --data_path $SUBPOP_DATA_DIR --download
-SUBPOP_DATA_DIR = os.environ.get("SUBPOP_DATA_DIR", "/mnt/workplace_autoprobe/data")
+SUBPOP_DATA_DIR = os.environ.get("SUBPOP_DATA_DIR", "/mnt/workspace/data")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(HERE, "output")
