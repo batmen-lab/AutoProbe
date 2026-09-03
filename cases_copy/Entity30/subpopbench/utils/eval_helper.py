@@ -126,7 +126,13 @@ def prob_metrics(targets, preds, label_set, return_arrays=False):
 
     res = {
         'AUROC_ovo': roc_auc_score(targets, preds, multi_class='ovo', labels=label_set),
-        'BCE': log_loss(targets, preds, eps=1e-6, labels=label_set),
+        # `log_loss(..., eps=...)` was deprecated in scikit-learn 1.3 and REMOVED
+        # in 1.5. The parameter clipped predictions to [eps, 1-eps] before taking
+        # logs; modern log_loss clips at machine epsilon (~2.2e-16) instead, which
+        # would change BCE wherever a prediction saturates at exactly 0.0 / 1.0.
+        # Clipping explicitly at the original 1e-6 reproduces the pre-1.5 result
+        # (verified equal to ~1e-9 relative), so the benchmark's BCE is unchanged.
+        'BCE': log_loss(targets, np.clip(preds, 1e-6, 1 - 1e-6), labels=label_set),
         'ECE': netcal.metrics.ECE().measure(preds, targets)
     }
 

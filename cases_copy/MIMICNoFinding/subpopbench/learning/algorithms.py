@@ -863,8 +863,10 @@ class LISA(ERM):
         W = size[2]
         H = size[3]
         cut_rat = np.sqrt(1. - lam)
-        cut_w = np.int(W * cut_rat)
-        cut_h = np.int(H * cut_rat)
+        # `np.int` was a pure alias for the builtin `int` and was removed in
+        # numpy 1.24, so this is a rename, not a semantic change.
+        cut_w = int(W * cut_rat)
+        cut_h = int(H * cut_rat)
 
         # uniform
         cx = np.random.randint(W)
