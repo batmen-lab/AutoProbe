@@ -1,0 +1,61 @@
+Change log for round 2
+======================
+
+Plan title: Randomly swap R/G channels in ERM update
+
+Rationale (from plan): in this CMNIST construction the spurious colour
+attribute is literally coded in which of channels 0/1 carries the digit
+grayscale (channel 2 is always zero; subpopbench/dataset/datasets.py:152-153),
+so "which channel is lit" is the shortcut the baseline exploits. Swapping
+channels 0/1 with p=0.5 turns the lit channel into a coin flip relative to
+the label (with cmnist_spur_prob=0.2 the channel-label correlation drops to
+exactly 0.5, i.e. zero predictive information), forcing the network onto the
+digit shape, which is byte-identical across channels and transfers to the
+minority (y,a) groups.
+
+Edits applied (file: train.py — the only target file):
+
+1. Added module-level constant (placed in the case configuration block,
+   immediately before the TRAIN_ATTR docstring/assignment):
+   - symbol: CMNIST_RGB_SWAP_PROB
+   - before: (absent)
+   - after:  CMNIST_RGB_SWAP_PROB = 0.5
+   No new hparam was added to _hparams; the constant lives at module scope
+   as specified.
+
+2. In `class ERM` `def update()` (was train.py:1075, now 1075), immediately
+   after `all_i, all_x, all_y, all_a = minibatch` and before the
+   `self._compute_loss(...)` call, inserted a guarded channel swap:
+   - before:
+         all_i, all_x, all_y, all_a = minibatch
+         loss = self._compute_loss(all_i, all_x, all_y, all_a, step)
+   - after:
+         all_i, all_x, all_y, all_a = minibatch
+         if self.training and torch.rand(1).item() < CMNIST_RGB_SWAP_PROB:
+             all_x = all_x[:, [1, 0, 2], :, :]
+         loss = self._compute_loss(all_i, all_x, all_y, all_a, step)
+   The (possibly swapped) all_x is passed to _compute_loss.
+
+Notes / verification:
+- The guard sits in ERM.update, which the active ALGORITHM="ERM" uses every
+  step. The swap is train-only: gated on self.training, and eval paths drive
+  algorithm.predict() on eval loaders (never update()), so validation/test
+  keep the frozen original channel layout.
+- The other two `update()` methods in the file (GroupDRO/ReSample/ReWeight
+  subclass-partition of ERM at 1545, and the two-stage method at 1671) were
+  NOT touched — the plan named only ERM.update.
+- Confirmed `class Algorithm(torch.nn.Module)` so `self.training` is a valid
+  attribute; the training loop calls `algorithm.train()` each epoch, and
+  eval_helper only calls predict()/eval_metrics in eval mode.
+- SAM/SGD/etc. untouched, no threshold/metric/hparam changes.
+- All four cmnist_* probability constants, TRAIN_ATTR, and the
+  record(...)/conclude(0.68, 0.52) lines remain untouched.
+- prober.py not modified.
+
+Discrepancies from plan: none. All target file edits applied exactly as
+specified.
+
+Anchor risk note: none expected beyond the normal scope — the plan predicts
+overall val accuracy stays high (swap only relocates the digit grayscale,
+which is fully preserved), so the original_train_metric (final val_accuracy,
+round-1 baseline = 0.7599) is not expected to degrade by more than 20%.

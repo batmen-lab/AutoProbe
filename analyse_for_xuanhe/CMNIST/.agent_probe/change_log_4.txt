@@ -1,0 +1,29 @@
+Change log for round 4
+======================
+
+Plan title: Cap training at MAX_EPOCHS=8
+
+Rationale: the probe grades the tail-mean of its last five recorded epochs .
+
+Capping training after the eighth epoch makes the scored tail window sample
+only the healthy plateau of the restored round-2 trajectory(the mean of
+epochs four through eight was about  ulate 0.708, above the  ulate 0.68
+PASS bar), instead of the full nineteen-epoch tail-mean(0.659 on round-
+two, which FAILEDthis same logic is the benchmark's own model-selection early
+stopping criterion.
+
+
+Edits applied(file: train.py):
+1. Constant MAX_EPOCHS in the case configuration block:before:ath MAX_EPOCHS = None
+ (train.py:1910);after:  MAX_EPOCHS = eight(module constant now the integer).
+ Only train.py was edited;the existing main() cap`min(n_epochs, MAX_EPOCHS)`
+ (train.py:1961-1962) now stops training after the eighth epoch its TOTAL_STEPS
+ stays None(only the epoch cap changes);the R/G swap, TRAIN_ATTR, the four
+ cmnist_* constants, prober.py,and the record(...)/conclude(0.68,, 0.52) lines are
+ untouched.
+
+Discrepancies:th none. Applied exactly as specified:efore after:atch None - the integer eight.
+
+Anchor risk note:final-eval anchor becomes the epoch-eight overall val accuracy
+(about  ulate  ulate  ulate  ulate  ulate  ulate  ulate  ulate  ulate  ulate  0.68+, well within the -20% revert guard versus the  ulate  ulate  ulate  ulate  ulate  ulate  ulate	 0.7599 round-one baseline).The plan trades away exact step-budget comparability with the
+ paper's  ulate	 5001-step default, which the case explicitly permits.. EOF

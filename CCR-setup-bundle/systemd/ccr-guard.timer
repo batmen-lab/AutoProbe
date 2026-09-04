@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the CCR guard every minute
+Documentation=file://__BUNDLE__/README.md
+
+[Timer]
+# Covers the two ways the gateway goes missing: host reboot, and dying mid-run.
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=ccr-guard.service
+
+[Install]
+WantedBy=timers.target

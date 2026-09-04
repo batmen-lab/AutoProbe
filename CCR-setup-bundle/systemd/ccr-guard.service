@@ -1,0 +1,16 @@
+[Unit]
+Description=CCR guard - undo global profile takeover, keep the gateway alive
+Documentation=file://__BUNDLE__/README.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__USER__
+Environment=HOME=__HOME__
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/python3 __BUNDLE__/ccr_guard.py
+# The guard repairs config and restarts ccr; a single failed run is not fatal,
+# the timer will simply try again in 60s.
+SuccessExitStatus=0 1
+TimeoutStartSec=120

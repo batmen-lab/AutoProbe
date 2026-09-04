@@ -1,0 +1,100 @@
+{
+  "metric_name": "worst_group_accuracy",
+  "standard_threshold": 0.68,
+  "acceptable_threshold": 0.52,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.6329896907216495
+    },
+    {
+      "epoch": 2,
+      "value": 0.6804123711340206
+    },
+    {
+      "epoch": 3,
+      "value": 0.7298969072164948
+    },
+    {
+      "epoch": 4,
+      "value": 0.7216494845360825
+    },
+    {
+      "epoch": 5,
+      "value": 0.7185567010309278
+    },
+    {
+      "epoch": 6,
+      "value": 0.7298969072164948
+    },
+    {
+      "epoch": 7,
+      "value": 0.7195876288659794
+    },
+    {
+      "epoch": 8,
+      "value": 0.7134020618556701
+    },
+    {
+      "epoch": 9,
+      "value": 0.7237113402061855
+    },
+    {
+      "epoch": 10,
+      "value": 0.6525773195876289
+    },
+    {
+      "epoch": 11,
+      "value": 0.7082474226804124
+    },
+    {
+      "epoch": 12,
+      "value": 0.643298969072165
+    },
+    {
+      "epoch": 13,
+      "value": 0.5618556701030928
+    },
+    {
+      "epoch": 14,
+      "value": 0.6164948453608248
+    },
+    {
+      "epoch": 15,
+      "value": 0.6463917525773196
+    },
+    {
+      "epoch": 16,
+      "value": 0.5814606741573034
+    },
+    {
+      "epoch": 17,
+      "value": 0.675143355771628
+    },
+    {
+      "epoch": 18,
+      "value": 0.6515463917525773
+    },
+    {
+      "epoch": 19,
+      "value": 0.654639175257732
+    }
+  ],
+  "min": 0.5618556701030928,
+  "max": 0.7298969072164948,
+  "mean": 0.6716715089002204,
+  "std": 0.049678037675637506,
+  "first_value": 0.6329896907216495,
+  "final_value": 0.654639175257732,
+  "delta": 0.02164948453608251,
+  "tail_mean": 0.641836269903312,
+  "status": "FAIL",
+  "acceptable_met": true,
+  "conclusion": "Worst-group accuracy rose from 0.63 to 0.65 (tail mean 0.64), below the 0.68 standard bar.",
+  "original_train_metric": {
+    "name": "val_accuracy",
+    "value": 0.6817,
+    "direction": "higher_is_better"
+  }
+}

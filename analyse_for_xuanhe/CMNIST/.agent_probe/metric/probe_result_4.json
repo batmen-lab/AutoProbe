@@ -1,0 +1,56 @@
+{
+  "metric_name": "worst_group_accuracy",
+  "standard_threshold": 0.68,
+  "acceptable_threshold": 0.52,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.6855670103092784
+    },
+    {
+      "epoch": 2,
+      "value": 0.7123711340206186
+    },
+    {
+      "epoch": 3,
+      "value": 0.6814432989690722
+    },
+    {
+      "epoch": 4,
+      "value": 0.7257731958762886
+    },
+    {
+      "epoch": 5,
+      "value": 0.7116104868913857
+    },
+    {
+      "epoch": 6,
+      "value": 0.709278350515464
+    },
+    {
+      "epoch": 7,
+      "value": 0.7061855670103093
+    },
+    {
+      "epoch": 8,
+      "value": 0.68711044627275
+    }
+  ],
+  "min": 0.6814432989690722,
+  "max": 0.7257731958762886,
+  "mean": 0.7024174362331459,
+  "std": 0.014783884690501233,
+  "first_value": 0.6855670103092784,
+  "final_value": 0.68711044627275,
+  "delta": 0.0015434359634716177,
+  "tail_mean": 0.7079916093132396,
+  "status": "PASS",
+  "acceptable_met": true,
+  "conclusion": "Worst-group accuracy improved steadily from 0.69 to 0.69, holding >= 0.68 across the final 5 epochs with a mean spurious-correlation gap of 0.040.",
+  "original_train_metric": {
+    "name": "val_accuracy",
+    "value": 0.7262,
+    "direction": "higher_is_better"
+  }
+}

@@ -1,0 +1,59 @@
+Change log for round 3
+======================
+
+Plan title: Make R/G swap per-sample, not per-batch
+
+Rationale (from plan): the round-2 series shows the shortcut is genuinely
+broken (epochs 1-11 steady at 0.68-0.73) and the 0.68 PASS is missed only
+because epochs 12-19 swing 0.51-0.70 — variance, not re-learning. The
+per-batch coin-flip swap makes the whole minibatch flip together, so a
+minibatch whose lit channel all flips sends the same wrong-gradient direction
+to the network; converting to a per-sample Bernoulli decorrelates the colour
+shortcut from the label inside every batch, cutting the batch-level gradient
+oscillation so the scored last-5-epoch mean holds above 0.68.
+
+Edits applied (file: train.py — the only target file):
+
+1. In `class ERM` `def update()` (train.py:1075), the train-only colour-swap
+   block was changed from one coin flip per minibatch to an independent
+   Bernoulli per sample:
+   - before:
+         all_i, all_x, all_y, all_a = minibatch
+         if self.training and torch.rand(1).item() < CMNIST_RGB_SWAP_PROB:
+             all_x = all_x[:, [1, 0, 2], :, :]
+         loss = self._compute_loss(all_i, all_x, all_y, all_a, step)
+   - after:
+         all_i, all_x, all_y, all_a = minibatch
+         if self.training:
+             swap_mask = torch.rand(all_x.shape[0], device=all_x.device) < CMNIST_RGB_SWAP_PROB
+             if bool(swap_mask.any()):
+                 all_x[swap_mask] = all_x[swap_mask][:, [1, 0, 2], :, :]
+         loss = self._compute_loss(all_i, all_x, all_y, all_a, step)
+   The per-sample mask draws an independent Bernoulli over the batch
+   dimension, so within EVERY minibatch roughly half the images keep channel
+   0 lit and half have channel 1 lit. The (possibly per-sample swapped)
+   all_x is passed to _compute_loss.
+
+Notes / verification:
+- The whole block stays gated on self.training, so validation/test (which
+  only call predict(), never update()) still see the frozen original channel
+  layout. The active ALGORITHM="ERM" uses this update() every step.
+- CMNIST_RGB_SWAP_PROB kept at 0.5 (module-level constant untouched).
+- The other update() methods in the file (GroupDRO/ReSample/ReWeight
+  subclass at 1545, and the two-stage method at 1671) were NOT touched — the
+  plan named only ERM.update.
+- Integration verified: record(...) at train.py:2012 and
+  conclude(0.68, 0.52) at train.py:2053 are both present and unmodified, with
+  BOTH thresholds passed to conclude. record(...) args resolve to existing
+  vars (val["min_group"]["accuracy"], val["overall"]["accuracy"],
+  val["adjusted_accuracy"]).
+- The four cmnist_* constants, TRAIN_ATTR, the ANCHOR markers, and the
+  record(...)/conclude(0.68, 0.52) lines are all untouched.
+- prober.py not modified.
+
+Discrepancies from plan: none. Applied exactly as specified.
+
+Anchor risk note: none expected — the swap only relocates the digit
+grayscale (fully preserved) per sample, so overall val accuracy (final
+val_accuracy anchor) is not expected to degrade by more than 20% from the
+round-1 baseline of 0.7599.

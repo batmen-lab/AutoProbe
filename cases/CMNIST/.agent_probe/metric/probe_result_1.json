@@ -1,0 +1,100 @@
+{
+  "metric_name": "worst_group_accuracy",
+  "standard_threshold": 0.68,
+  "acceptable_threshold": 0.52,
+  "direction": "higher_is_better",
+  "values": [
+    {
+      "epoch": 1,
+      "value": 0.0
+    },
+    {
+      "epoch": 2,
+      "value": 0.06597938144329897
+    },
+    {
+      "epoch": 3,
+      "value": 0.0009363295880149813
+    },
+    {
+      "epoch": 4,
+      "value": 0.12989690721649486
+    },
+    {
+      "epoch": 5,
+      "value": 0.18865979381443299
+    },
+    {
+      "epoch": 6,
+      "value": 0.0443298969072165
+    },
+    {
+      "epoch": 7,
+      "value": 0.13576779026217228
+    },
+    {
+      "epoch": 8,
+      "value": 0.24157303370786518
+    },
+    {
+      "epoch": 9,
+      "value": 0.2883895131086142
+    },
+    {
+      "epoch": 10,
+      "value": 0.20103092783505155
+    },
+    {
+      "epoch": 11,
+      "value": 0.2556179775280899
+    },
+    {
+      "epoch": 12,
+      "value": 0.19101123595505617
+    },
+    {
+      "epoch": 13,
+      "value": 0.10103092783505155
+    },
+    {
+      "epoch": 14,
+      "value": 0.29307116104868913
+    },
+    {
+      "epoch": 15,
+      "value": 0.15257731958762888
+    },
+    {
+      "epoch": 16,
+      "value": 0.0749063670411985
+    },
+    {
+      "epoch": 17,
+      "value": 0.2303370786516854
+    },
+    {
+      "epoch": 18,
+      "value": 0.26082474226804125
+    },
+    {
+      "epoch": 19,
+      "value": 0.19175257731958764
+    }
+  ],
+  "min": 0.0,
+  "max": 0.29307116104868913,
+  "mean": 0.16040489269043104,
+  "std": 0.09030966945899406,
+  "first_value": 0.0,
+  "final_value": 0.19175257731958764,
+  "delta": 0.19175257731958764,
+  "tail_mean": 0.18207961697362834,
+  "status": "FAIL",
+  "acceptable_met": false,
+  "conclusion": "Classic spurious-correlation failure: overall validation accuracy stayed healthy at 0.77 while worst-group collapsed to 0.18 \u2014 the minority (y,a) groups are sacrificed to the colour shortcut.",
+  "original_train_metric": {
+    "name": "val_accuracy",
+    "value": 0.7599,
+    "direction": "higher_is_better"
+  }
+}
