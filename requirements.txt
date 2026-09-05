@@ -3,8 +3,8 @@
 # training pipeline (project workspaces' train.py / prober.py).
 #
 # Install with `make setup`, which creates venv/ on Python 3.12 and installs
-# torch/torchvision from the CPU wheel index first. Python 3.13+ is not usable
-# yet — the case stack below has no wheels for it.
+# torch/torchvision from the CUDA wheel index (cu128) first. Python 3.13+ is
+# not usable yet — the case stack below has no wheels for it.
 
 # ── API / pipeline ──────────────────────────────────────────────────────────
 fastapi

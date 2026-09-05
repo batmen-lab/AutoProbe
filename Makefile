@@ -6,10 +6,12 @@ UV     := $(shell command -v uv 2>/dev/null)
 # case stack (torch / timm / netcal) has no 3.14 wheels yet.
 VENV_PYTHON ?= 3.12
 
-# torch wheel index. Defaults to the CPU build: this box has no GPU, and the
-# PyPI default drags in ~2.5GB of unused CUDA libs. On a GPU box override it,
-# e.g. `make setup PYTORCH_INDEX=https://download.pytorch.org/whl/cu126`.
-PYTORCH_INDEX ?= https://download.pytorch.org/whl/cpu
+# torch wheel index. Defaults to the CUDA 12.8 build, which is what these boxes
+# run (NVIDIA L4 here; the intended deployment is one GPU VM per case). The CPU
+# build installs silently on a GPU box and just trains 10-50x slower, so the
+# default matches the hardware. On a genuinely GPU-less box override it:
+# `make setup PYTORCH_INDEX=https://download.pytorch.org/whl/cpu`.
+PYTORCH_INDEX ?= https://download.pytorch.org/whl/cu128
 
 # ── Model routing (claude-code-router v3) ───────────────────────────────────
 # ccr routes the `claude` CLI through a cheaper provider. Config lives in

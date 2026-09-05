@@ -23,7 +23,12 @@ the fix-plan machinery and produces invalid runs.
 **Python.** One venv at `venv/`, CPython **3.12** — created with `uv`, not
 `python3 -m venv`. The system python here is 3.14 and the case stack
 (`torch` / `torchvision` / `timm` / `netcal`) has no 3.14 wheels. torch comes
-from the **CPU** wheel index; this box has no GPU.
+from the **CUDA** wheel index (`cu128`).
+
+**This box has a GPU** — an NVIDIA L4, and `torch.cuda.is_available()` is
+`True`. Don't assume otherwise from prose anywhere in this repo; confirm with
+`make doctor` (a `+cuXXX` suffix on the torch version is the tell) or
+`venv/bin/python -c "import torch; print(torch.cuda.is_available())"`.
 
 It runs both the API server and every workspace's `train.py`.
 `pipeline/stages.py::_train_interpreter()` resolves `<repo>/venv/bin/python`
@@ -34,10 +39,10 @@ Override per-case with `AUTOPROBE_TRAIN_PYTHON`.
 
 **`transformers` is pinned `<5`.** v5 dropped tokenizer aliases the vendored
 SubpopBench sources import. Separately, `transformers.AdamW` is gone in 4.57
-too, so `cases/*/subpopbench/learning/optimizers.py` imports
-`torch.optim.AdamW` (identical algorithm). Only `cases/MIMICNotes` has that
-patch so far — the other 16 cases still import the removed symbol and will
-`ImportError` on first run.
+too, so the optimizer builder imports `torch.optim.AdamW` (identical
+algorithm). **All 16 cases carry that patch** — both in each case's
+`subpopbench/learning/optimizers.py` and in the copy inlined into its
+self-contained `train.py`.
 
 **Model routing is claude-code-router v3.** Full setup, schema and
 troubleshooting: **[CCR_and_openRouter.md](CCR_and_openRouter.md)**. The short

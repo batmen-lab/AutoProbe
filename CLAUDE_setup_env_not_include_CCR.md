@@ -84,25 +84,26 @@ installs `torch`/`torchvision` **from the correct wheel index first**, installs
 
 ### Choosing the torch wheel index — do this consciously
 
-`make setup` defaults to the **CPU** index, because the PyPI default drags in
-~2.5 GB of CUDA libraries a CPU box never loads:
+`make setup` defaults to the **CUDA 12.8** index, because these boxes have GPUs
+(the reference box is an NVIDIA L4) and the intended deployment is one GPU VM
+per case:
 
 ```bash
-make setup                                                    # CPU (default)
-make setup PYTORCH_INDEX=https://download.pytorch.org/whl/cu126   # GPU box
+make setup                                                   # cu128 (default)
+make setup PYTORCH_INDEX=https://download.pytorch.org/whl/cpu   # GPU-less box
 ```
 
-**If the box has a GPU, pass the CUDA index.** Installing the CPU build on a
-GPU box is silent — nothing errors, training just runs 10–50× slower on the
-CPU. Verify after install ([§5](#5-verify)); `torch.cuda.is_available()` must
-be `True`.
+**Only pass the CPU index on a box that genuinely has no GPU.** Installing the
+CPU build on a GPU box is silent — nothing errors, training just runs 10–50×
+slower on the CPU. Verify after install ([§5](#5-verify));
+`torch.cuda.is_available()` must be `True`.
 
 ### Manual equivalent
 
 ```bash
 uv venv --python 3.12 venv
 uv pip install --python venv/bin/python torch torchvision \
-    --index-url https://download.pytorch.org/whl/cpu      # or .../cu126
+    --index-url https://download.pytorch.org/whl/cu128   # or .../cpu
 uv pip install --python venv/bin/python -r requirements.txt
 ```
 
@@ -226,9 +227,10 @@ venv/bin/python -c "import torch; print(torch.cuda.is_available(), torch.cuda.ge
 # -> True NVIDIA L4
 ```
 
-Do not trust prose about this box's hardware — `CLAUDE.md` still says "this box
-has no GPU", which is **stale**; the reference box has an NVIDIA L4 and
-`torch.cuda.is_available()` is `True`. Always check.
+The reference box has an **NVIDIA L4** and `torch.cuda.is_available()` is
+`True`. `CLAUDE.md`, the `Makefile` and the `README` used to claim "this box has
+no GPU"; that has been corrected repo-wide. Still check rather than trusting
+prose — LLM fix-plan agents occasionally assert "this GPU-less box" on their own.
 
 ### Import check
 
@@ -403,7 +405,7 @@ uv --version && node --version && npm --version
 # 1. clone
 git clone <your-fork-of-AutoProbe>.git && cd AutoProbe
 
-# 2. python + node deps  (add PYTORCH_INDEX=.../cu126 on a GPU box)
+# 2. python + node deps  (add PYTORCH_INDEX=.../cpu on a GPU-less box)
 make setup
 
 # 3. claude CLI + auth

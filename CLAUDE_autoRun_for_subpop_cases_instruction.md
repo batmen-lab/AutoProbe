@@ -120,7 +120,7 @@ API server is the natural unit and needs no coordination. Per-VM checklist:
 - `pipeline/stages.py::_train_interpreter()` resolves `<repo>/venv/bin/python` from the repo
   root. Override with `AUTOPROBE_TRAIN_PYTHON` if a case needs a different stack.
 - Confirm the GPU is actually visible on that VM (`make doctor`) rather than assuming — see
-  [hazard 4](#hazard-4-claudemd-says-no-gpu--it-is-stale).
+  [hazard 4](#hazard-4-agents-assert-this-gpu-less-box--it-is-false).
 - Batch size comes from the registry and is tuned for the benchmark, not for your GPU's
   memory. Raising it to fill an H100 changes the optimisation and breaks comparability;
   leave it alone.
@@ -130,11 +130,11 @@ API server is the natural unit and needs no coordination. Per-VM checklist:
 ## 2. Start the servers
 
 ```bash
-cd /mnt/workspace/AutoProbe && nohup make api > /tmp/.../api.log 2>&1 &
+( cd /mnt/workspace/AutoProbe && nohup make api > /tmp/.../api.log 2>&1 & )
 ( cd /mnt/workspace/AutoProbe && nohup make web > /tmp/.../web.log 2>&1 & )
 ```
 
-**The subshell parentheses on `make web` matter.** `cd X && nohup make api ... &`
+**The subshell parentheses matter — use them on both.** `cd X && nohup make api ... &`
 backgrounds the *whole* `cd && make`, so the `cd` never applies to your shell, and a
 following bare `make web` runs in `$HOME` and dies with
 `No rule to make target 'web'`.
@@ -386,10 +386,13 @@ Corollary: **do not resume an old run whose archived `snapshot.git` predates the
 Its `HEAD` holds the old wired `train.py`, so the first regression would overwrite the
 self-contained file and re-introduce this bug. Start a fresh run instead.
 
-### Hazard 4: `CLAUDE.md` says "no GPU" — it is stale
-The box has an NVIDIA L4 and `torch.cuda.is_available()` is `True`. Fix-plan agents
-sometimes assert "this GPU-less box" in their rationale; the reasoning is wrong even when
-the edit is harmless. Check `make doctor` rather than trusting prose.
+### Hazard 4: agents assert "this GPU-less box" — it is false
+The box has an NVIDIA L4 and `torch.cuda.is_available()` is `True`. `CLAUDE.md`, the
+`Makefile` and the `README` used to say "this box has no GPU"; that has been corrected, and
+`make setup` now defaults to the `cu128` wheel index. Fix-plan agents still sometimes assert
+"this GPU-less box" in their rationale — the reasoning is wrong even when the edit is
+harmless. Check `make doctor` (torch must show a `+cuXXX` suffix) rather than trusting prose,
+and correct the assumption in your next hint.
 
 ### Hazard 5: `tail_mean` grades the most over-trained window
 The decision value is the mean of the **last 5 epochs**. When the metric peaks early and

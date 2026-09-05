@@ -197,14 +197,17 @@ cd AutoProbe
 ```bash
 uv venv --python 3.12 venv
 uv pip install --python venv/bin/python torch torchvision \
-    --index-url https://download.pytorch.org/whl/cpu
+    --index-url https://download.pytorch.org/whl/cu128
 uv pip install --python venv/bin/python -r requirements.txt
 ```
 
-torch and torchvision come from the **CPU** wheel index — the PyPI default
-drags in ~2.5GB of CUDA libraries that a CPU box never loads. On a GPU box,
-swap the index (`.../whl/cu126`) or let `make setup` do it:
-`make setup PYTORCH_INDEX=https://download.pytorch.org/whl/cu126`.
+torch and torchvision come from the **CUDA 12.8** wheel index, which `make
+setup` uses by default — these boxes have GPUs (an NVIDIA L4 on the reference
+box), and the CPU build installs without error while training 10-50x slower.
+On a genuinely GPU-less box, swap the index (`.../whl/cpu`) or let `make setup`
+do it: `make setup PYTORCH_INDEX=https://download.pytorch.org/whl/cpu`.
+Verify either way with `venv/bin/python -c "import torch;
+print(torch.__version__, torch.cuda.is_available())"`.
 
 `requirements.txt` covers the API server (`fastapi`, `uvicorn`, `pydantic`),
 the training stack the agent leans on inside your project workspaces
