@@ -62,6 +62,7 @@ a checkpoint is missing, mismatched or corrupt — freezing an ImageNet-init
 featurizer would produce plausible numbers for a method that never ran.
 """
 import copy
+import datetime
 import hashlib
 import json
 import math
@@ -1923,6 +1924,11 @@ SUBPOP_DATA_DIR = os.environ.get("SUBPOP_DATA_DIR", "/mnt/workspace/data")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(HERE, "output")
+USER_ANALYSIS_DIR = os.path.join(HERE, "user_analysis")
+_run_dt = datetime.datetime.now()
+METRIC_PREFIX = ("subpop_metric_"
+                 + _run_dt.strftime("%Y%m%d_%H%M%S_")
+                 + "%03d" % (_run_dt.microsecond // 1000) + "_")
 
 IMAGE_ARCH = "resnet_sup_in1k"
 TEXT_ARCH = "bert-base-uncased"
@@ -2238,6 +2244,7 @@ def load_stage1_featurizer(algorithm, ckpt_path):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(USER_ANALYSIS_DIR, exist_ok=True)
     _seed_everything(SEED)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     torch.multiprocessing.set_sharing_strategy("file_system")
@@ -2361,13 +2368,13 @@ def main():
             f"adjusted={adjusted_accuracy:.4f}",
             flush=True,
         )
-        with open(os.path.join(OUTPUT_DIR, "history.json"), "w") as f:
+        with open(os.path.join(USER_ANALYSIS_DIR, METRIC_PREFIX + "history.json"), "w") as f:
             json.dump(history, f, indent=2)
 
     algorithm.eval()
     final = {s: eval_helper.eval_metrics(algorithm, loader, device)
              for s, loader in eval_loaders.items()}
-    with open(os.path.join(OUTPUT_DIR, "final_results.json"), "w") as f:
+    with open(os.path.join(USER_ANALYSIS_DIR, METRIC_PREFIX + "final_results.json"), "w") as f:
         json.dump(final, f, indent=2, default=float)
 
     print("\nFinal (held-out splits):")
