@@ -84,18 +84,26 @@ all raised `ValueError` for auto-research runs.
   no-op without them — auto-research previously had neither, so the shared
   prompts would have referred to things that did not exist.
 - **New `PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM`.** Appended (auto-research
-  only) after PROMPT_NINE / PROMPT_TEN / PROMPT_ELEVEN. It overrides exactly the
-  assumptions those prompts make that auto-research cannot satisfy: no
-  `standard_threshold` / `acceptable_threshold` / `status` anywhere; the
-  objective is unbounded improvement (never stop early, never no-op); the
-  `conclude()` call site takes **no** arguments; `prober.py` and the frozen
-  operating point are still off-limits; the anchor and `user_analyze()` rules
-  stay in force; no plot output; and the auto-research **epoch budget** (a fix
-  plan may not raise epochs, nor an epoch cap past 50). *Why an addendum and
-  not an edit:* PROMPT_NINE/TEN/ELEVEN are auto-probe's prompts and are off
-  limits — see **PERMISSION NEEDED**.
+  only) after PROMPT_NINE / PROMPT_TEN / PROMPT_ELEVEN. It declares the mode —
+  which is what the conditional line now in those prompts keys on (§8) — and
+  carries the instructions that have no home in a shared prompt: the objective
+  is unbounded improvement (never stop early, never no-op); `prober.py` and the
+  frozen operating point are still off-limits; the anchor and `user_analyze()`
+  rules stay in force; no plot output; and the auto-research **epoch budget** (a
+  fix plan may not raise epochs, nor an epoch cap past 50). It also restates the
+  no-threshold / no-argument-`conclude()` facts, since it is the block the
+  inline line points at.
 - `PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT` kept verbatim under a
   `# ── DISABLED` banner (repo convention), with no importer.
+
+### `hard_prompt/agent_fix_plan_gen.py`, `hard_prompt/agent_fix_plan_apply.py`
+
+- **One conditional line each** (PROMPT_NINE, PROMPT_ELEVEN), added under
+  explicit permission from the owner, stating that threshold instructions and
+  the two-argument `conclude()` don't apply when the auto-research addendum is
+  present. Nothing else in either prompt was reworded. PROMPT_TEN and
+  PROMPT_EIGHT were checked and left alone — neither assumes a threshold. Full
+  detail, placement rationale and the inertness argument: **§8**.
 
 ### `hard_prompt/agent_improve_commentor.py`
 
@@ -115,8 +123,10 @@ all raised `ValueError` for auto-research runs.
   `generate_fix_plans`, `auto_fix_loop` and `select_and_apply_fix_plan` are
   removed — those functions are now the shared path.
 - `_mode_addendum(state)` → `""` for auto probe, the addendum for auto
-  research. Appended to the three shared prompts. `_hint_block(hint)` factored
-  out of `generate_fix_plans` so the hint is formatted identically everywhere.
+  research. Appended to the three shared prompts — and it doubles as the flag
+  the shared prompts' conditional line tests for (§8). `_hint_block(hint)`
+  factored out of `generate_fix_plans` so the hint is formatted identically
+  everywhere.
 - `_do_auto_fix_round(state, hint=None)` — now **the** improvement round for
   both modes. Gained the optional hint (default `None` reproduces the previous
   prompt byte-for-byte) and returns its `IterationRecord`.
@@ -230,7 +240,7 @@ auto-research setup makes exactly **one** agent call).
 
 All offline — no `claude` subprocess, no GPU, no LLM spend.
 
-- **`venv/bin/python tests/test_unified_stage4.py` → 71 checks, 0 failures.**
+- **`venv/bin/python tests/test_unified_stage4.py` → 82 checks, 0 failures.**
   It runs the real `pipeline.stages` code against a temp workspace with a
   20-line fake `train.py` (writes a `probe_result` JSON, carries an anchor and a
   `VALUE` constant a "fix plan" edits) and a scripted stand-in for
@@ -246,10 +256,12 @@ All offline — no `claude` subprocess, no GPU, no LLM spend.
     advances 0.50 → 0.54, `best_value` is monotonic, no threshold fields leak;
   - a regressing round is reverted and `train.py` is rewound to the previous
     round's snapshot;
-  - **auto-probe prompt bytes are unchanged** — `== f"{PROMPT_NINE}{round}"`,
-    `== f"{PROMPT_TEN}{round}"`,
+  - **auto probe sees nothing but the shared prompt** —
+    `== f"{PROMPT_NINE}{round}"`, `== f"{PROMPT_TEN}{round}"`,
     `== f"{PROMPT_ELEVEN}\n\n{json}"`, the hinted generate prompt
-    `== f"{PROMPT_NINE}{round}\n\nUser hint:\n…\n"`, and no addendum anywhere;
+    `== f"{PROMPT_NINE}{round}\n\nUser hint:\n…\n"`, and no addendum anywhere.
+    The conditional AUTO-RESEARCH MODE line (§8) is asserted *present* in the
+    prompt and the block it names asserted *absent*, i.e. provably inert;
   - auto-probe's auto-pilot still runs 3 fix rounds, stops at 4 rows, parks at
     `phase=ready`, is re-enterable, and gets no `best_value` bookkeeping;
   - the manual fix-plan round works in auto-research mode (it used to raise);
@@ -258,7 +270,11 @@ All offline — no `claude` subprocess, no GPU, no LLM spend.
     mode guards left in the three shared functions, Tier 1 precedes Tier 2 in
     the setup prompt, the anchor is wired, `iterate_once` still raises, and
     `_at_terminal_state` still returns False/True/True for 3-FAIL / 4-FAIL /
-    PASS.
+    PASS;
+  - the conditional line: present in PROMPT_NINE and PROMPT_ELEVEN exactly
+    once each, absent from PROMPT_TEN, phrased as a conditional that names the
+    addendum block and states the "if absent" branch, the addendum carries the
+    matching banner, and the trimmed addendum still states both facts.
 - **Live API smoke** (`AUTOPROBE_ROUTER=off`, port 8799, no LLM reachable):
   `/api/health` ok; the OpenAPI schema shows `hint` as optional on
   `AutoResearchIterateBody`; `count=0` and `count=101` → 400; a valid body and
@@ -279,50 +295,67 @@ auto-research setup → confirm `prober.py` tracks the metric `train.py` already
 reports and records `original_train_metric*` → one batch round → confirm
 `fix_plans_2.json` exists with confidences and a change log.
 
-## 8. PERMISSION NEEDED
+## 8. Shared-prompt edits (PERMISSION GRANTED, now applied)
 
-Nothing was changed here. Each item is a prompt auto probe uses, so it was left
-alone; the behaviour is instead patched from the outside by the addendum.
+The owner granted permission for one minimal conditional line: *"just add a
+line that unless we are doing auto research then we don't have threshold so
+you can ignore threshold related prompt in any confusing prompt."* Applied as
+**one line, verbatim identical in both prompts**, and nothing else reworded:
 
-1. **`hard_prompt/agent_fix_plan_gen.py` — PROMPT_NINE opening line.**
+```
+AUTO-RESEARCH MODE (conditional — read this before anything below): if an
+"AUTO-RESEARCH MODE ADDENDUM" block appears at the END of this prompt, this
+run's probe is a performance monitor with NO thresholds — `standard_threshold`,
+`acceptable_threshold`, `status`, PASS and FAIL do not exist anywhere, so
+ignore every threshold-related instruction below, and `conclude()` is called
+with NO arguments (leave that call site exactly as you find it). Everything
+else below still applies unchanged. If that block is absent, this is a normal
+threshold-gated probe and every instruction below applies as written.
+```
 
-   ```diff
-   -You are an expert ML/DL optimization engineer. The current probe is failing — the metric has not crossed `standard_threshold` after one or more iterations. The orchestrator has asked you to propose THREE distinct, concrete fix plans that the user will pick from. Another supervisor agent will rank them with confidence after you produce them; you only generate the plans here.
-   +You are an expert ML/DL optimization engineer. The orchestrator has asked you to propose THREE distinct, concrete fix plans that the user will pick from, to push the probe metric further in its better direction. (On a threshold-gated probe the metric has not crossed `standard_threshold` after one or more iterations; a performance-monitoring probe has no threshold and the goal is simply further improvement.) Another supervisor agent will rank them with confidence after you produce them; you only generate the plans here.
-   ```
+(Shown wrapped; it is a single line in the source.)
 
-   *Reason:* in auto-research there is no `standard_threshold`, so the first
-   thing the agent reads is false. The addendum corrects it, but a prompt whose
-   opening claim has to be retracted 4 000 characters later is weaker than one
-   that is true in both modes. Same applies to PROMPT_NINE's Step 1/Step 2
-   threshold bullets and PROMPT_TEN's `probe_result` references.
+- **`hard_prompt/agent_fix_plan_gen.py` → PROMPT_NINE** — inserted as the
+  *first* line, because the prompt's own opening sentence ("The current probe
+  is failing — the metric has not crossed `standard_threshold`") is the
+  confusing claim, so the caveat has to be read first. The threshold bullets in
+  its Step 1 / Step 2 are covered by the same line and were left untouched.
+- **`hard_prompt/agent_fix_plan_apply.py` → PROMPT_ELEVEN** — inserted after
+  the three HARD RULE paragraphs (which are mode-agnostic and belong at the
+  top) and immediately before the body, which is where the two
+  `conclude(standard_threshold, acceptable_threshold)` instructions live
+  (Step 2's "do not modify" bullet and Step 4's verification bullet). Both
+  bullets were left untouched; the line covers them.
+- **`hard_prompt/agent_fix_plan_gen.py` → PROMPT_TEN — deliberately NOT
+  touched.** Checked: it contains no occurrence of `threshold`, `PASS`, `FAIL`
+  or `conclude`, so it makes no assumption to correct. Adding the line there
+  would have been noise.
+- **`hard_prompt/agent_exception_catcher.py` → PROMPT_EIGHT — NOT touched.**
+  Checked: its only `conclude()` mention is mode-agnostic ("wrong arguments
+  passed to `record()` or `conclude()`" → fix the call site), which is correct
+  advice for a zero-argument call too.
+- **`hard_prompt/agent_iterat_improver.py` → PROMPT_SEVEN — NOT touched.** It
+  belongs to the disabled `iterate_once` engine and is never sent. (Still
+  imported under `# noqa: F401` purely to keep the reference alive — say the
+  word and I'll drop the import.)
 
-2. **`hard_prompt/agent_fix_plan_apply.py` — PROMPT_ELEVEN's two `conclude()`
-   rules** (Step 2's "do not modify" bullet and Step 4's verification bullet).
+**Auto-probe behaviour is unchanged** because the line is conditional on a
+block auto-probe never receives: `_mode_addendum()` returns `""` outside
+auto-research, so the named "AUTO-RESEARCH MODE ADDENDUM" block is absent and
+the line's own final clause applies — "every instruction below applies as
+written". The test suite asserts exactly this (§7).
 
-   ```diff
-   -- Do NOT modify the `record(...)` or `conclude(...)` call lines in `train.py` (they must remain intact, with both `standard_threshold` and `acceptable_threshold` still passed to `conclude`).
-   +- Do NOT modify the `record(...)` or `conclude(...)` call lines in `train.py`. Leave the `conclude(...)` call exactly as you find it — with both `standard_threshold` and `acceptable_threshold` still passed on a threshold-gated probe, or with no arguments at all on a performance-monitoring probe.
-   ```
-
-   ```diff
-   -- `conclude(standard_threshold, acceptable_threshold)` still passes BOTH threshold values
-   +- the `conclude(...)` call is unchanged — both threshold values still passed if it had them, still no arguments if it didn't
-   ```
-
-   The same Step-4 wording appears in PROMPT_SEVEN (disabled) and, as
-   "`conclude()` is still called with no arguments", in the auto-research
-   iteration prompt (also disabled) — neither needs changing.
-
-   *Reason:* auto-research's `conclude()` takes no arguments. As written, a
-   literal-minded agent could "restore" two threshold arguments that don't
-   exist and break the probe. The addendum tells it not to, but this is the
-   highest-risk mismatch of the three and would be better fixed at source.
-
-3. **`hard_prompt/agent_iterat_improver.py` — PROMPT_SEVEN.** No change
-   proposed, just flagging: it belongs to the disabled `iterate_once` engine and
-   is now imported only to keep the reference alive (`# noqa: F401`). Say the
-   word and I'll drop the import and leave the file untouched.
+**Addendum trimmed in exchange.** Its two retraction items (item 1 "NO
+THRESHOLD, NO PASS/FAIL" and item 3 "`conclude()` TAKES NO ARGUMENTS") are now
+redundant with the inline line, so they were merged into a single short item
+that points back at it; items 2/4/5/6/7 renumbered to 2/3/4/5/6. The addendum
+still *states* both facts (the tests pin that) because it is also the flag the
+inline line keys on — it has to announce the mode. Merging the two items saved
+~110 characters; two additions put it back and a little more (a cross-reference
+in the header, and a reminder that the round index `K` given at the end of
+PROMPT_NINE is still the integer immediately above the block), so net size went
+3523 → 3559 characters. The win is placement, not length: the correction the
+agent most needs now arrives before the claim it corrects.
 
 ## 9. Open risks
 
@@ -337,7 +370,21 @@ alone; the behaviour is instead patched from the outside by the addendum.
    change is small and local: in `_maybe_revert_on_regression`, compare against
    `state.record.auto_research_best_value` instead of `iters[-1]` when
    `debug_flags["auto_research"]` is set. I did not do it because it would make
-   the two modes differ in the one place you asked them not to.
+   the two modes differ in the one place you asked them not to — and the owner
+   has since confirmed they want auto-probe's N vs N−1 rule kept as is. Note
+   the precise consequence: the rule does **not** guarantee the kept `train.py`
+   never sits below an earlier peak. After any reverted round, the comparison
+   baseline is the *discarded* code's metric, so the next round only has to
+   beat the failed attempt. Worked example (higher_is_better): round 1 = 0.70
+   (train.py = A, tag round-1-post = A); round 2 edits A→B, measures 0.60,
+   reverted, train.py back to A, but the ledger row for round 2 is 0.60; round
+   3 edits A→C, measures 0.65, compared against 0.60 → **kept**, so train.py is
+   now C at 0.65, below round 1's 0.70, and every later round is judged against
+   0.65. The per-run chart will still look monotonic because it plots
+   `best_value` (the running best ever seen), not the metric of the code
+   currently on disk. There is no revert *tolerance* contributing to this:
+   `_better_strict` demands strict improvement at 4-decimal precision, so ties
+   revert.
 2. **Cost per round went up ~3×.** A round used to be 1 agent call + 1 training
    run; it is now 3 agent calls (generate / score / apply) + 1 training run. A
    100-round batch is a materially bigger bill than before.
@@ -346,15 +393,21 @@ alone; the behaviour is instead patched from the outside by the addendum.
    error surfaces as `last_error` (the old loop `continue`d past a round that
    produced no metric). This matches `auto_fix_loop`; completed rounds are
    durable, so re-starting a batch resumes cleanly.
-4. **Prompt compliance is unverified** (see §7). Two specific things to watch on
-   the first live run: whether the setup agent really reuses `train.py`'s metric
-   rather than inventing one, and whether it places the anchor markers precisely
-   enough that `original_train_metric*` is recorded every round (the anchor
-   guard silently no-ops if either side of the comparison lacks anchors).
+4. **Prompt compliance is unverified** (see §7). Three specific things to watch
+   on the first live run: whether the agent honours the conditional
+   AUTO-RESEARCH MODE line (i.e. does not hunt for thresholds and does not
+   "restore" arguments to `conclude()`); whether the setup agent really reuses
+   `train.py`'s metric rather than inventing one; and whether it places the
+   anchor markers precisely enough that `original_train_metric*` is recorded
+   every round (the anchor guard silently no-ops if either side of the
+   comparison lacks anchors).
 5. **The addendum is long** (~3.5 kB) and sits at the end of three already-long
-   prompts. It is positioned last and says it overrides what precedes it, which
-   is the best available ordering — but it is still a retraction rather than a
-   correction at source (§8).
+   prompts. The worst part of that — retracting the prompt's own opening claim
+   4 000 characters later — is now fixed at source by the conditional line
+   (§8), which is the first thing the agent reads in PROMPT_NINE. What remains
+   is bulk: the addendum also lands *after* PROMPT_NINE's trailing round index
+   `K`, so it now carries an explicit reminder that `K` is the integer
+   immediately above it.
 6. **Auto-research now writes `fix_plans_N.json` into the workspace and the run
    folder.** `revert_to` already purges both, so nothing leaks, but the
    per-round artifact set for an auto-research run is larger than it was.

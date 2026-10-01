@@ -12,8 +12,11 @@ What it pins down:
   2. auto-research improvement rounds ARE auto-probe's fix-plan rounds
      (PROMPT_NINE -> PROMPT_TEN -> PROMPT_ELEVEN), honour the user hint, and
      carry the auto-research addendum.
-  3. AUTO-PROBE PROMPTS ARE BYTE-IDENTICAL to before this change (no
-     addendum, no extra text) — the regression guard that matters most.
+  3. AUTO-PROBE SEES NOTHING BUT THE SHARED PROMPT — exactly the constant
+     plus its round index / hint / plan JSON, no addendum and no mode
+     branching. The one conditional AUTO-RESEARCH MODE line inside those
+     shared constants is inert without the addendum. This is the regression
+     guard that matters most.
   4. the manual fix-plan path (generate + user-selected apply) works in
      auto-research mode, where it used to raise.
   5. the stale `iterate_once` engine is still disabled.
@@ -42,6 +45,15 @@ from hard_prompt.auto_research_prompt_patch import (
 from hard_prompt.auto_research_prompt_patch import (
     PROMPT_AUTO_RESEARCH_PATCH_PERFORMANCE_PROBE_IMPLEMENTATION_AND_INTEGRATION as SETUP_PROMPT,
 )
+
+# The conditional mode line the shared prompts carry, and the name of the
+# block it is conditional on.
+MODE_LINE_KEY = "AUTO-RESEARCH MODE (conditional"
+ADDENDUM_HEADER = "AUTO-RESEARCH MODE ADDENDUM"
+# The block's own banner. Distinct from ADDENDUM_HEADER because the
+# conditional line quotes that name, so the name alone cannot tell you whether
+# the block itself is present.
+ADDENDUM_BLOCK_MARK = "AUTO-RESEARCH MODE ADDENDUM — READ THIS LAST"
 
 from pipeline import snapshot_git as snap
 from pipeline import stages as st
@@ -399,6 +411,16 @@ def test_auto_probe_prompts_unchanged() -> None:
             "auto-pilot apply prompt == PROMPT_ELEVEN + selected plan",
         )
         check(ADDENDUM not in gen + score + apply_p, "no addendum in auto-probe mode")
+        # The conditional line is present but inert: it fires only when the
+        # addendum block it names is appended, which auto-probe never does.
+        check(
+            MODE_LINE_KEY in gen and MODE_LINE_KEY in apply_p,
+            "shared prompts carry the conditional auto-research line",
+        )
+        check(
+            ADDENDUM_BLOCK_MARK not in gen and ADDENDUM_BLOCK_MARK not in apply_p,
+            "the block that line is conditional on is absent in auto-probe mode",
+        )
 
         # ... and the manual generate path, with a hint.
         h.stub.prompts.clear()
@@ -534,6 +556,35 @@ def test_static_guards() -> None:
             "not used in auto-research mode" not in body,
             f"{fn} no longer rejects auto-research runs",
         )
+    # The conditional line: present in the two shared prompts that assume
+    # thresholds, absent from the one that doesn't (PROMPT_TEN never mentions
+    # a threshold), and keyed to the addendum block by name.
+    check(MODE_LINE_KEY in PROMPT_NINE, "PROMPT_NINE carries the conditional line")
+    check(MODE_LINE_KEY in PROMPT_ELEVEN, "PROMPT_ELEVEN carries the conditional line")
+    check(
+        MODE_LINE_KEY not in PROMPT_TEN,
+        "PROMPT_TEN left alone (it makes no threshold assumption)",
+    )
+    for name, prompt in (("PROMPT_NINE", PROMPT_NINE), ("PROMPT_ELEVEN", PROMPT_ELEVEN)):
+        line = next(l for l in prompt.split("\n") if MODE_LINE_KEY in l)
+        check(
+            line.lstrip().startswith("AUTO-RESEARCH MODE (conditional")
+            and ADDENDUM_HEADER in line
+            and "If that block is absent" in line,
+            f"{name}'s line is a single conditional keyed to the addendum block",
+        )
+        eq(
+            prompt.count(MODE_LINE_KEY), 1, f"{name} gained exactly one such line",
+        )
+    check(
+        ADDENDUM_BLOCK_MARK in ADDENDUM,
+        "the addendum announces itself under the name the line looks for",
+    )
+    # Trimming the addendum's retractions must not have dropped the facts.
+    check(
+        "no `status` field" in ADDENDUM and "`conclude()` takes no" in ADDENDUM,
+        "addendum still states no-threshold + no-argument conclude()",
+    )
     tier1 = SETUP_PROMPT.index("TIER 1: REUSE THE METRIC")
     tier2 = SETUP_PROMPT.index("TIER 2: AUPRC")
     check(tier1 < tier2, "setup prompt prefers train.py's own metric over AUPRC")

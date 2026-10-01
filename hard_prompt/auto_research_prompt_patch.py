@@ -239,44 +239,45 @@ This run is in auto-research mode. The improvement loop is exactly the one
 described above (candidate fix plans → confidence → apply exactly one plan →
 change log → the orchestrator runs training and keeps or reverts the round).
 Only the probe differs: it is a PERFORMANCE-MONITORING probe, so every
-threshold / pass-fail notion in the prompt above does not exist here.
+threshold / pass-fail notion in the prompt above does not exist here — which
+is exactly what the conditional AUTO-RESEARCH MODE line at the top of the
+prompt told you to expect.
 
-1. NO THRESHOLD, NO PASS/FAIL. There is no `standard_threshold`, no
+If the prompt above ended by giving you a round index `K`, that integer is the
+last thing before this block — this block does not change it.
+
+1. THIS IS THE BLOCK the AUTO-RESEARCH MODE line near the top of this prompt
+   refers to. So, as that line states: there is no `standard_threshold`, no
    `acceptable_threshold` and no `status` field — not in `prober.py`, not in
-   `.agent_probe/metric/probe_result_*.json`. Ignore every instruction above
-   that tells you to read, compare against, or report them; do not go looking
-   for them, and do not add them. "The probe is failing" above simply means
-   "the tracked metric has room to improve" — which is always true here.
+   `.agent_probe/metric/probe_result_*.json` — and `conclude()` takes no
+   arguments. Do not go looking for thresholds and do not add any. Where the
+   prompt above speaks of the probe "failing", read it as "the tracked metric
+   has room to improve", which is always true here. The `record(...)` call
+   site rule is unchanged: leave it intact, with its arguments still resolving
+   to existing variables of the right type.
 
 2. THE OBJECTIVE IS UNBOUNDED IMPROVEMENT. Push the tracked metric further in
    its better direction (`direction` in the probe_result), round after round.
    Never conclude the metric is "good enough", never propose a no-op plan, and
    never stop early. The orchestrator decides when the rounds end, not you.
 
-3. `conclude()` TAKES NO ARGUMENTS. Where the prompt above says to keep
-   `conclude(standard_threshold, acceptable_threshold)` intact with both
-   values passed, read it as: keep the `conclude()` call site exactly as it
-   is — a no-argument call. Do not add arguments to it. The `record(...)`
-   call site rule is unchanged: leave it intact and keep its arguments
-   resolving to existing variables of the right type.
-
-4. `prober.py` IS STILL COMPLETELY OFF-LIMITS, and the probe's metric
+3. `prober.py` IS STILL COMPLETELY OFF-LIMITS, and the probe's metric
    definition, aggregation and operating point are still FROZEN — including
    any probe-facing constant referenced from `train.py`. The tracked metric is
    usually the metric `train.py` itself already computes and selects on; you
    improve it by genuinely improving the model, never by redefining,
    re-aggregating or re-thresholding how it is measured.
 
-5. THE ANCHOR AND `user_analyze()` RULES STAY FULLY IN FORCE. Keep the
+4. THE ANCHOR AND `user_analyze()` RULES STAY FULLY IN FORCE. Keep the
    `# ANCHOR: original train metric` markers and the `original_train_metric*`
    recording intact and accurate, and keep `user_analyze()` untouched. A round
    that degrades an anchor by more than 20% from the round-1 baseline is still
    auto-reverted by the orchestrator and still wastes the round.
 
-6. NO PLOT OUTPUT. This mode writes only the metric JSON. Do not add any
+5. NO PLOT OUTPUT. This mode writes only the metric JSON. Do not add any
    chart / PDF / image generation to `prober.py` or `train.py`.
 
-7. EPOCH BUDGET — STRICT, ALWAYS APPLIES. Auto-research runs many rounds, so
+6. EPOCH BUDGET — STRICT, ALWAYS APPLIES. Auto-research runs many rounds, so
    "just train longer" is an expensive, indiscriminate lever that hides the
    real bottleneck. A plan may NOT increase the number of training epochs as
    its change, and may not raise an existing epoch cap past 50 even as a side

@@ -826,11 +826,13 @@ def _mode_addendum(state: RunState) -> str:
     """Suffix appended to the SHARED fix-plan prompts (PROMPT_NINE / _TEN /
     _ELEVEN) so one improvement loop serves both modes.
 
-    Auto-probe gets `""` — the prompts it sees are byte-identical to before.
-    Auto-research gets an addendum that cancels the threshold / PASS-FAIL /
-    two-argument-`conclude()` assumptions those prompts carry, because its
-    probe is a performance monitor with no thresholds. The shared prompts
-    themselves are never edited.
+    Auto-probe gets `""` — it sees nothing but the shared prompt itself, with
+    no mode branching anywhere. Auto-research gets the addendum, which is also
+    the flag the shared prompts key on: PROMPT_NINE and PROMPT_ELEVEN each
+    carry ONE conditional line saying "if an AUTO-RESEARCH MODE ADDENDUM block
+    appears at the end of this prompt, there are no thresholds and
+    `conclude()` takes no arguments". Absent the addendum that line is inert,
+    so auto-probe behaviour is unchanged.
     """
     if state.record.debug_flags.get("auto_research"):
         return PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM

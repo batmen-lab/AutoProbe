@@ -101,9 +101,14 @@ Two prompts are **disabled and callerless**: `PROMPT_SIX` (the improve
 commentor, which seeded `# potential_improvement_*` markers) and
 `PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT` (which actioned them).
 Auto-research no longer uses either — don't re-wire them. The shared fix-plan
-prompts (`PROMPT_NINE` / `_TEN` / `_ELEVEN`) are sent byte-identically in both
-modes; auto-research appends `PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM`
-rather than branching the prompt text. See `AUTO_RESEARCH_CHANGE_REPORT.md`.
+prompts (`PROMPT_NINE` / `_TEN` / `_ELEVEN`) are sent **unbranched** in both
+modes: auto-research appends `PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM`
+and nothing else. `PROMPT_NINE` and `PROMPT_ELEVEN` each carry ONE conditional
+line at the top — "if an AUTO-RESEARCH MODE ADDENDUM block appears at the end
+of this prompt, there are no thresholds and `conclude()` takes no arguments" —
+which is inert when the addendum is absent, i.e. in auto-probe mode. Keep that
+line and the addendum's banner in sync; the line names the block it looks for.
+See `AUTO_RESEARCH_CHANGE_REPORT.md`.
 
 Offline regression check for all of the above (no LLM, no GPU):
 `venv/bin/python tests/test_unified_stage4.py`.

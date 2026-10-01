@@ -146,10 +146,11 @@ Probe Fixing (Stage 4) — SAME loop as normal mode
 Post-batch dialog: Run more rounds / Back to Probe Design (clean everything) / Stay
 ```
 
-Every shared prompt is sent **verbatim**; auto-research only appends a mode
-addendum (`PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM`) that cancels the
-threshold / PASS-FAIL assumptions those prompts carry, since its probe is a
-performance monitor. Remaining differences from normal mode: no PASS/FAIL
+Every shared prompt is sent **unbranched**; auto-research only appends a mode
+addendum (`PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM`). PROMPT_NINE and
+PROMPT_ELEVEN each carry one *conditional* line stating that when that addendum
+is present there are no thresholds and `conclude()` takes no arguments — inert
+in auto-probe mode, where the addendum never appears. Remaining differences from normal mode: no PASS/FAIL
 threshold (so the round *count* is the stopping rule rather than
 `_at_terminal_state`), no dev-plan selection, and a second chart in the UI —
 one green dot per round, showing the running best.
