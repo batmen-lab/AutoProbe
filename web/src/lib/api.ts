@@ -65,6 +65,8 @@ export type RunRecord = {
   current_action: string | null;
   auto_research_target_runs: number;
   auto_research_runs_completed: number;
+  // Auto-research running best. DISPLAY ONLY — keep/revert is decided round
+  // vs. previous round, exactly as in auto-probe mode.
   auto_research_best_value: number | null;
   auto_research_best_direction: "higher_is_better" | "lower_is_better" | null;
   // Fix-plan flow (stage 4). `fix_plan_round` is the iteration index the
@@ -242,10 +244,13 @@ export const api = {
   //   http<RunRecord>(`/api/runs/${runId}/stage4/iterate`, {
   //     method: "POST",
   //   }),
-  autoResearchIterate: (runId: string, count: number) =>
+  // stage 4: auto-research auto-pilot — runs `count` fix-plan rounds (the same
+  // round autoFixLoop runs; the count is the stopping rule since auto-research
+  // has no PASS gate). `hint` is the optional non-binding user direction.
+  autoResearchIterate: (runId: string, count: number, hint?: string) =>
     http<RunRecord>(`/api/runs/${runId}/stage4/auto-research-iterate`, {
       method: "POST",
-      body: JSON.stringify({ count }),
+      body: JSON.stringify({ count, hint: hint ?? null }),
     }),
 
   // stage 4: auto-pilot — loops fix-plan rounds until terminal state.

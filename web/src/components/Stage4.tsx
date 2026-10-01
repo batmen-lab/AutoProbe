@@ -169,6 +169,9 @@ export function Stage4({
   const handleGenerateFixPlans = useCallback(async () => {
     begin();
     setError(null);
+    // Entering the manual flow explicitly: this is also how auto-research
+    // reaches the fix-plan panel (it has no stagnant modal to come through).
+    setFixingMode(true);
     const hintToSend = fixHint.trim() || undefined;
     try {
       const r = await api.generateFixPlans(run.run_id, hintToSend);
@@ -197,14 +200,23 @@ export function Stage4({
     }
   }
 
+  // Auto-research auto-pilot. Runs `count` fix-plan rounds — the same round
+  // the auto-probe auto-pilot runs — forwarding the optional hint to the plan
+  // generator each round.
   async function handleAutoResearchBatch(count: number) {
     if (count <= 0) return;
     lastArBatchKeyRef.current = null;
     begin();
     setError(null);
     setStep(null);
+    // Leaving the manual flow: the auto-pilot picks plans itself, and the
+    // backend briefly sets fix_plan_round mid-round — keep the panel hidden
+    // so stale plans don't flicker in between rounds.
+    setFixingMode(false);
+    setFixPlans(null);
+    const hintToSend = fixHint.trim() || undefined;
     try {
-      await api.autoResearchIterate(run.run_id, count);
+      await api.autoResearchIterate(run.run_id, count, hintToSend);
       onUpdate();
     } catch (e) {
       setError(String((e as Error).message ?? e));
@@ -249,7 +261,7 @@ export function Stage4({
         title="Probe Fixing"
         subtitle={
           isAutoResearch
-            ? "Each round, the agent applies one of the 10 # potential_improvement comments seeded in train.py and re-runs training. Auto-research has no PASS gate — keep running rounds as long as the metric is still moving."
+            ? "Same improvement loop as auto probe: each round the agent drafts 3 candidate fix plans, a supervisor scores them, one is applied to train.py and training re-runs. Auto-research has no PASS gate — the round count is the stopping rule, so keep running rounds as long as the metric is still moving."
             : "Each round, the agent edits train.py to push the probe metric. When a round fails, you'll see fix plans you can pick from. Stops automatically when status becomes PASS."
         }
       />
@@ -279,6 +291,13 @@ export function Stage4({
             ) : (
               `Start auto-research (${arRounds} round${arRounds === 1 ? "" : "s"})`
             )}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleGenerateFixPlans}
+            disabled={running || run.busy || hasOpenFixPlans}
+          >
+            {hasOpenFixPlans ? "Pick a fix plan below" : "Generate fixing plans"}
           </Button>
           <span className="text-[12px] text-ink-500">
             {run.iterations.length} run{run.iterations.length === 1 ? "" : "s"}{" "}
@@ -325,9 +344,14 @@ export function Stage4({
         </section>
       )}
 
-      {/* Optional hint for the fix-plan generator — only shown while in
-          fixing mode and no plans are currently open. */}
-      {!isAutoResearch && fixingMode && !hasOpenFixPlans && !passed && (
+      {/* Optional hint for the fix-plan generator. Auto-probe shows it once the
+          user has dropped to manual fixing mode; auto-research shows it
+          whenever no plans are open, because there it feeds BOTH the manual
+          "Generate fixing plans" button and every round of the auto-pilot
+          batch. */}
+      {(isAutoResearch
+        ? !hasOpenFixPlans
+        : fixingMode && !hasOpenFixPlans && !passed) && (
         <section className="space-y-1.5">
           <SectionLabel>Hint for the fix-plan agent (optional)</SectionLabel>
           <textarea
@@ -341,6 +365,8 @@ export function Stage4({
           <div className="text-[11px] text-ink-500">
             Leave empty to let the agent decide entirely from the codebase and
             iteration history.
+            {isAutoResearch &&
+              " Applies to the next auto-research batch as well as a single manual round."}
           </div>
         </section>
       )}
@@ -366,11 +392,13 @@ export function Stage4({
         </section>
       )}
 
-      {/* Fix plans — manual mode only. During auto-pilot the backend
-          briefly sets fix_plan_round between generate and apply; we keep
-          the panel hidden then so it doesn't flicker. fixingMode is only
-          true after the user clicked "Continue" on the stagnant modal. */}
-      {!isAutoResearch && fixingMode && hasOpenFixPlans && (
+      {/* Fix plans — manual rounds in BOTH modes. During either auto-pilot the
+          backend briefly sets fix_plan_round between generate and apply; we
+          keep the panel hidden then so it doesn't flicker. fixingMode is only
+          true after the user explicitly asked for plans (auto-probe: the
+          "Continue manually" choice on the stagnant modal; auto-research: the
+          "Generate fixing plans" button). */}
+      {fixingMode && hasOpenFixPlans && (
         <section className="space-y-3">
           <SectionLabel>
             Fix plans for {ordinal(run.fix_plan_round ?? 0)} run

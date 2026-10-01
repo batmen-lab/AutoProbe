@@ -36,10 +36,13 @@ Two end-to-end screen recordings of the web UI live in [`utilities/video_demo/`]
   pipeline run on the MIMIC workspace: Probe Design → Dev Plan → Implementation
   → Probe Fixing, including the PASS / FAIL dialogs at the end of a round.
 - **[`utilities/video_demo/autoresearch.mp4`](utilities/video_demo/autoresearch.mp4)** —
-  auto-research mode: toggle on at Stage 1, agent writes `prober.py` and
-  seeds the 10 `# potential_improvement_*` markers, then a batch of rounds
-  runs with the orchestrator-level revert-on-regression and the monotonic
-  per-run chart updating dot by dot.
+  auto-research mode: toggle on at Stage 1, agent writes `prober.py`, then a
+  batch of rounds runs with the orchestrator-level revert-on-regression and the
+  monotonic per-run chart updating dot by dot. **Note:** this recording predates
+  the unified improvement loop — it shows the retired comment-driven engine
+  (10 `# potential_improvement_*` markers, one actioned per round). Auto-research
+  now runs the same fix-plan rounds as auto probe; everything else in the video
+  still matches.
 
 Watch one or both before running the pipeline yourself — they cover the parts
 of the UI that are easier to see than to describe (status bar phases, the
@@ -100,58 +103,67 @@ Probe Fixing (Stage 4) — normal mode
 
 ### Auto-research mode (Stage 1 alternative)
 
-Toggling **auto-research** at Stage 1 collapses the first three stages into one
-agent-driven setup, then parks the run at Stage 4 with a different UI:
+Toggling **auto-research** at Stage 1 skips the probe-idea and dev-plan stages.
+That is the *only* difference between the two modes: once the run reaches
+Stage 4 it improves the subject through exactly the same fix-plan loop
+auto-probe uses.
 
 ```
 User toggles "auto-research" at Probe Design
         │
         ▼
 Auto-research Setup (single Stage-1 action)
-         [Agent] pick a standard metric, write prober.py,    ← PERFORMANCE_PROBE_IMPLEMENTATION_AND_INTEGRATION
-                 integrate it into train.py
-         [Run]   validate the integration
-         [Agent] seed 10 # potential_improvement_N: markers  ← PROMPT_SIX
-                 into train.py
-         [Run]   re-validate after the markers are in place
-         Orchestrator cleans up so indexing aligns (iter K
-         → train_version_K / probe_result_K / change_log_K).
+         [Agent] track the metric train.py ALREADY improves,  ← PERFORMANCE_PROBE_IMPLEMENTATION_AND_INTEGRATION
+                 write prober.py, integrate it into train.py,
+                 mark the `# ANCHOR: original train metric`s
+         [Run]   python train.py  → probe_result_1
+                  └─ on crash → [Agent] fix                   ← PROMPT_EIGHT
+         Tags `pre-iter` + `round-1-post`, records round 1.
+         (Step-for-step the tail of Stage 3 in normal mode.)
         │
         ▼
-Probe Fixing (Stage 4) — auto-research mode
+Probe Fixing (Stage 4) — SAME loop as normal mode
          Sidebar locks Stage 2 and Stage 3 (skipped).
-         User sets a "rounds" count (default 10) and clicks
-         "Start auto-research (N rounds)". For each round:
-           snapshot train.py
-           [Agent] apply one targeted change                 ← PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT
-                   (epoch budget enforced; size adapts to
-                    recent progress; smooth increments)
+         Two entry points, both running the identical round:
+           · "Start auto-research (N rounds)" — auto-pilot,
+             auto-picks the highest-confidence plan each round
+           · "Generate fixing plans" — manual: you read the 3
+             plans and pick one
+         Each round:
+           [Agent] draft 3 candidate fix plans                ← PROMPT_NINE  (+ user hint)
+           [Agent] score their confidence                     ← PROMPT_TEN
+           [Agent] apply exactly one plan, write change log   ← PROMPT_ELEVEN
            [Run]   python train.py
-                  └─ on crash → [Agent] fix                  ← PROMPT_EIGHT
-           Orchestrator compares new tail_mean to running
-           best (respecting direction):
-              ├─ improved → keep change, advance best
-              └─ regressed → restore train.py from snapshot
-                              (per-run chart stays monotonic)
+                  └─ on crash → [Agent] fix                   ← PROMPT_EIGHT
+           Orchestrator compares this round's tail_mean to the
+           PREVIOUS round's (respecting direction) and checks
+           the anchor floor:
+              ├─ improved → keep, tag round-N-post
+              └─ regressed / anchor breach → restore train.py
+                 from round-(N-1)-post, warn next round's agent
         │
         ▼
 Post-batch dialog: Run more rounds / Back to Probe Design (clean everything) / Stay
 ```
 
-Key differences from normal mode: no PASS/FAIL threshold, no dev-plan
-selection, the orchestrator is the source of truth for revert-on-regression
-(not the agent), and the UI shows a second chart — one green dot per round —
-that is monotonic by construction.
+Every shared prompt is sent **verbatim**; auto-research only appends a mode
+addendum (`PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM`) that cancels the
+threshold / PASS-FAIL assumptions those prompts carry, since its probe is a
+performance monitor. Remaining differences from normal mode: no PASS/FAIL
+threshold (so the round *count* is the stopping rule rather than
+`_at_terminal_state`), no dev-plan selection, and a second chart in the UI —
+one green dot per round, showing the running best.
 
 ### Artifacts produced inside the workspace
 
 | Path | Written by | Contents |
 |---|---|---|
-| `prober.py` | Stage 3 agent (or auto-research setup) | Probe definition; never touched again. |
+| `prober.py` | Stage 3 agent (or auto-research setup) | Probe definition; never touched again. In auto-research it wraps the metric `train.py` already computes. |
 | `train.py` | Stage 3 + 4 agents | Modified in place. The orchestrator may rewind it after a round (auto-research revert-on-regression, or the user's back-step). |
 | `.agent_probe/snapshot/train_version_N.py` | pipeline | Snapshot of `train.py` before each agent edit. Used for revert and for auto-research's keep-best logic. After auto-research setup, indices align: round K writes `train_version_K` alongside `probe_result_K` and `change_log_K`. |
 | `.agent_probe/metric/probe_result_N.json` | `prober.py` | metric_name, direction, per-epoch values, min/max/mean/std, `tail_mean`, threshold + status (normal mode only). |
 | `.agent_probe/plot/probe_result_N.pdf` | `prober.py` (normal mode) | Plotly chart of the metric over epochs. Auto-research skips plots. |
+| `.agent_probe/fix_plans/fix_plans_N.json` | Stage-4 agents (both modes) | The round's 3 candidate fix plans + confidences; mirrored into `response/<run>/` for durable history. |
 | `.agent_probe/live/probe_live.json` | `prober.py` | Per-epoch trajectory updated during the run; powers the web UI's live chart. |
 | `.agent_probe/change_log_N.txt` | Stage 4 agent | What changed each round; the next round reads these to avoid repeating an unsuccessful change. |
 
@@ -363,8 +375,8 @@ Open <http://localhost:3000> and:
    dataset, then either:
    - click *Generate Probes* and pick one of 10 candidates (normal path), **or**
    - flip the *auto-research mode* toggle and click *Run Auto-Research Setup*
-     (the agent picks a metric and writes the prober for you; you'll land at
-     Probe Fixing).
+     (the agent reuses the metric `train.py` already improves, writes the
+     prober and runs it once; you'll land at Probe Fixing).
 4. **Dev Plan (Stage 2)** — click *Generate Dev Plans*. Pick one of 3.
    Optionally edit the threshold before continuing. (Skipped in auto-research.)
 5. **Implementation (Stage 3)** — click *Implement & Run*. The agent writes
@@ -374,14 +386,16 @@ Open <http://localhost:3000> and:
    - *Normal mode:* click *Start auto probe-fixing* to run one round, then
      respond to the PASS or FAIL dialog. PASS lets you discard or keep
      changes; FAIL offers Give up / Relax threshold / Continue.
-   - *Auto-research mode:* set the number of rounds (default 10) and click
-     *Start auto-research (N rounds)*. The orchestrator runs the batch with
-     revert-on-regression. A post-batch dialog offers Run more / Back to
-     Probe Design (clean everything) / Stay.
+   - *Auto-research mode:* optionally type a hint, then either set the number
+     of rounds (default 10) and click *Start auto-research (N rounds)* — the
+     auto-pilot drafts, scores and applies one fix plan per round — or click
+     *Generate fixing plans* to read the 3 plans and pick one yourself. The
+     hint feeds whichever you use. The orchestrator runs each round with
+     revert-on-regression and the anchor guard. A post-batch dialog offers Run
+     more / Back to Probe Design (clean everything) / Stay.
 
 The persistent **status bar** above each stage tells you what the pipeline is
-currently doing (e.g. *"Auto-research 3/10: applying one improvement to
-train.py…"*) or what input it's waiting on (e.g. *"Waiting for probe
+currently doing (e.g. *"3rd run: agent drafting 3 candidate fix plans…"*) or what input it's waiting on (e.g. *"Waiting for probe
 selection — pick one of the candidates below to continue."*).
 
 The sidebar lets you go **back** to an earlier stage. The semantics are:
@@ -461,15 +475,17 @@ AutoProbe/
 │   ├── nlp_dev_doc_gen.py          # PROMPT_THREE — 3 dev plans
 │   ├── nlp_dd_confi_comput.py      # PROMPT_FOUR  — practicality scoring
 │   ├── agent_dd_implement.py       # PROMPT_FIVE  — implement + integrate
-│   ├── agent_improve_commentor.py  # PROMPT_SIX   — annotate train.py with 10 markers
-│   ├── agent_iterat_improver.py    # PROMPT_SEVEN — iterate (normal mode)
-│   ├── agent_exception_catcher.py  # PROMPT_EIGHT — fix crashed train.py
-│   ├── agent_fix_plan_gen.py       # PROMPT_NINE / PROMPT_TEN — candidate fix plans + scoring
-│   ├── agent_fix_plan_apply.py     # apply the selected fix plan
+│   ├── agent_improve_commentor.py  # PROMPT_SIX   — DISABLED (no caller; seeded the 10 markers)
+│   ├── agent_iterat_improver.py    # PROMPT_SEVEN — stale iterate_once engine (disabled)
+│   ├── agent_exception_catcher.py  # PROMPT_EIGHT — fix crashed train.py (both modes)
+│   ├── agent_fix_plan_gen.py       # PROMPT_NINE / PROMPT_TEN — candidate fix plans + scoring (both modes)
+│   ├── agent_fix_plan_apply.py     # PROMPT_ELEVEN — apply the selected fix plan (both modes)
 │   └── auto_research_prompt_patch.py
-│                                   # Auto-research prompts: setup (write prober + pick metric)
-│                                   # + iteration (one targeted change per round, epoch budget,
-│                                   # smooth-progress heuristics; orchestrator handles revert).
+│                                   # Auto-research-only prompts: setup (reuse train.py's own
+│                                   # metric, write prober, mark the anchor) + the fix-plan
+│                                   # addendum that strips threshold/PASS-FAIL from the shared
+│                                   # prompts. Also holds the DISABLED comment-driven iteration
+│                                   # prompt, kept for reference.
 │
 ├── cases/                          # Workspaces — one folder per SubpopBench case
 │   └── MIMICNotes/                 # CASE.md, train.py, requirements.txt, vendored subpopbench/
@@ -522,22 +538,36 @@ AutoProbe/
   reports `"status": "PASS"`, and the UI pops a PASS dialog with three exits
   (Discard & re-pick / Keep & re-baseline / Stay). On FAIL, a separate dialog
   offers Give up / Relax threshold / Continue.
-- **Auto-research keeps only the best version.** In auto-research mode there
-  is no PASS threshold. After every round the orchestrator compares the new
-  `tail_mean` against the running best (respecting `direction`). If the round
-  didn't improve, the orchestrator rewinds `train.py` to that round's
-  pre-iteration snapshot. The per-run chart in the UI is monotonic by
-  construction — the agent doesn't have to do its own revert math.
+- **One improvement loop, two front doors.** Auto-research and auto-probe
+  share the *same* Stage-4 round (`_do_auto_fix_round`): fix-plan generation
+  with an optional user hint, supervisor confidence scoring, single-plan
+  application, change log, orchestrator-owned revert-on-regression and the
+  anchor guard. Auto-research only skips Stage 1 (probe idea) and Stage 2
+  (dev plan). Shared prompts are never branched on mode — a mode addendum is
+  appended instead, so auto-probe's prompt bytes are untouched.
+- **Auto-research has no PASS gate, so the count stops it.** With no
+  threshold there is nothing to PASS, and auto-probe's `_at_terminal_state`
+  is unconditionally terminal past 4 rows. Auto-research therefore runs the
+  number of rounds the user asked for. Keep/revert itself is identical to
+  auto-probe: this round's `tail_mean` vs the **previous** round's, with
+  `train.py` rewound to `round-(N-1)-post` on a regression. The per-run chart
+  additionally plots a running best (`best_value`), which is display-only and
+  does not participate in any decision.
 - **Locked stages in auto-research.** Dev Plan and Implementation are not used
   in auto-research; the sidebar greys them out so the user can't navigate
   there. The only "back" path from Probe Fixing is all the way to Probe
   Design (which wipes everything and starts over).
-- **Smooth-progress prompt heuristics.** The auto-research iteration prompt
-  has a strict epoch budget (no inflating training epochs as a hack) and
-  modulates step size based on the most recent round's delta — small steps
-  when progress is positive, larger steps when it stalled. The goal is
-  traceable round-by-round increments so the per-run chart tells a coherent
-  story.
+- **Epoch budget in auto-research.** Auto-research runs many rounds, so
+  "just train longer" is an expensive, indiscriminate lever. The mode
+  addendum forbids raising the epoch count as a fix plan (and forbids pushing
+  an epoch cap past 50, or `n_estimators` past a sane ceiling, as a stand-in).
+  Auto-probe, which runs at most 3 fix rounds, has no such rule.
+- **Auto-research reuses `train.py`'s own metric.** The setup prompt's METRIC
+  RULE is tiered: Tier 1 is the metric `train.py` already computes and selects
+  on (passed straight through to `record()`, never recomputed); AUPRC is only
+  Tier 2, for scripts that evaluate nothing; a standard task-appropriate
+  metric is Tier 3. The point of the mode is to push the number the project
+  already cares about.
 - **Back-step semantics (normal mode).** Back to Probe Design or Dev Plan
   lands at the *end* of that stage with the previous selection cleared, so
   the user can re-pick from the same candidate list. A 4 → 1 back-step also

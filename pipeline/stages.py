@@ -4,9 +4,11 @@ Stage 1 (NLP):  generate_probes, select_probe
 Stage 2 (NLP):  generate_dev_plans, select_plan
 Stage 3 (agent): implement
 Stage 4 (agent): fix-plan flow — generate_fix_plans, select_and_apply_fix_plan,
-                 auto_fix_loop (auto-research: auto_research_iterate_batch).
-                 NOTE: `iterate_once` is the STALE, DISABLED Stage-4 engine
-                 (no fix-plan mechanism) — do not use. See CLAUDE.md.
+                 auto_fix_loop. Auto-research runs the SAME fix-plan rounds
+                 (auto_research_iterate_batch just repeats _do_auto_fix_round
+                 `count` times, since auto-research has no PASS gate to stop
+                 on). NOTE: `iterate_once` is the STALE, DISABLED Stage-4
+                 engine (no fix-plan mechanism) — do not use. See CLAUDE.md.
 
 Each function reads/writes via the RunState passed in and returns the new
 phase/output suitable for the API response.
@@ -27,14 +29,16 @@ from hard_prompt.nlp_prober_confi_comput import PROMPT_TWO
 from hard_prompt.nlp_dev_doc_gen import PROMPT_THREE
 from hard_prompt.nlp_dd_confi_comput import PROMPT_FOUR
 from hard_prompt.agent_dd_implement import PROMPT_FIVE
-from hard_prompt.agent_improve_commentor import PROMPT_SIX
-from hard_prompt.agent_iterat_improver import PROMPT_SEVEN
+# PROMPT_SIX (improve-commentor) is DISABLED and has no caller — auto-research
+# no longer seeds `# potential_improvement_*` markers. PROMPT_SEVEN belongs to
+# the stale `iterate_once` engine. Both are left in hard_prompt/ for reference.
+from hard_prompt.agent_iterat_improver import PROMPT_SEVEN  # noqa: F401 (stale iterate_once)
 from hard_prompt.agent_exception_catcher import PROMPT_EIGHT
 from hard_prompt.agent_fix_plan_gen import PROMPT_NINE, PROMPT_TEN
 from hard_prompt.agent_fix_plan_apply import PROMPT_ELEVEN
 from hard_prompt.auto_research_prompt_patch import (
     PROMPT_AUTO_RESEARCH_PATCH_PERFORMANCE_PROBE_IMPLEMENTATION_AND_INTEGRATION,
-    PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT,
+    PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM,
 )
 
 from . import snapshot_git as snap
@@ -100,10 +104,21 @@ def select_probe(state: RunState, index_1based: int) -> None:
 def auto_research_setup(state: RunState) -> None:
     """Stage 1 alternative: skip NLP probe/dev-plan generation entirely.
 
-    The agent picks a standard performance metric, writes prober.py + integrates
-    train.py, then we run training, run the commentor (which seeds 10
-    `# potential_improvement_N:` markers in train.py), then training again to
-    validate. This jumps straight from stage 1 to stage 4.
+    The agent picks the performance metric `train.py` is already improving
+    (see the METRIC RULE in the setup prompt), writes prober.py + integrates
+    train.py + marks the anchor, then we run training once. That single run IS
+    round 1 — exactly like stage 3's first run in auto-probe mode — so stage 4
+    can use the identical fix-plan improvement loop from round 2 onward.
+
+    Deliberately mirrors the tail of `implement()` step for step: same
+    `pre-iter` / `round-1-post` tags, same first iteration record. The only
+    difference between the two modes is that this one skips the probe-idea
+    (stage 1) and dev-plan (stage 2) NLP stages.
+
+    The improve-commentor (PROMPT_SIX) used to run here to seed 10
+    `# potential_improvement_*` markers for the old comment-driven iteration
+    prompt. Both are DISABLED: stage 4 now generates fix plans from the
+    codebase and the metric history, the same way auto-probe does.
     """
     state.set_phase(Stage.ONE, "running")
     state.record.debug_flags["auto_research"] = True
@@ -116,68 +131,41 @@ def auto_research_setup(state: RunState) -> None:
         log_path=state.log_path,
     )
 
-    # Validate the integration with a real training run. Both setup-time runs
-    # use expected_index=1 — their outputs are wiped a few lines below before
-    # the first real iteration produces probe_result_1.
-    run_training_with_autofix(state, expected_index=1)
-
-    # Commentor seeds train.py with the 10 improvement markers used by
-    # PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT in stage 4.
-    agent_call(
-        f"{PROMPT_SIX}\n\nTarget file: train.py",
-        cwd=state.workspace,
-        log_path=state.log_path,
-    )
-    # Re-validate after the commentor edits.
-    run_training_with_autofix(state, expected_index=1)
-
     # Tag the post-setup train.py as `pre-iter` — the auto-research equivalent
     # of post-stage-3 implementation. revert_to(stage=4) restores from this.
     snap.commit_train(state.workspace, "auto-research setup (pre-iter)", tag="pre-iter")
 
-    # ── Indexing cleanup ──────────────────────────────────────────────────
-    # Setup produced two validation runs (post-prober + post-commentor). We
-    # seed best_value off the post-commentor tail_mean first, then wipe the
-    # setup artifacts so iter 1 produces probe_result_1 / change_log_1.
-    seed = _read_best_stats_and_direction(state.workspace)
-    if seed is not None:
-        state.record.auto_research_best_value = seed[0]
-        state.record.auto_research_best_max = seed[1]
-        state.record.auto_research_best_mean = seed[2]
-        state.record.auto_research_best_direction = seed[3]
+    # Validate the integration with a real training run. This is round 1: it
+    # produces probe_result_1.json, which is also the anchor-guard baseline.
+    state.set_action("auto-research-setup-test-run")
+    run_training_with_autofix(state, expected_index=1)
 
-    metric_dir = state.workspace / ".agent_probe" / "metric"
-    if metric_dir.exists():
-        for p in metric_dir.glob("probe_result_*.json"):
-            try:
-                p.unlink()
-            except FileNotFoundError:
-                pass
-    plot_dir = state.workspace / ".agent_probe" / "plot"
-    if plot_dir.exists():
-        for p in plot_dir.glob("probe_result_*.pdf"):
-            try:
-                p.unlink()
-            except FileNotFoundError:
-                pass
-    base = state.workspace / ".agent_probe"
-    for p in base.glob("change_log_*.txt"):
-        try:
-            p.unlink()
-        except FileNotFoundError:
-            pass
-    live_file = state.workspace / ".agent_probe" / "live" / "probe_live.json"
-    if live_file.exists():
-        try:
-            live_file.unlink()
-        except FileNotFoundError:
-            pass
+    # Round 1 is the setup run — tag the train.py that produced probe_result_1
+    # so round 2 has a revert-on-regression target.
+    snap.commit_train(
+        state.workspace, "round 1 post (auto-research setup run)", tag="round-1-post",
+    )
 
-    # No baseline iteration is recorded — iterations starts empty so the
-    # first batch round shows up cleanly as "1st run".
-    state.record.iterations = []
+    # Pull the setup run's metric into the iteration ledger. The fix-plan flow
+    # requires at least one iteration to learn from, so this row is what makes
+    # the shared stage-4 loop usable from round 2 on.
+    snapshot = _read_latest_metric(state.workspace)
+    if snapshot is not None:
+        seed = _tail_mean_stat(snapshot.get("raw", {}) or {})
+        if seed is None:
+            seed = snapshot.get("tail_mean")
+        _set_auto_research_best(state, seed, snapshot.get("direction"))
+        state.record_iteration(
+            _iteration_record_from_snapshot(
+                snapshot,
+                note="auto-research setup run",
+                best_value=state.record.auto_research_best_value,
+            )
+        )
+
     state.record.auto_research_target_runs = 0
     state.record.auto_research_runs_completed = 0
+    state.save()
 
     state.set_action(None)
     state.advance_to(Stage.FOUR)
@@ -834,6 +822,63 @@ def iterate_once(state: RunState) -> dict:
 
 
 # ── Stage 4: fix-plan flow ──────────────────────────────────────────────────
+def _mode_addendum(state: RunState) -> str:
+    """Suffix appended to the SHARED fix-plan prompts (PROMPT_NINE / _TEN /
+    _ELEVEN) so one improvement loop serves both modes.
+
+    Auto-probe gets `""` — the prompts it sees are byte-identical to before.
+    Auto-research gets an addendum that cancels the threshold / PASS-FAIL /
+    two-argument-`conclude()` assumptions those prompts carry, because its
+    probe is a performance monitor with no thresholds. The shared prompts
+    themselves are never edited.
+    """
+    if state.record.debug_flags.get("auto_research"):
+        return PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM
+    return ""
+
+
+def _backfill_auto_research_baseline(state: RunState) -> None:
+    """Give a legacy auto-research run the baseline iteration row the shared
+    fix-plan flow needs. No-op in auto-probe mode and whenever the ledger
+    already has rows.
+
+    The retired auto-research setup deliberately cleared `iterations` and the
+    metric artifacts so its first batch round would read as "1st run". A run
+    parked at stage 4 by that code therefore has no row to learn from, which
+    the fix-plan flow requires. Rather than make such a run unusable, we
+    synthesize the row from whatever probe_result is on disk.
+    """
+    if not state.record.debug_flags.get("auto_research"):
+        return
+    if state.record.iterations:
+        return
+    snapshot = _read_latest_metric(state.workspace)
+    if snapshot is None:
+        return
+    seed = _tail_mean_stat(snapshot.get("raw", {}) or {})
+    if seed is None:
+        seed = snapshot.get("tail_mean")
+    _set_auto_research_best(state, seed, snapshot.get("direction"))
+    rec = _iteration_record_from_snapshot(
+        snapshot,
+        note="baseline (recovered from existing metric)",
+        best_value=state.record.auto_research_best_value,
+    )
+    state.record_iteration(rec)
+    _track_auto_research_best(state, rec)
+    # The snapshot tag the next round reverts to must exist too.
+    tag = _round_post_tag(snapshot["index"])
+    if not snap.tag_exists(state.workspace, tag):
+        snap.commit_train(state.workspace, f"round {snapshot['index']} post (recovered)", tag=tag)
+
+
+def _hint_block(hint: str | None) -> str:
+    """The `User hint:` block appended to PROMPT_NINE, or `""` when there is
+    no hint (so the generator prompt is unchanged)."""
+    hint_clean = (hint or "").strip()
+    return f"\n\nUser hint:\n{hint_clean}\n" if hint_clean else ""
+
+
 def _next_round_index(state: RunState) -> int:
     """The 1-based index of the next iteration about to run — same number
     used for fix_plans_N.json, round-N-post tags, and probe_result_N.json.
@@ -851,17 +896,19 @@ _next_fix_plan_round = _next_round_index
 
 def generate_fix_plans(state: RunState, hint: str | None = None) -> dict:
     """Stage 4 fix flow: agent reads repo + history, writes 3 candidate fix
-    plans, supervisor agent fills in confidence. Auto-research is independent
-    of this path and uses its own iteration prompt instead.
+    plans, supervisor agent fills in confidence.
+
+    Shared by BOTH modes. Auto-research runs the identical flow; the only
+    difference is the mode addendum appended to the prompts (see
+    `_mode_addendum`), which cancels their threshold / PASS-FAIL assumptions.
 
     `hint` is an optional user-supplied string passed verbatim to the
     generator agent. The agent treats it as non-binding direction and the
     supervisor (PROMPT_TEN) scores plans on the merits regardless.
     """
-    if state.record.debug_flags.get("auto_research"):
-        raise ValueError("Fix-plan flow is not used in auto-research mode.")
     if not (state.workspace / "prober.py").exists():
         raise ValueError("Fix-plan flow requires prober.py from stage 3.")
+    _backfill_auto_research_baseline(state)
     if not state.record.iterations:
         raise ValueError("Fix-plan flow requires at least one iteration to learn from.")
 
@@ -878,19 +925,19 @@ def generate_fix_plans(state: RunState, hint: str | None = None) -> dict:
     except FileNotFoundError:
         pass
 
-    hint_clean = (hint or "").strip()
-    hint_block = f"\n\nUser hint:\n{hint_clean}\n" if hint_clean else ""
+    hint_block = _hint_block(hint)
+    addendum = _mode_addendum(state)
 
     state.set_action(f"fix-plan-generate:{round_idx}")
     agent_call(
-        f"{PROMPT_NINE}{round_idx}{hint_block}",
+        f"{PROMPT_NINE}{round_idx}{hint_block}{addendum}",
         cwd=state.workspace,
         log_path=state.log_path,
     )
 
     state.set_action(f"fix-plan-confidence:{round_idx}")
     agent_call(
-        f"{PROMPT_TEN}{round_idx}",
+        f"{PROMPT_TEN}{round_idx}{addendum}",
         cwd=state.workspace,
         log_path=state.log_path,
     )
@@ -1023,11 +1070,21 @@ def _pick_highest_confidence(plans: list) -> int:
     return best_idx
 
 
-def _do_auto_fix_round(state: RunState) -> None:
+def _do_auto_fix_round(
+    state: RunState, hint: str | None = None,
+) -> IterationRecord:
     """One round inside auto_fix_loop: generate plans, auto-pick highest
     confidence, apply, run training, record the iteration. Inlined here
     rather than calling generate_fix_plans + select_and_apply_fix_plan so
     the loop owns phase management end-to-end (no flickers between rounds).
+
+    This is THE improvement round for both modes — `auto_fix_loop`
+    (auto-probe) and `auto_research_iterate_batch` (auto-research) each just
+    decide how many times to call it and when to stop. `hint` defaults to
+    None, which reproduces the original no-hint prompt exactly.
+
+    Returns the IterationRecord it appended, so a caller can post-annotate
+    the stored row (auto-research uses this for its monotonic best series).
     """
     round_idx = _next_fix_plan_round(state)
     fix_plans_dir = state.workspace / ".agent_probe" / "fix_plans"
@@ -1038,16 +1095,19 @@ def _do_auto_fix_round(state: RunState) -> None:
     except FileNotFoundError:
         pass
 
+    hint_block = _hint_block(hint)
+    addendum = _mode_addendum(state)
+
     state.set_action(f"fix-plan-generate:{round_idx}")
     agent_call(
-        f"{PROMPT_NINE}{round_idx}",
+        f"{PROMPT_NINE}{round_idx}{hint_block}{addendum}",
         cwd=state.workspace,
         log_path=state.log_path,
     )
 
     state.set_action(f"fix-plan-confidence:{round_idx}")
     agent_call(
-        f"{PROMPT_TEN}{round_idx}",
+        f"{PROMPT_TEN}{round_idx}{addendum}",
         cwd=state.workspace,
         log_path=state.log_path,
     )
@@ -1074,7 +1134,7 @@ def _do_auto_fix_round(state: RunState) -> None:
 
     state.set_action(f"fix-plan-apply:{round_idx}")
     anchor_warning = _consume_anchor_warning(state.workspace)
-    apply_prompt = f"{PROMPT_ELEVEN}\n\n{json.dumps(selected, indent=2)}"
+    apply_prompt = f"{PROMPT_ELEVEN}\n\n{json.dumps(selected, indent=2)}{addendum}"
     if anchor_warning:
         apply_prompt = f"{apply_prompt}\n\n{anchor_warning}"
     agent_call(
@@ -1101,11 +1161,13 @@ def _do_auto_fix_round(state: RunState) -> None:
         rec = IterationRecord(index=round_idx, note=f"{base_note} (no metric)")
     rec.fix_plan_chosen_index = one_based
     state.record_iteration(rec)
+    _track_auto_research_best(state, rec)
 
     # Clear the pointer — auto-pilot never leaves a half-open round.
     state.record.fix_plan_round = None
     state.record.fix_plan_index = None
     state.save()
+    return rec
 
 
 def auto_fix_loop(state: RunState) -> dict:
@@ -1115,10 +1177,12 @@ def auto_fix_loop(state: RunState) -> dict:
       - last status == PASS
       - >= 4 iteration rows + improving + AT met (best-effort)
       - >= 4 iteration rows + not improving (stagnant)
-    Auto-research mode is unrelated and uses its own path.
+
+    Auto-research cannot use this terminal rule (no thresholds -> no PASS, and
+    `_at_terminal_state` is unconditionally terminal past 4 rows), so it runs
+    the same rounds under a user-supplied count instead — see
+    `auto_research_iterate_batch`. The ROUND ITSELF is identical.
     """
-    if state.record.debug_flags.get("auto_research"):
-        raise ValueError("Auto-fix-loop is not used in auto-research mode.")
     if not (state.workspace / "prober.py").exists():
         raise ValueError("Stage 4 requires prober.py from stage 3.")
     if not state.record.iterations:
@@ -1139,9 +1203,10 @@ def auto_fix_loop(state: RunState) -> dict:
 def select_and_apply_fix_plan(state: RunState, index_1based: int) -> dict:
     """User picked one of the 3 candidate fix plans. Apply it + run training,
     then record an iteration as if iterate_once had run.
+
+    Shared by both modes (auto-research included); the only difference is the
+    mode addendum appended to the apply prompt.
     """
-    if state.record.debug_flags.get("auto_research"):
-        raise ValueError("Fix-plan flow is not used in auto-research mode.")
     if state.record.fix_plan_round is None:
         raise ValueError("No open fix-plan round.")
     round_idx = state.record.fix_plan_round
@@ -1167,6 +1232,7 @@ def select_and_apply_fix_plan(state: RunState, index_1based: int) -> dict:
     prompt = (
         f"{PROMPT_ELEVEN}\n\n"
         f"{json.dumps(selected, indent=2)}"
+        f"{_mode_addendum(state)}"
     )
     if anchor_warning:
         prompt = f"{prompt}\n\n{anchor_warning}"
@@ -1188,6 +1254,7 @@ def select_and_apply_fix_plan(state: RunState, index_1based: int) -> dict:
         rec = IterationRecord(index=round_idx, note=f"{base_note} (no metric)")
     rec.fix_plan_chosen_index = index_1based
     state.record_iteration(rec)
+    _track_auto_research_best(state, rec)
 
     # Close the fix-plan round — the file stays on disk for history; the
     # round/index pointer clears so the UI reverts to the ready state.
@@ -1205,56 +1272,83 @@ def _better(value: float, best: float, direction: str) -> bool:
     return value > best
 
 
-def _annotate_metric_history(
-    workspace: Path,
-    round_idx: int,
-    prev_best_last_epoch: float | None,
-    prev_best_max: float | None,
-    prev_best_mean: float | None,
+def _set_auto_research_best(
+    state: RunState, value: float | None, direction: str | None,
 ) -> None:
-    """Stamp the round's metric artifact with the running-best iteration it is
-    judged against. All three describe that same best iteration:
+    """Advance the auto-research running best. DISPLAY ONLY.
 
-      previous_best_last_epoch — its last-epoch value (drives keep/revert)
-      previous_best_max        — its max-over-epochs value
-      previous_best_mean       — its mean value
-
-    Written into .agent_probe/metric/probe_result_<round_idx>.json so the
-    comparison is visible in the artifact itself.
+    Keep/revert is decided by `_maybe_revert_on_regression` (this round vs the
+    previous round) — identical to auto-probe. This running best exists purely
+    so the UI header, the post-batch dialog and the monotonic per-run chart
+    have a non-decreasing series to show.
     """
-    p = workspace / ".agent_probe" / "metric" / f"probe_result_{round_idx}.json"
-    if not p.exists():
+    if direction:
+        state.record.auto_research_best_direction = direction
+    if value is None:
         return
-    try:
-        doc = json.loads(p.read_text())
-    except (json.JSONDecodeError, OSError):
-        return
-    if not isinstance(doc, dict):
-        return
-    doc["previous_best_last_epoch"] = prev_best_last_epoch
-    doc["previous_best_max"] = prev_best_max
-    doc["previous_best_mean"] = prev_best_mean
-    try:
-        p.write_text(json.dumps(doc, indent=2))
-    except OSError:
-        pass
+    best = state.record.auto_research_best_value
+    if best is None or _better(
+        value, best, state.record.auto_research_best_direction or "higher_is_better",
+    ):
+        state.record.auto_research_best_value = value
 
 
-def auto_research_iterate_batch(state: RunState, count: int) -> dict:
-    """Run `count` auto-research rounds with revert-on-regression.
+def _track_auto_research_best(state: RunState, rec: IterationRecord) -> None:
+    """Post-annotate the just-recorded iteration row — auto-research only.
 
-    Each round: snapshot train.py → run agent → run training → compare the new
-    `last_epoch` (end-of-training metric) to the running best's last_epoch. If
-    improved, keep the change and update best. If not, restore train.py from the
-    pre-iteration snapshot so the
-    workspace only ever holds the best version seen. Each recorded
-    IterationRecord stores `best_value` so the UI's per-run chart is
-    monotonic by construction.
+    No-op in auto-probe mode, which keeps the shared round byte-identical.
+    In auto-research mode it advances the running best, stamps it onto the
+    stored row as `best_value` (the monotonic chart's y) and nulls the
+    threshold fields, which the mode does not have (defensive: a prober that
+    wrote them from a stale schema must not make a threshold appear in the UI).
+    """
+    if not state.record.debug_flags.get("auto_research"):
+        return
+    value = rec.tail_mean if rec.tail_mean is not None else rec.metric_value
+    _set_auto_research_best(state, value, rec.direction)
+    # Mirror onto the dataclass too — `select_and_apply_fix_plan` returns
+    # `rec.__dict__` to the API, which must match the stored row.
+    rec.best_value = state.record.auto_research_best_value
+    rec.threshold = None
+    rec.acceptable_threshold = None
+    rec.acceptable_met = None
+    if state.record.iterations:
+        row = state.record.iterations[-1]
+        row["best_value"] = rec.best_value
+        row["threshold"] = None
+        row["acceptable_threshold"] = None
+        row["acceptable_met"] = None
+    state.save()
+
+
+def auto_research_iterate_batch(
+    state: RunState, count: int, hint: str | None = None,
+) -> dict:
+    """Run `count` auto-research rounds — each one the auto-probe fix-plan round.
+
+    Every round is literally `_do_auto_fix_round`: the agent drafts 3 candidate
+    fix plans (PROMPT_NINE), a supervisor scores them (PROMPT_TEN), the
+    highest-confidence plan is applied (PROMPT_ELEVEN) with the one-shot anchor
+    warning if the previous round breached the utility floor, training runs with
+    the exception-catcher retry loop, and the orchestrator keeps or reverts the
+    round against the previous round's tail_mean. `hint` (optional, from the
+    UI) is passed to the plan generator verbatim, exactly as in the manual
+    `generate_fix_plans` path.
+
+    The ONLY thing this adds over `auto_fix_loop` is the stopping rule: with no
+    threshold there is no PASS to stop on and `_at_terminal_state` would be
+    unconditionally terminal past 4 rows, so the user's round count decides
+    when the batch ends. Mid-batch failures are not swallowed — a round that
+    cannot produce fix plans or a training run that cannot be fixed aborts the
+    batch and surfaces via the server's `last_error`, same as auto-probe.
     """
     if not state.record.debug_flags.get("auto_research"):
         raise ValueError("auto_research_iterate_batch requires auto-research mode.")
     if not (state.workspace / "prober.py").exists():
         raise ValueError("Auto-research batch requires prober.py from setup.")
+    _backfill_auto_research_baseline(state)
+    if not state.record.iterations:
+        raise ValueError("Auto-research batch needs at least one iteration to learn from.")
     if count <= 0:
         raise ValueError("count must be >= 1")
 
@@ -1263,142 +1357,79 @@ def auto_research_iterate_batch(state: RunState, count: int) -> dict:
     state.record.auto_research_runs_completed = 0
     state.save()
 
-    # Seed best from the latest existing probe result if we haven't yet.
-    best = state.record.auto_research_best_value          # best iteration's last_epoch
-    best_max = state.record.auto_research_best_max
-    best_mean = state.record.auto_research_best_mean
-    direction = state.record.auto_research_best_direction
-    if best is None:
-        seed = _read_best_stats_and_direction(state.workspace)
-        if seed is not None:
-            best, best_max, best_mean, direction = seed
-            state.record.auto_research_best_value = best
-            state.record.auto_research_best_max = best_max
-            state.record.auto_research_best_mean = best_mean
-            state.record.auto_research_best_direction = direction
-            state.save()
-
-    # The "pre-iteration" snapshot for batch round k is whatever
-    # round-{k-1}-post points at (or `pre-iter` for the very first round).
-    # We never write a separate pre-snapshot — we just remember the ref to
-    # restore from on regression.
-    for k in range(1, count + 1):
-        next_idx = _next_round_index(state)
-        prev_ref = (
-            f"round-{next_idx - 1}-post"
-            if snap.tag_exists(state.workspace, f"round-{next_idx - 1}-post")
-            else "pre-iter"
+    # Seed the display-only running best from the ledger if setup didn't.
+    if state.record.auto_research_best_value is None:
+        last = state.record.iterations[-1]
+        _set_auto_research_best(
+            state,
+            last.get("tail_mean") if last.get("tail_mean") is not None else last.get("metric_value"),
+            last.get("direction"),
         )
-
-        state.set_action(f"auto-research-improving:{k}:{count}")
-        agent_call(
-            PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT,
-            cwd=state.workspace,
-            log_path=state.log_path,
-        )
-
-        state.set_action(f"auto-research-test:{k}:{count}")
-        run_training_with_autofix(state, expected_index=next_idx)
-
-        tag_n = _round_post_tag(next_idx)
-
-        snapshot = _read_latest_metric(state.workspace)
-        if snapshot is None:
-            # No metric produced — treat as a no-op round; revert to be safe.
-            snap.restore_train(state.workspace, prev_ref)
-            snap.commit_train(
-                state.workspace, f"round {next_idx} reverted (no metric)", tag=tag_n,
-            )
-            state.log_round_outcome(
-                next_idx, "reverted", "no metric",
-                source="auto-research", restored_from=prev_ref,
-            )
-            state.record.auto_research_runs_completed = k
-            state.save()
-            continue
-
-        raw = snapshot.get("raw", {}) or {}
-        # The decision metric is the LAST-EPOCH value (the model actually produced).
-        cur, cur_max, cur_mean = _epoch_stats(raw)
-        if cur is None:
-            cur = snapshot.get("metric_value")
-        direction = raw.get("direction", direction or "higher_is_better")
-
-        # Stamp the artifact with the running-best iteration this round is judged
-        # against (its last_epoch / max / mean). `best` is updated below on a keep.
-        _annotate_metric_history(state.workspace, next_idx, best, best_max, best_mean)
-
-        if cur is None:
-            snap.restore_train(state.workspace, prev_ref)
-            snap.commit_train(
-                state.workspace, f"round {next_idx} reverted (no metric)", tag=tag_n,
-            )
-            state.log_round_outcome(
-                next_idx, "reverted", "no metric",
-                source="auto-research", restored_from=prev_ref,
-            )
-            note = "reverted (no metric)"
-        elif best is None:
-            best, best_max, best_mean = cur, cur_max, cur_mean
-            snap.commit_train(
-                state.workspace, f"round {next_idx} kept (baseline)", tag=tag_n,
-            )
-            state.log_round_outcome(
-                next_idx, "kept", "baseline of batch",
-                source="auto-research", tail_mean=cur,
-            )
-            note = "kept (baseline of batch)"
-        elif _better(cur, best, direction):
-            best, best_max, best_mean = cur, cur_max, cur_mean
-            snap.commit_train(
-                state.workspace, f"round {next_idx} kept (improved)", tag=tag_n,
-            )
-            state.log_round_outcome(
-                next_idx, "kept", "improved",
-                source="auto-research", tail_mean=cur, prev_best=best,
-            )
-            note = "kept (improved)"
-        else:
-            # Orchestrator-level revert — train.py rewinds to prev_ref.
-            snap.restore_train(state.workspace, prev_ref)
-            snap.commit_train(
-                state.workspace, f"round {next_idx} reverted (no improvement)", tag=tag_n,
-            )
-            state.log_round_outcome(
-                next_idx, "reverted", "no improvement",
-                source="auto-research", tail_mean=cur, prev_best=best,
-                restored_from=prev_ref,
-            )
-            note = "reverted (no improvement)"
-
-        state.record.auto_research_best_value = best
-        state.record.auto_research_best_max = best_max
-        state.record.auto_research_best_mean = best_mean
-        state.record.auto_research_best_direction = direction
-        # Auto-research has no thresholds; build the record so threshold fields
-        # stay None even if the snapshot carries them from a stale schema.
-        rec = _iteration_record_from_snapshot(snapshot, note=note, best_value=best)
-        rec.threshold = None
-        rec.acceptable_threshold = None
-        rec.acceptable_met = None
-        state.record_iteration(rec)
-        state.record.auto_research_runs_completed = k
         state.save()
 
-    state.set_action(None)
-    state.set_phase(Stage.FOUR, "ready")
+    try:
+        for k in range(1, count + 1):
+            _do_auto_fix_round(state, hint=hint)
+            state.record.auto_research_runs_completed = k
+            state.save()
+    finally:
+        state.set_action(None)
+        state.set_phase(Stage.FOUR, "ready")
+
     return {
-        "completed": count,
+        "completed": state.record.auto_research_runs_completed,
         "best_value": state.record.auto_research_best_value,
         "direction": state.record.auto_research_best_direction,
     }
 
 
+# ── DISABLED: best-based auto-research bookkeeping ───────────────────────────
+# Both helpers below belonged to the old auto-research engine, which compared
+# each round to the RUNNING BEST's last_epoch and stamped the comparison into
+# the round's metric artifact. Auto-research now shares auto-probe's decision
+# rule verbatim (tail_mean, this round vs the PREVIOUS round, in
+# `_maybe_revert_on_regression`), so nothing calls them. Kept for reference —
+# re-wiring `_annotate_metric_history` is also the smallest change if the
+# best-based comparison is ever wanted back.
+#
+# def _annotate_metric_history(
+#     workspace: Path,
+#     round_idx: int,
+#     prev_best_last_epoch: float | None,
+#     prev_best_max: float | None,
+#     prev_best_mean: float | None,
+# ) -> None:
+#     """Stamp the round's metric artifact with the running-best iteration it is
+#     judged against (its last_epoch / max / mean)."""
+#     p = workspace / ".agent_probe" / "metric" / f"probe_result_{round_idx}.json"
+#     if not p.exists():
+#         return
+#     try:
+#         doc = json.loads(p.read_text())
+#     except (json.JSONDecodeError, OSError):
+#         return
+#     if not isinstance(doc, dict):
+#         return
+#     doc["previous_best_last_epoch"] = prev_best_last_epoch
+#     doc["previous_best_max"] = prev_best_max
+#     doc["previous_best_mean"] = prev_best_mean
+#     try:
+#         p.write_text(json.dumps(doc, indent=2))
+#     except OSError:
+#         pass
+#
+#
 def _read_best_stats_and_direction(
     workspace: Path,
 ) -> tuple[float, float, float, str] | None:
     """Return (last_epoch, max_epoch, mean_epoch, direction) from the latest
-    probe_result, if any."""
+    probe_result, if any.
+
+    UNUSED — part of the retired last-epoch/best-based auto-research seeding
+    (see the DISABLED block above). `auto_research_setup` now seeds the
+    display-only best from the decision value (`_tail_mean_stat`) so the seed
+    and the keep/revert rule agree. Kept for reference.
+    """
     metric_dir = workspace / ".agent_probe" / "metric"
     if not metric_dir.exists():
         return None

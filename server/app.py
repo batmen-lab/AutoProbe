@@ -130,6 +130,10 @@ class ListDirBody(BaseModel):
 
 class AutoResearchIterateBody(BaseModel):
     count: int  # number of auto-research rounds to run in this batch
+    # Optional user hint, forwarded verbatim to the fix-plan generator agent
+    # each round — the same non-binding direction the manual
+    # /stage4/fix-plans/generate route accepts.
+    hint: str | None = None
 
 
 class FixPlanGenerateBody(BaseModel):
@@ -257,8 +261,10 @@ def stage1_artifact(run_id: str):
 async def stage1_auto_research(run_id: str):
     """Skip NLP probe + dev-plan, jump straight to a performance-monitoring probe.
 
-    The agent picks a metric, writes prober.py, integrates train.py, then we run
-    training + commentor + training. After this the run is parked at stage 4.
+    The agent reuses the metric train.py already improves, writes prober.py,
+    integrates train.py and marks the anchor; then one training run produces
+    round 1. After this the run is parked at stage 4, where it uses the same
+    fix-plan improvement loop as auto-probe.
     """
     state = load_run(run_id)
     _launch(stages_mod.auto_research_setup, state, run_id=run_id)
@@ -362,11 +368,21 @@ async def stage4_fix_plans_select(run_id: str, body: SelectBody):
 
 @app.post("/api/runs/{run_id}/stage4/auto-research-iterate")
 async def stage4_auto_research_iterate(run_id: str, body: AutoResearchIterateBody):
-    """Run a batch of `count` auto-research rounds with revert-on-regression."""
+    """Auto-research auto-pilot: run `count` fix-plan rounds.
+
+    Each round is the SAME round auto-probe's /stage4/auto-fix-loop runs
+    (generate 3 fix plans → score confidence → apply the best → train →
+    keep-or-revert). The count is the stopping rule, because auto-research has
+    no threshold to PASS. `hint` is optional and non-binding.
+    """
     if body.count <= 0 or body.count > 100:
         raise HTTPException(400, "count must be between 1 and 100")
     state = load_run(run_id)
-    _launch(stages_mod.auto_research_iterate_batch, state, body.count, run_id=run_id)
+    _launch(
+        stages_mod.auto_research_iterate_batch,
+        state, body.count, body.hint,
+        run_id=run_id,
+    )
     return _state_payload(load_run(run_id))
 
 

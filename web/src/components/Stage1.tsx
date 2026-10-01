@@ -104,12 +104,16 @@ export function Stage1({
       {stage1Active && autoResearch && !designs && (
         <Card className="p-4">
           <div className="text-[12.5px] text-ink-700 leading-relaxed">
-            The agent will read <span className="font-mono">train.py</span>,
-            pick a standard performance metric appropriate for your task, write{" "}
-            <span className="font-mono">prober.py</span>, integrate it into{" "}
-            <span className="font-mono">train.py</span>, and run training to
-            produce the first metric. There is no probe selection or dev plan
-            in this mode — you'll jump straight to Probe Fixing.
+            The agent will read <span className="font-mono">train.py</span> and
+            track the performance metric it is{" "}
+            <span className="italic">already</span> improving — the value it
+            selects / early-stops on, or its headline eval number — falling back
+            to a standard metric only if the script computes none. It writes{" "}
+            <span className="font-mono">prober.py</span>, integrates it into{" "}
+            <span className="font-mono">train.py</span>, and runs training to
+            produce the first metric. There is no probe selection or dev plan in
+            this mode — you'll jump straight to Probe Fixing, which then uses the
+            same fix-plan improvement loop as auto probe.
           </div>
           <div className="mt-4">
             <Button onClick={handleAutoResearch} disabled={generating}>

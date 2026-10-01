@@ -77,7 +77,11 @@ The **only** correct way to run auto-probe / auto-research is through the
 3. Stage 4 auto-probe = **`POST /stage4/auto-fix-loop`** ("Start auto
    probe-fixing"), or the manual fix-plan flow: `stage4/fix-plans/generate` →
    `stage4/fix-plans/select`.
-4. Auto-research = `stage1/auto-research` then `stage4/auto-research-iterate`.
+4. Auto-research = `stage1/auto-research` then `stage4/auto-research-iterate`
+   (auto-pilot, `{count, hint?}`) — or the *same* `stage4/fix-plans/generate`
+   → `stage4/fix-plans/select` routes for a manual round. Auto-research runs
+   the identical Stage-4 improvement round as auto-probe; it only skips
+   stages 1 and 2.
 
 If asked to "auto-run the whole pipeline via frontend interaction like a human
 user," use these frontend/HTTP routes only. **Never** shell out to
@@ -85,8 +89,21 @@ user," use these frontend/HTTP routes only. **Never** shell out to
 
 ## The live Stage-4 functions (in `pipeline/stages.py`)
 
-- `generate_fix_plans`, `read_fix_plans`, `select_and_apply_fix_plan`
-- `auto_fix_loop` (auto-pilot: loops fix-plan rounds until terminal)
-- `auto_research_iterate_batch` (auto-research mode)
+- `_do_auto_fix_round` — THE improvement round, shared by both modes
+- `generate_fix_plans`, `read_fix_plans`, `select_and_apply_fix_plan` (both modes)
+- `auto_fix_loop` (auto-probe auto-pilot: loops rounds until terminal)
+- `auto_research_iterate_batch` (auto-research auto-pilot: loops the same
+  round `count` times, because there is no threshold to PASS)
 
 `iterate_once` is **not** among them — it is dead code kept only for reference.
+
+Two prompts are **disabled and callerless**: `PROMPT_SIX` (the improve
+commentor, which seeded `# potential_improvement_*` markers) and
+`PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT` (which actioned them).
+Auto-research no longer uses either — don't re-wire them. The shared fix-plan
+prompts (`PROMPT_NINE` / `_TEN` / `_ELEVEN`) are sent byte-identically in both
+modes; auto-research appends `PROMPT_AUTO_RESEARCH_PATCH_FIX_PLAN_ADDENDUM`
+rather than branching the prompt text. See `AUTO_RESEARCH_CHANGE_REPORT.md`.
+
+Offline regression check for all of the above (no LLM, no GPU):
+`venv/bin/python tests/test_unified_stage4.py`.

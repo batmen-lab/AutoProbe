@@ -1,3 +1,15 @@
+# ── DISABLED: the improve-commentor ──────────────────────────────────────────
+# PROMPT_SIX seeded `train.py` with 10 `# potential_improvement_N:` markers that
+# the old comment-driven auto-research iteration prompt then actioned one per
+# round. Auto-research now improves the subject through the SAME fix-plan flow
+# auto-probe uses (generate 3 plans → confidence → apply one → change log), so
+# the commentor has no caller: `auto_research_setup` no longer runs it, and
+# auto-probe never did. The prompt text is kept verbatim for reference / quick
+# revert and is intentionally left unedited. Do NOT re-wire it without also
+# re-enabling PROMPT_AUTO_RESEARCH_PATCH_ITERATION_IMPROVEMENT, which is the
+# only thing that ever consumed the markers.
+# See AUTO_RESEARCH_CHANGE_REPORT.md.
+
 PROMPT_SIX = """
 You are an expert ML/DL code reviewer. Your job is to annotate a training script with improvement suggestions — but you must not change any code.
 

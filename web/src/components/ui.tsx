@@ -248,6 +248,8 @@ export function humanizeAction(action: string | null): string {
     return "Running first probe test on the integrated train.py…";
   if (action === "auto-research-setup")
     return "Auto-research: writing prober & integrating train.py…";
+  if (action === "auto-research-setup-test-run")
+    return "Auto-research: running the first probe on the integrated train.py…";
   if (action.startsWith("improving-implement:")) {
     const n = parseInt(action.split(":")[1], 10);
     return `${ordinal(n)} run: applying improvement to train.py…`;
@@ -272,6 +274,9 @@ export function humanizeAction(action: string | null): string {
     const n = parseInt(action.split(":")[1], 10);
     return `${ordinal(n)} run: re-running probe after fix…`;
   }
+  // Legacy auto-research actions — emitted by the retired comment-driven
+  // engine. Auto-research now reports the shared `fix-plan-*` actions above.
+  // Kept so an old run's log/status replays with readable labels.
   if (action.startsWith("auto-research-improving:")) {
     const [, k, n] = action.split(":");
     return `Auto-research ${k}/${n}: applying one improvement to train.py…`;
