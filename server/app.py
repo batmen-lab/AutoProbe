@@ -386,6 +386,32 @@ async def stage4_auto_research_iterate(run_id: str, body: AutoResearchIterateBod
     return _state_payload(load_run(run_id))
 
 
+# ── User override of the latest keep/revert decision ─────────────────────────
+def _override_round(run_id: str, fn) -> dict:
+    """Synchronous (snapshot-git only, no agent). Refused while any stage
+    action runs, so it can never race a round's own keep/revert."""
+    if _busy:
+        raise HTTPException(409, "Another stage action is already running.")
+    state = load_run(run_id)
+    try:
+        result = fn(state)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"result": result, "state": _state_payload(load_run(run_id))}
+
+
+@app.post("/api/runs/{run_id}/stage4/rounds/reject-kept")
+def stage4_reject_kept_round(run_id: str):
+    """User rejects the latest kept round: its workspace is reverted."""
+    return _override_round(run_id, stages_mod.reject_kept_round)
+
+
+@app.post("/api/runs/{run_id}/stage4/rounds/keep-reverted")
+def stage4_keep_reverted_round(run_id: str):
+    """User keeps the latest reverted round: its tried workspace is restored."""
+    return _override_round(run_id, stages_mod.keep_reverted_round)
+
+
 # ── Revert ───────────────────────────────────────────────────────────────────
 @app.post("/api/runs/{run_id}/revert")
 def revert(run_id: str, body: RevertBody):

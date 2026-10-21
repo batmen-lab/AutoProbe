@@ -47,6 +47,11 @@ export type IterationRow = {
   // Auto-research only: running best metric after this iteration. Used to
   // plot the monotonic per-run chart.
   best_value: number | null;
+  // Stage-4 rounds: whether this round's workspace became the resident one.
+  // Absent on older rows (infer from the note).
+  outcome?: "kept" | "reverted" | null;
+  // Set when the user overrode the decision afterwards.
+  user_override?: "rejected" | "kept" | null;
 };
 
 export type RunRecord = {
@@ -65,8 +70,8 @@ export type RunRecord = {
   current_action: string | null;
   auto_research_target_runs: number;
   auto_research_runs_completed: number;
-  // Auto-research running best. DISPLAY ONLY — keep/revert is decided round
-  // vs. previous round, exactly as in auto-probe mode.
+  // Auto-research best over KEPT rounds. DISPLAY ONLY — keep/revert is decided
+  // round vs. best kept round, exactly as in auto-probe mode.
   auto_research_best_value: number | null;
   auto_research_best_direction: "higher_is_better" | "lower_is_better" | null;
   // Fix-plan flow (stage 4). `fix_plan_round` is the iteration index the
@@ -274,6 +279,16 @@ export const api = {
     http<RunRecord>(`/api/runs/${runId}/stage4/fix-plans/select`, {
       method: "POST",
       body: JSON.stringify({ index }),
+    }),
+
+  // stage 4: user override of the latest round's keep/revert decision
+  rejectKeptRound: (runId: string) =>
+    http<{ state: RunRecord }>(`/api/runs/${runId}/stage4/rounds/reject-kept`, {
+      method: "POST",
+    }),
+  keepRevertedRound: (runId: string) =>
+    http<{ state: RunRecord }>(`/api/runs/${runId}/stage4/rounds/keep-reverted`, {
+      method: "POST",
     }),
 
   // revert

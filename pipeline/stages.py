@@ -265,6 +265,44 @@ def _round_post_tag(n: int) -> str:
     return f"round-{n}-post"
 
 
+def _round_tried_tag(n: int) -> str:
+    """Round N's workspace as its edits + training left it, BEFORE keep/revert."""
+    return f"round-{n}-tried"
+
+
+def _row_value(row: dict) -> float | None:
+    """A ledger row's decision value (tail_mean; older rows fall back)."""
+    v = row.get("tail_mean")
+    if v is None:
+        v = row.get("last_epoch")
+    if v is None:
+        v = row.get("metric_value")
+    return v
+
+
+def _row_kept(row: dict) -> bool:
+    """Whether a ledger row's workspace was kept. Rows written before the
+    `outcome` field existed are inferred from their note."""
+    outcome = row.get("outcome")
+    if outcome is not None:
+        return outcome == "kept"
+    return "reverted" not in (row.get("note") or "")
+
+
+def _best_kept_value(iters: list, direction: str) -> float | None:
+    """Best decision value among the rounds whose workspace was kept."""
+    best: float | None = None
+    for row in iters:
+        if not _row_kept(row):
+            continue
+        v = _row_value(row)
+        if v is None:
+            continue
+        if best is None or _better_strict(v, best, direction):
+            best = v
+    return best
+
+
 # ── Anchor guard (original-train-metric utility floor) ───────────────────────
 # The probe metric is the optimization target, so anything NOT in it is free to
 # be sacrificed (Goodhart). The anchor re-couples the fix-loop to train.py's own
@@ -386,9 +424,13 @@ def _consume_anchor_warning(workspace: Path) -> str | None:
 
 
 def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
-    """If round `round_idx`'s tail_mean is worse than round `round_idx - 1`'s,
-    restore train.py from `round-{N-1}-post` and return a note string. Else
-    commit the kept train.py as `round-N-post` and return None.
+    """If round `round_idx`'s tail_mean is not better than the BEST kept
+    round's, restore the workspace from `round-{N-1}-post` (undoing this
+    round) and return a note string. Else commit the kept workspace as
+    `round-N-post` and return None.
+
+    The tried workspace is always committed first as `round-N-tried`, so the
+    user can still keep a reverted round afterwards (keep_reverted_round).
 
     Caller is expected to have already run training and have probe_result_N
     on disk. Tags are written via the snapshot git, NOT by the agent. The
@@ -405,6 +447,9 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
     direction = (cur_snap or {}).get("direction") or "higher_is_better"
     tag_n = _round_post_tag(round_idx)
     prev_tag = _round_post_tag(round_idx - 1)
+    snap.commit_train(
+        state.workspace, f"round {round_idx} tried", tag=_round_tried_tag(round_idx),
+    )
 
     # Without a measurable new metric, treat as no-info: revert to be safe.
     if cur_tm is None:
@@ -415,16 +460,11 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
         )
         state.log_round_outcome(round_idx, "reverted", "no metric", restored_from=prev_tag)
         return "reverted (no metric)"
-    # No prior round → nothing to compare; just keep.
-    prev_tm: float | None = None
-    if len(iters) >= 1:
-        prev_tm = iters[-1].get("tail_mean")
-        # # DISABLED (last-epoch mechanism):
-        # prev_tm = iters[-1].get("last_epoch")
-        if prev_tm is None:  # pre-tail_mean run on disk
-            prev_tm = iters[-1].get("last_epoch")
-        if prev_tm is None:
-            prev_tm = iters[-1].get("metric_value")
+    # No kept round with a value → nothing to compare; just keep.
+    # Compared against the BEST kept round, not the previous row: a previous
+    # row that was itself reverted (or a worse round the user kept) must not
+    # lower the bar.
+    prev_tm = _best_kept_value(iters, direction)
     if prev_tm is None:
         snap.commit_train(
             state.workspace, f"round {round_idx} kept (baseline)", tag=tag_n,
@@ -459,9 +499,9 @@ def _maybe_revert_on_regression(state: RunState, round_idx: int) -> str | None:
             tail_mean=cur_tm, prev_tail_mean=prev_tm,
         )
         return None
-    # Regressed (or unchanged). Roll train.py back to the prior round's tag
-    # and commit a no-op so the round-N-post tag still exists for the next
-    # round's revert target.
+    # Not better than the best kept round (or unchanged). Roll the workspace
+    # back to the prior round's tag and commit a no-op so the round-N-post tag
+    # still exists for the next round's revert target.
     reverted = False
     if snap.tag_exists(state.workspace, prev_tag):
         snap.restore_train(state.workspace, prev_tag)
@@ -1149,7 +1189,8 @@ def _do_auto_fix_round(
     run_training_with_autofix(state, expected_index=round_idx)
 
     # Revert-on-regression at the orchestrator level. If the new tail_mean is
-    # worse than the prior round's, restore train.py from round-{N-1}-post.
+    # not better than the best kept round's, restore the workspace from
+    # round-{N-1}-post.
     # Either way, tag the resulting train.py as round-{N}-post.
     revert_note = _maybe_revert_on_regression(state, round_idx)
 
@@ -1162,6 +1203,7 @@ def _do_auto_fix_round(
     else:
         rec = IterationRecord(index=round_idx, note=f"{base_note} (no metric)")
     rec.fix_plan_chosen_index = one_based
+    rec.outcome = "reverted" if revert_note else "kept"
     state.record_iteration(rec)
     _track_auto_research_best(state, rec)
 
@@ -1255,6 +1297,7 @@ def select_and_apply_fix_plan(state: RunState, index_1based: int) -> dict:
     else:
         rec = IterationRecord(index=round_idx, note=f"{base_note} (no metric)")
     rec.fix_plan_chosen_index = index_1based
+    rec.outcome = "reverted" if revert_note else "kept"
     state.record_iteration(rec)
     _track_auto_research_best(state, rec)
 
@@ -1264,6 +1307,87 @@ def select_and_apply_fix_plan(state: RunState, index_1based: int) -> dict:
     state.set_action(None)
     state.set_phase(Stage.FOUR, "ready")
     return {"iteration": rec.__dict__, "passed": rec.status == "PASS"}
+
+
+# ── User override of the latest keep/revert decision ─────────────────────────
+def _latest_overridable_round(state: RunState) -> dict:
+    """The latest ledger row, if the user may override its decision now."""
+    if int(state.record.stage) != int(Stage.FOUR):
+        raise ValueError("Keep/revert overrides are only available in stage 4.")
+    if state.record.phase == "running" or state.record.current_action:
+        raise ValueError("Wait for the running action to finish.")
+    if state.record.fix_plan_round is not None:
+        raise ValueError("Close the open fix-plan round first.")
+    iters = state.record.iterations
+    if len(iters) < 2:
+        raise ValueError("Round 1 is the baseline; there is no decision to override.")
+    return iters[-1]
+
+
+def _after_override(state: RunState, row: dict) -> None:
+    """Refresh the auto-research best after a user override."""
+    if state.record.debug_flags.get("auto_research"):
+        state.record.auto_research_best_value = _best_kept_value(
+            state.record.iterations,
+            state.record.auto_research_best_direction
+            or row.get("direction") or "higher_is_better",
+        )
+        row["best_value"] = state.record.auto_research_best_value
+    state.save()
+
+
+def reject_kept_round(state: RunState) -> dict:
+    """User rejects the latest KEPT round: the workspace goes back to the
+    round before it, exactly as if the orchestrator had reverted it."""
+    row = _latest_overridable_round(state)
+    if not _row_kept(row):
+        raise ValueError(f"Round {row['index']} was not kept; nothing to reject.")
+    n = int(row["index"])
+    prev_tag = _round_post_tag(n - 1)
+    if not snap.tag_exists(state.workspace, prev_tag):
+        raise ValueError(f"Snapshot {prev_tag} is missing; cannot revert round {n}.")
+    if not snap.tag_exists(state.workspace, _round_tried_tag(n)):
+        # Older rounds have no tried tag; keep their workspace so a later
+        # "keep" can bring it back.
+        snap.commit_train(state.workspace, f"round {n} tried", tag=_round_tried_tag(n))
+    snap.restore_train(state.workspace, prev_tag)
+    snap.commit_train(
+        state.workspace, f"round {n} reverted (rejected by user)", tag=_round_post_tag(n),
+    )
+    state.log_round_outcome(n, "reverted", "rejected by user", restored_from=prev_tag)
+    row["outcome"] = "reverted"
+    row["user_override"] = "rejected"
+    row["note"] = f"{row.get('note') or ''} — reverted (rejected by user)".lstrip(" —")
+    _after_override(state, row)
+    return {"iteration": row}
+
+
+def keep_reverted_round(state: RunState) -> dict:
+    """User keeps the latest REVERTED round: its tried workspace becomes the
+    resident one, exactly as if the orchestrator had kept it."""
+    row = _latest_overridable_round(state)
+    if _row_kept(row):
+        raise ValueError(f"Round {row['index']} was already kept.")
+    n = int(row["index"])
+    tried = _round_tried_tag(n)
+    if not snap.tag_exists(state.workspace, tried):
+        raise ValueError(
+            f"Round {n} has no saved tried version (it predates this feature); "
+            "it cannot be restored."
+        )
+    snap.restore_train(state.workspace, tried)
+    snap.commit_train(
+        state.workspace, f"round {n} kept (kept by user)", tag=_round_post_tag(n),
+    )
+    state.log_round_outcome(n, "kept", "kept by user", restored_from=tried)
+    # The user accepted this round as is: drop the pending one-shot anchor
+    # warning the revert left for the next round's agent.
+    _consume_anchor_warning(state.workspace)
+    row["outcome"] = "kept"
+    row["user_override"] = "kept"
+    row["note"] = f"{row.get('note') or ''} — kept by user".lstrip(" —")
+    _after_override(state, row)
+    return {"iteration": row}
 
 
 # ── Auto-research batch ──────────────────────────────────────────────────────
@@ -1280,9 +1404,9 @@ def _set_auto_research_best(
     """Advance the auto-research running best. DISPLAY ONLY.
 
     Keep/revert is decided by `_maybe_revert_on_regression` (this round vs the
-    previous round) — identical to auto-probe. This running best exists purely
-    so the UI header, the post-batch dialog and the monotonic per-run chart
-    have a non-decreasing series to show.
+    best kept round) — identical to auto-probe. This running best exists purely
+    for the UI header, the post-batch dialog and the per-run chart; it is the
+    best over KEPT rounds, so a user rejecting a kept round can lower it.
     """
     if direction:
         state.record.auto_research_best_direction = direction
@@ -1306,8 +1430,14 @@ def _track_auto_research_best(state: RunState, rec: IterationRecord) -> None:
     """
     if not state.record.debug_flags.get("auto_research"):
         return
-    value = rec.tail_mean if rec.tail_mean is not None else rec.metric_value
-    _set_auto_research_best(state, value, rec.direction)
+    if rec.direction:
+        state.record.auto_research_best_direction = rec.direction
+    # The best over KEPT rounds only — a reverted round's value (e.g. an
+    # anchor-breach round that scored higher) is not the resident workspace.
+    state.record.auto_research_best_value = _best_kept_value(
+        state.record.iterations,
+        state.record.auto_research_best_direction or "higher_is_better",
+    )
     # Mirror onto the dataclass too — `select_and_apply_fix_plan` returns
     # `rec.__dict__` to the API, which must match the stored row.
     rec.best_value = state.record.auto_research_best_value
@@ -1333,7 +1463,7 @@ def auto_research_iterate_batch(
     highest-confidence plan is applied (PROMPT_ELEVEN) with the one-shot anchor
     warning if the previous round breached the utility floor, training runs with
     the exception-catcher retry loop, and the orchestrator keeps or reverts the
-    round against the previous round's tail_mean. `hint` (optional, from the
+    round against the best kept round's tail_mean. `hint` (optional, from the
     UI) is passed to the plan generator verbatim, exactly as in the manual
     `generate_fix_plans` path.
 
@@ -1389,7 +1519,7 @@ def auto_research_iterate_batch(
 # Both helpers below belonged to the old auto-research engine, which compared
 # each round to the RUNNING BEST's last_epoch and stamped the comparison into
 # the round's metric artifact. Auto-research now shares auto-probe's decision
-# rule verbatim (tail_mean, this round vs the PREVIOUS round, in
+# rule verbatim (tail_mean, this round vs the best KEPT round, in
 # `_maybe_revert_on_regression`), so nothing calls them. Kept for reference —
 # re-wiring `_annotate_metric_history` is also the smallest change if the
 # best-based comparison is ever wanted back.

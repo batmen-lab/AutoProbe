@@ -111,6 +111,14 @@ class IterationRecord:
     # value plotted on the monotonic per-run chart. Stays None for normal
     # threshold-gated runs.
     best_value: float | None = None
+    # Stage-4 rounds: "kept" or "reverted" — whether this round's workspace
+    # became the resident one. None on rows written before this field existed
+    # (stages._row_kept infers those from the note).
+    outcome: str | None = None
+    # Set when the user overrode the orchestrator's decision afterwards:
+    # "rejected" (a kept round was reverted) or "kept" (a reverted round was
+    # restored).
+    user_override: str | None = None
 
 
 @dataclass

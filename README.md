@@ -135,12 +135,15 @@ Probe Fixing (Stage 4) — SAME loop as normal mode
            [Agent] apply exactly one plan, write change log   ← PROMPT_ELEVEN
            [Run]   python train.py
                   └─ on crash → [Agent] fix                   ← PROMPT_EIGHT
-           Orchestrator compares this round's tail_mean to the
-           PREVIOUS round's (respecting direction) and checks
-           the anchor floor:
+           Orchestrator snapshots the workspace (round-N-tried),
+           compares this round's tail_mean to the BEST kept
+           round's (respecting direction) and checks the anchor
+           floor:
               ├─ improved → keep, tag round-N-post
-              └─ regressed / anchor breach → restore train.py
+              └─ not better / anchor breach → restore the workspace
                  from round-(N-1)-post, warn next round's agent
+           The user can override the latest round's decision:
+           "Reject" a kept round or "Keep" a reverted one.
         │
         ▼
 Post-batch dialog: Run more rounds / Back to Probe Design (clean everything) / Stay
