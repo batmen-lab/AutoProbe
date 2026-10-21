@@ -212,6 +212,23 @@ export function Stage4({
     }
   }
 
+  // User override of the latest round's keep/revert decision.
+  const [overriding, setOverriding] = useState(false);
+  async function performOverride(fn: (runId: string) => Promise<unknown>) {
+    setOverriding(true);
+    setError(null);
+    try {
+      await fn(run.run_id);
+      onUpdate();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setOverriding(false);
+    }
+  }
+  const handleRejectKept = () => performOverride(api.rejectKeptRound);
+  const handleKeepReverted = () => performOverride(api.keepRevertedRound);
+
   async function performRevert(toStage: number, keep: boolean = false) {
     setReverting(true);
     setError(null);
@@ -451,7 +468,12 @@ export function Stage4({
             no runs yet
           </div>
         ) : (
-          <IterTable rows={run.iterations} />
+          <IterTable
+            rows={run.iterations}
+            overrideDisabled={running || run.busy || hasOpenFixPlans || overriding}
+            onReject={handleRejectKept}
+            onKeep={handleKeepReverted}
+          />
         )}
       </section>
 
@@ -1083,19 +1105,36 @@ function PerRunBestChart({
   );
 }
 
-function IterTable({ rows }: { rows: RunRecord["iterations"] }) {
+// Whether a round's workspace was kept. Older rows have no `outcome`.
+function rowKept(r: IterationRow): boolean {
+  if (r.outcome != null) return r.outcome === "kept";
+  return !(r.note ?? "").includes("reverted");
+}
+
+function IterTable({
+  rows,
+  overrideDisabled,
+  onReject,
+  onKeep,
+}: {
+  rows: RunRecord["iterations"];
+  overrideDisabled: boolean;
+  onReject: () => void;
+  onKeep: () => void;
+}) {
   return (
     <div className="rounded-md border border-ink-200 bg-white overflow-hidden">
-      <div className="grid grid-cols-[60px_1fr_120px_140px] text-[10px] uppercase tracking-wider text-ink-500 px-3 py-2 border-b border-ink-100 bg-ink-50/50">
+      <div className="grid grid-cols-[60px_1fr_120px_140px_150px] text-[10px] uppercase tracking-wider text-ink-500 px-3 py-2 border-b border-ink-100 bg-ink-50/50">
         <div>#</div>
         <div>probe metric</div>
         <div className="text-right">probe value</div>
         <div>probe result</div>
+        <div>workspace</div>
       </div>
       {rows.map((r, i) => (
         <div
           key={i}
-          className="grid grid-cols-[60px_1fr_120px_140px] items-center px-3 py-2 border-b border-ink-50 last:border-0 text-[12px]"
+          className="grid grid-cols-[60px_1fr_120px_140px_150px] items-center px-3 py-2 border-b border-ink-50 last:border-0 text-[12px]"
         >
           <div className="font-mono text-ink-700">{r.index}</div>
           <div className="text-ink-700 truncate" title={r.metric_name ?? ""}>
@@ -1113,6 +1152,33 @@ function IterTable({ rows }: { rows: RunRecord["iterations"] }) {
             {!r.status && <span className="text-ink-400">—</span>}
             {r.acceptable_met === true && r.status !== "PASS" && (
               <Pill tone="warn">ACCEPT</Pill>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {i === 0 ? (
+              <span className="text-ink-400">baseline</span>
+            ) : rowKept(r) ? (
+              <Pill tone="pass">{r.user_override === "kept" ? "KEPT (user)" : "KEPT"}</Pill>
+            ) : (
+              <Pill tone="neutral">
+                {r.user_override === "rejected" ? "REVERTED (user)" : "REVERTED"}
+              </Pill>
+            )}
+            {/* Only the latest round's decision can be overridden. */}
+            {i > 0 && i === rows.length - 1 && (
+              <Button
+                size="sm"
+                variant={rowKept(r) ? "danger" : "secondary"}
+                disabled={overrideDisabled}
+                onClick={rowKept(r) ? onReject : onKeep}
+                title={
+                  rowKept(r)
+                    ? "Revert this round's workspace to the previous round"
+                    : "Restore this round's workspace and keep it"
+                }
+              >
+                {rowKept(r) ? "Reject" : "Keep"}
+              </Button>
             )}
           </div>
         </div>

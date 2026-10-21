@@ -111,6 +111,14 @@ class IterationRecord:
     # value plotted on the monotonic per-run chart. Stays None for normal
     # threshold-gated runs.
     best_value: float | None = None
+    # Stage-4 rounds: "kept" or "reverted" — whether this round's workspace
+    # became the resident one. None on rows written before this field existed
+    # (stages._row_kept infers those from the note).
+    outcome: str | None = None
+    # Set when the user overrode the orchestrator's decision afterwards:
+    # "rejected" (a kept round was reverted) or "kept" (a reverted round was
+    # restored).
+    user_override: str | None = None
 
 
 @dataclass
@@ -150,6 +158,10 @@ class StageRecord:
     # round's metric artifact as previous_best_{last_epoch,max,mean}.
     auto_research_best_max: float | None = None
     auto_research_best_mean: float | None = None
+    # Auto-research only: the setup run's last-epoch value. The batch loop has no
+    # baseline ledger row, so the best kept round is recomputed against this
+    # after a user overrides a keep/revert decision.
+    auto_research_baseline_value: float | None = None
     # Fix-plan flow (stage 4). When the user clicks "Continue fixing" after a
     # FAIL round, an agent produces 3 candidate fix plans tied to the NEXT
     # iteration index (== highest probe_result index + 1). We track:
@@ -365,6 +377,7 @@ class RunState:
             self._record.auto_research_best_direction = None
             self._record.auto_research_best_max = None
             self._record.auto_research_best_mean = None
+            self._record.auto_research_baseline_value = None
             self._record.fix_plan_round = None
             self._record.fix_plan_index = None
             self._record.stage = 1
@@ -481,6 +494,7 @@ class RunState:
             self._record.auto_research_best_direction = None
             self._record.auto_research_best_max = None
             self._record.auto_research_best_mean = None
+            self._record.auto_research_baseline_value = None
         self._record.current_action = None
         self.save()
         return {"deleted": deleted, "stage": target, "phase": self._record.phase}
